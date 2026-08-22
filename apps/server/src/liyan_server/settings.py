@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     supabase_issuer: str = "http://localhost:54321/auth/v1"
     supabase_audience: str = "authenticated"
     supabase_jwks_url: str = ""
+    short_source_characters: int = 500
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

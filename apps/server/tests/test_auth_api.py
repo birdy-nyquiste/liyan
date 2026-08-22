@@ -2,15 +2,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from uuid import UUID
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from liyan_server.app import create_app
 from liyan_server.auth import InvalidAccessToken, VerifiedIdentity
-from liyan_server.database import Task
 from liyan_server.settings import Settings
 
 
@@ -38,17 +34,6 @@ def migrated_database(tmp_path: Path) -> str:
     )
     assert result.returncode == 0, result.stderr
     return database_url
-
-
-def seed_task(database_url: str, owner_id: str) -> str:
-    engine = create_engine(database_url)
-    with Session(engine) as session:
-        task = Task(owner_id=UUID(owner_id))
-        session.add(task)
-        session.commit()
-        task_id = str(task.id)
-    engine.dispose()
-    return task_id
 
 
 def test_allowlisted_identity_maps_to_one_local_user_and_its_empty_task_list(
@@ -122,8 +107,22 @@ def test_client_supplied_owner_cannot_replace_the_verified_subject(tmp_path: Pat
             "X-Owner-Id": first.json()["id"],
         },
     )
-    first_task_id = seed_task(database_url, first.json()["id"])
-    second_task_id = seed_task(database_url, second.json()["id"])
+    creation = {
+        "idempotency_key": "owner-isolation-test",
+        "source": {"title": "Owned source", "body": "Owned body", "provenance": None},
+    }
+    first_created = client.post(
+        "/task-creation/confirm",
+        headers={"Authorization": "Bearer first-token"},
+        json=creation,
+    ).json()["task"]
+    second_created = client.post(
+        "/task-creation/confirm",
+        headers={"Authorization": "Bearer second-token"},
+        json=creation,
+    ).json()["task"]
+    first_task_id = first_created["id"]
+    second_task_id = second_created["id"]
     second_tasks = client.get(
         "/tasks",
         headers={
@@ -136,7 +135,8 @@ def test_client_supplied_owner_cannot_replace_the_verified_subject(tmp_path: Pat
     assert second.status_code == 200
     assert second.json()["email"] == "second@example.com"
     assert second.json()["id"] != first.json()["id"]
-    assert second_tasks.json() == {"items": [{"id": second_task_id}]}
+    assert first_created["number"] == second_created["number"] == 1
+    assert [task["id"] for task in second_tasks.json()["items"]] == [second_task_id]
     assert first_task_id not in second_tasks.text
 
 

@@ -5,10 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from liyan_server.auth import HttpJwksLoader, JwksJwtVerifier, JwtVerifier
+from liyan_server.authentication import Authenticator, current_user_dependency
 from liyan_server.database import Database
 from liyan_server.health import health_router
 from liyan_server.identity_api import identity_router
 from liyan_server.settings import Settings
+from liyan_server.task_api import task_router
+from liyan_server.task_creation_api import task_creation_router
 
 
 def create_app(
@@ -22,6 +25,10 @@ def create_app(
         issuer=current_settings.supabase_issuer,
         audience=current_settings.supabase_audience,
         load_jwks=HttpJwksLoader(current_settings.resolved_supabase_jwks_url),
+    )
+    current_user = current_user_dependency(
+        Authenticator(current_settings, verifier),
+        database,
     )
 
     @asynccontextmanager
@@ -43,7 +50,9 @@ def create_app(
         allow_headers=["*"],
     )
     application.include_router(health_router(database))
-    application.include_router(identity_router(current_settings, database, verifier))
+    application.include_router(identity_router(current_user))
+    application.include_router(task_router(database, current_user))
+    application.include_router(task_creation_router(current_settings, database, current_user))
     return application
 
 

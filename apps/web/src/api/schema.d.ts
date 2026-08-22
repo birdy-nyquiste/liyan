@@ -72,16 +72,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename Task */
+        patch: operations["rename_task"];
+        trace?: never;
+    };
+    "/task-creation/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare Task Source */
+        post: operations["prepare_task_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Task Creation */
+        post: operations["confirm_task_creation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ConfirmTaskRequest */
+        ConfirmTaskRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            source: components["schemas"]["SourceInput"];
+        };
+        /** ConfirmTaskResponse */
+        ConfirmTaskResponse: {
+            task: components["schemas"]["TaskSummary"];
+            source_revision: components["schemas"]["SourceRevisionResponse"];
+        };
         /** CurrentUserResponse */
         CurrentUserResponse: {
             /** Id */
             id: string;
             /** Email */
             email: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** LivenessResponse */
         LivenessResponse: {
@@ -90,6 +157,37 @@ export interface components {
              * @constant
              */
             status: "alive";
+        };
+        /** PreparationWarning */
+        PreparationWarning: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "short_body" | "missing_provenance";
+            /** Message */
+            message: string;
+        };
+        /** PrepareSourceResponse */
+        PrepareSourceResponse: {
+            source: components["schemas"]["PreparedSource"];
+            /** Warnings */
+            warnings: components["schemas"]["PreparationWarning"][];
+            /**
+             * Can Confirm
+             * @default true
+             * @constant
+             */
+            can_confirm: true;
+        };
+        /** PreparedSource */
+        PreparedSource: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance: string | null;
         };
         /** ReadinessChecks */
         ReadinessChecks: {
@@ -108,6 +206,31 @@ export interface components {
             status: "ready" | "not_ready";
             checks: components["schemas"]["ReadinessChecks"];
         };
+        /** RenameTaskRequest */
+        RenameTaskRequest: {
+            /** Display Name */
+            display_name: string;
+        };
+        /** SourceInput */
+        SourceInput: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance?: string | null;
+        };
+        /** SourceRevisionResponse */
+        SourceRevisionResponse: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance: string | null;
+        };
         /** TaskListResponse */
         TaskListResponse: {
             /** Items */
@@ -117,6 +240,36 @@ export interface components {
         TaskSummary: {
             /** Id */
             id: string;
+            /** Number */
+            number: number;
+            /** Display Name */
+            display_name: string;
+            /** First Source Title */
+            first_source_title: string;
+            /** Additional Source Count */
+            additional_source_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Version Id */
+            current_version_id: string;
+            /** Current Version Number */
+            current_version_number: number;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -212,6 +365,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+        };
+    };
+    rename_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prepare_task_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepareSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_task_creation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

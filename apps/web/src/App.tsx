@@ -34,6 +34,7 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
           screen: "workspace",
           identity: workspace.identity,
           tasks: workspace.tasks,
+          accessToken,
         });
       } catch (error) {
         const accessDenied = error instanceof ApiError && [401, 403].includes(error.status);
@@ -133,7 +134,15 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
       {auth.screen === "workspace" ? (
         <TaskWorkspace
           identity={auth.identity}
+          accessToken={auth.accessToken}
           tasks={auth.tasks}
+          onTaskCreated={(task) =>
+            setAuth((current) =>
+              current.screen === "workspace"
+                ? { ...current, tasks: [task, ...current.tasks] }
+                : current,
+            )
+          }
           onSignOut={async () => {
             await authProvider.signOut();
             setAuth(signedOut());

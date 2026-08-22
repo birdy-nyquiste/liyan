@@ -1,6 +1,11 @@
 import createClient from "openapi-fetch";
 
 import type { paths } from "./schema";
+import type { components } from "./schema";
+
+export type SourceInput = components["schemas"]["SourceInput"];
+export type PreparedSourceResponse = components["schemas"]["PrepareSourceResponse"];
+export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -22,10 +27,7 @@ export async function serverIsAlive(): Promise<boolean> {
 }
 
 export async function loadTaskWorkspace(accessToken: string) {
-  const api = createClient<paths>({
-    baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const api = authenticatedApi(accessToken);
   const identityResult = await api.GET("/auth/me");
   if (!identityResult.data) {
     throw new ApiError(identityResult.response.status);
@@ -38,4 +40,47 @@ export async function loadTaskWorkspace(accessToken: string) {
     identity: identityResult.data,
     tasks: taskResult.data.items,
   };
+}
+
+function authenticatedApi(accessToken: string) {
+  return createClient<paths>({
+    baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function prepareTaskSource(
+  accessToken: string,
+  source: SourceInput,
+): Promise<PreparedSourceResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/prepare", {
+    body: source,
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function confirmTaskCreation(
+  accessToken: string,
+  idempotencyKey: string,
+  source: SourceInput,
+): Promise<TaskSummaryResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/confirm", {
+    body: { idempotency_key: idempotencyKey, source },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.task;
+}
+
+export async function renameTask(
+  accessToken: string,
+  taskId: string,
+  displayName: string,
+): Promise<TaskSummaryResponse> {
+  const result = await authenticatedApi(accessToken).PATCH("/tasks/{task_id}", {
+    params: { path: { task_id: taskId } },
+    body: { display_name: displayName },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
 }

@@ -1470,10 +1470,7 @@
           "url": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "publisher": {
-            "$ref": "#/components/schemas/Narrative"
-          },
-          "relevance": {
+          "explanation": {
             "$ref": "#/components/schemas/Narrative"
           }
         },
@@ -1483,8 +1480,7 @@
           "id",
           "title",
           "url",
-          "publisher",
-          "relevance"
+          "explanation"
         ],
         "title": "EvidenceItem"
       },
@@ -1497,7 +1493,7 @@
             "type": "array",
             "title": "Items"
           },
-          "empty_statement": {
+          "empty_state": {
             "anyOf": [
               {
                 "type": "string"
@@ -1506,14 +1502,14 @@
                 "type": "null"
               }
             ],
-            "title": "Empty Statement"
+            "title": "Empty State"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "empty_statement"
+          "empty_state"
         ],
         "title": "EvidenceSection"
       },
@@ -1662,31 +1658,35 @@
           "id": {
             "$ref": "#/components/schemas/Narrative"
           },
+          "quote": {
+            "$ref": "#/components/schemas/Narrative"
+          },
           "claim": {
             "$ref": "#/components/schemas/Narrative"
           },
           "verdict": {
             "$ref": "#/components/schemas/FactVerdict"
           },
-          "reasoning": {
+          "explanation": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "evidence_refs": {
+          "evidence_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Evidence Refs"
+            "title": "Evidence Ids"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
+          "quote",
           "claim",
           "verdict",
-          "reasoning",
-          "evidence_refs"
+          "explanation",
+          "evidence_ids"
         ],
         "title": "FactItem"
       },
@@ -1699,7 +1699,7 @@
             "type": "array",
             "title": "Items"
           },
-          "empty_statement": {
+          "empty_state": {
             "anyOf": [
               {
                 "type": "string"
@@ -1708,25 +1708,25 @@
                 "type": "null"
               }
             ],
-            "title": "Empty Statement"
+            "title": "Empty State"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "empty_statement"
+          "empty_state"
         ],
         "title": "FactSection"
       },
       "FactVerdict": {
         "type": "string",
         "enum": [
-          "supported",
-          "partially_supported",
-          "disputed",
-          "contradicted",
-          "unverifiable"
+          "有证据支持",
+          "有证据反驳",
+          "部分准确",
+          "存在争议",
+          "暂无法核实"
         ]
       },
       "FileSourceCapabilities": {
@@ -1892,32 +1892,31 @@
           "id": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "finding": {
+          "quote": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "reasoning": {
+          "possible_intent": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "refs": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Refs"
+          "explanation": {
+            "$ref": "#/components/schemas/Narrative"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "finding",
-          "reasoning",
-          "refs"
+          "quote",
+          "possible_intent",
+          "explanation"
         ],
         "title": "IntentItem"
       },
       "IntentSection": {
         "properties": {
+          "explicit_purpose": {
+            "$ref": "#/components/schemas/Narrative"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/IntentItem"
@@ -1925,7 +1924,17 @@
             "type": "array",
             "title": "Items"
           },
-          "empty_statement": {
+          "target_audience": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "expression_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Expression Methods"
+          },
+          "empty_state": {
             "anyOf": [
               {
                 "type": "string"
@@ -1934,16 +1943,36 @@
                 "type": "null"
               }
             ],
-            "title": "Empty Statement"
+            "title": "Empty State"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "explicit_purpose",
           "items",
-          "empty_statement"
+          "target_audience",
+          "expression_methods",
+          "empty_state"
         ],
         "title": "IntentSection"
+      },
+      "KeyFinding": {
+        "properties": {
+          "ref_id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ref_id",
+          "text"
+        ],
+        "title": "KeyFinding"
       },
       "LivenessResponse": {
         "properties": {
@@ -1964,32 +1993,39 @@
           "id": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "finding": {
+          "quote": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "assessment": {
+          "judgment": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "refs": {
+          "explanation": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "related_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Refs"
+            "title": "Related Ids"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "finding",
-          "assessment",
-          "refs"
+          "quote",
+          "judgment",
+          "explanation",
+          "related_ids"
         ],
         "title": "LogicItem"
       },
       "LogicSection": {
         "properties": {
+          "argument_chain": {
+            "$ref": "#/components/schemas/Narrative"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/LogicItem"
@@ -1997,7 +2033,7 @@
             "type": "array",
             "title": "Items"
           },
-          "empty_statement": {
+          "empty_state": {
             "anyOf": [
               {
                 "type": "string"
@@ -2006,20 +2042,50 @@
                 "type": "null"
               }
             ],
-            "title": "Empty Statement"
+            "title": "Empty State"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "argument_chain",
           "items",
-          "empty_statement"
+          "empty_state"
         ],
         "title": "LogicSection"
       },
       "Narrative": {
         "type": "string",
         "minLength": 1
+      },
+      "OverviewSection": {
+        "properties": {
+          "content_summary": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "fact_check_summary": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "key_findings": {
+            "items": {
+              "$ref": "#/components/schemas/KeyFinding"
+            },
+            "type": "array",
+            "title": "Key Findings"
+          },
+          "reading_note": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_summary",
+          "fact_check_summary",
+          "key_findings",
+          "reading_note"
+        ],
+        "title": "OverviewSection"
       },
       "PreparationWarning": {
         "properties": {
@@ -2426,26 +2492,26 @@
       },
       "SourceSection": {
         "properties": {
-          "title": {
+          "genre": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "origin": {
+          "provenance": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "material_type": {
+          "completeness": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "context": {
+          "note": {
             "$ref": "#/components/schemas/Narrative"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "title",
-          "origin",
-          "material_type",
-          "context"
+          "genre",
+          "provenance",
+          "completeness",
+          "note"
         ],
         "title": "SourceSection"
       },
@@ -2798,13 +2864,16 @@
           "id": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "holder": {
+          "quote": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "statement": {
+          "viewpoint": {
             "$ref": "#/components/schemas/Narrative"
           },
-          "assessment": {
+          "owner": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "analysis": {
             "$ref": "#/components/schemas/Narrative"
           }
         },
@@ -2812,9 +2881,10 @@
         "type": "object",
         "required": [
           "id",
-          "holder",
-          "statement",
-          "assessment"
+          "quote",
+          "viewpoint",
+          "owner",
+          "analysis"
         ],
         "title": "ViewpointItem"
       },
@@ -2827,7 +2897,7 @@
             "type": "array",
             "title": "Items"
           },
-          "empty_statement": {
+          "empty_state": {
             "anyOf": [
               {
                 "type": "string"
@@ -2836,14 +2906,14 @@
                 "type": "null"
               }
             ],
-            "title": "Empty Statement"
+            "title": "Empty State"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "empty_statement"
+          "empty_state"
         ],
         "title": "ViewpointSection"
       },
@@ -2868,7 +2938,7 @@
       "ZhiyanReportDocument": {
         "properties": {
           "overview": {
-            "$ref": "#/components/schemas/Narrative"
+            "$ref": "#/components/schemas/OverviewSection"
           },
           "source": {
             "$ref": "#/components/schemas/SourceSection"

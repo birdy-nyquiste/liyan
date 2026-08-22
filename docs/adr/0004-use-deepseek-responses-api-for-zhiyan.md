@@ -6,7 +6,9 @@ The integration must preserve DeepSeek's stateless contract. Responses and conve
 
 The built-in `web_search` and versioned `web_search_2025_08_26` tool types execute on DeepSeek's server and emit `web_search_call` output items for `search`, `open_page`, and `find_in_page` actions. Server-side search auto-continuation is capped at ten rounds; `search_context_size` and `user_location` are currently ignored. The adapter must not depend on those ignored controls and must preserve the search actions and evidence actually used for report validation and audit.
 
-The initial production-quality model candidate is `deepseek-v4-pro`, but the model identifier remains server configuration so `deepseek-v4-flash` can be evaluated without changing the domain contract. API keys and account balance are deployment configuration and must never be stored in source control or exposed to the browser.
+The confirmed MVP model is `deepseek-v4-flash`, matching the 服务端 模块总纲 and Technical Spec §10. The model identifier remains server configuration, so `deepseek-v4-pro` can be evaluated as a higher-quality candidate without changing the domain contract; that evaluation is the open task recorded in Technical Spec §11.1. API keys and account balance are deployment configuration and must never be stored in source control or exposed to the browser.
+
+Strict structured output accepts only a subset of JSON Schema, so the provider-facing report schema omits string-tightening keywords such as `minLength`. Those constraints are still enforced, but by deterministic application acceptance rather than by the provider.
 
 References, verified 2026-08-22:
 

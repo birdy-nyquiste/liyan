@@ -1,13 +1,12 @@
 """Deterministic acceptance of untrusted provider output as a 知言报告.
 
-Provider output is never trusted. A report becomes a 知言报告 only after every
-rule here holds: the fixed seven-section schema, stable sequential F/V/L/I/E
-identifiers, references that resolve inside the report, the five defined factual
-verdicts coupled to evidence, and evidence the provider actually opened and that
-a factual item actually uses.
+Agent Spec 知言 v0.4 §4.10 lists what makes a run fail. Each rule below is one
+of those conditions, so a provider result becomes business content only when all
+of them hold. A legal empty state is a success, not a failure.
 """
 
 import json
+import re
 from collections.abc import Iterable, Sequence
 from typing import Protocol
 from urllib.parse import urlsplit, urlunsplit
@@ -16,17 +15,32 @@ from pydantic import ValidationError
 
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
 from liyan_server.zhiyan.report import (
-    EVIDENCE_BEARING_VERDICTS,
+    DETERMINISTIC_VERDICTS,
     ZhiyanReportDocument,
 )
+
+INVALID_REPORT_MESSAGE = "知言报告未通过结构校验，请重试。"
+INVALID_EVIDENCE_MESSAGE = "知言报告的证据未通过校验，请重试。"
+
+#: Identifiers need only be stable and unique inside one report (§4.9).
+IDENTIFIER_PATTERN = re.compile(r"^(?P<prefix>[FVLIE])-(?P<number>\d{2,})$")
 
 
 class ZhiyanRejected(ZhiyanRunFailure):
     """A provider result that cannot become a 知言报告."""
 
 
-INVALID_REPORT_MESSAGE = "知言报告未通过结构校验，请重试。"
-INVALID_EVIDENCE_MESSAGE = "知言报告的证据未通过校验，请重试。"
+class Identified(Protocol):
+    @property
+    def id(self) -> str: ...
+
+
+class ListSection(Protocol):
+    @property
+    def items(self) -> Sequence[Identified]: ...
+
+    @property
+    def empty_state(self) -> str | None: ...
 
 
 def accept_report_text(
@@ -36,10 +50,10 @@ def accept_report_text(
 ) -> ZhiyanReportDocument:
     """Validate provider text and return the accepted 知言报告 document."""
     document = _parse(report_text)
-    _require_sequential_identifiers(document)
+    _require_well_formed_unique_identifiers(document)
     _require_explicit_empty_states(document)
     _require_resolvable_references(document)
-    _require_verdict_evidence_coupling(document)
+    _require_evidence_for_deterministic_verdicts(document)
     _require_used_and_opened_evidence(document, opened_urls)
     return document
 
@@ -59,15 +73,18 @@ def _parse(report_text: str) -> ZhiyanReportDocument:
         ) from error
 
 
-def _require_sequential_identifiers(document: ZhiyanReportDocument) -> None:
+def _require_well_formed_unique_identifiers(document: ZhiyanReportDocument) -> None:
     for prefix, items in _identified_sections(document):
-        expected = [f"{prefix}{position}" for position in range(1, len(items) + 1)]
-        if [item.id for item in items] != expected:
-            raise ZhiyanRejected(
-                "invalid_report_identifier",
-                INVALID_REPORT_MESSAGE,
-                internal_error=f"{prefix} identifiers are not sequential.",
-            )
+        seen: set[str] = set()
+        for item in items:
+            match = IDENTIFIER_PATTERN.match(item.id)
+            if match is None or match.group("prefix") != prefix or item.id in seen:
+                raise ZhiyanRejected(
+                    "invalid_report_identifier",
+                    INVALID_REPORT_MESSAGE,
+                    internal_error=f"Identifier {item.id!r} is malformed or repeated.",
+                )
+            seen.add(item.id)
 
 
 def _require_explicit_empty_states(document: ZhiyanReportDocument) -> None:
@@ -79,7 +96,7 @@ def _require_explicit_empty_states(document: ZhiyanReportDocument) -> None:
         "evidence": document.evidence,
     }
     for name, section in sections.items():
-        stated = bool((section.empty_statement or "").strip())
+        stated = bool((section.empty_state or "").strip())
         if bool(section.items) == stated:
             raise ZhiyanRejected(
                 "missing_empty_state",
@@ -90,17 +107,30 @@ def _require_explicit_empty_states(document: ZhiyanReportDocument) -> None:
 
 def _require_resolvable_references(document: ZhiyanReportDocument) -> None:
     evidence_ids = {item.id for item in document.evidence.items}
-    claim_ids = {item.id for item in document.facts.items} | {
-        item.id for item in document.viewpoints.items
-    }
+    judgements: tuple[Identified, ...] = (
+        *document.facts.items,
+        *document.viewpoints.items,
+        *document.logic.items,
+        *document.intent.items,
+    )
+    judgement_ids = {item.id for item in judgements}
     for fact in document.facts.items:
-        _require_distinct_known_refs(fact.evidence_refs, evidence_ids, fact.id)
-    reasonings: tuple[Reasoning, ...] = (*document.logic.items, *document.intent.items)
-    for reasoning in reasonings:
-        _require_distinct_known_refs(reasoning.refs, claim_ids, reasoning.id)
+        _require_distinct_known_refs(fact.evidence_ids, evidence_ids, fact.id)
+    for item in document.logic.items:
+        _require_distinct_known_refs(item.related_ids, judgement_ids - {item.id}, item.id)
+    # §4.10: the overview may not introduce a judgement no later section carries.
+    _require_distinct_known_refs(
+        [finding.ref_id for finding in document.overview.key_findings],
+        judgement_ids,
+        "overview",
+    )
 
 
-def _require_distinct_known_refs(refs: Sequence[str], known: set[str], owner: str) -> None:
+def _require_distinct_known_refs(
+    refs: Sequence[str],
+    known: set[str],
+    owner: str,
+) -> None:
     if len(set(refs)) != len(refs) or not set(refs) <= known:
         raise ZhiyanRejected(
             "invalid_report_reference",
@@ -109,15 +139,13 @@ def _require_distinct_known_refs(refs: Sequence[str], known: set[str], owner: st
         )
 
 
-def _require_verdict_evidence_coupling(document: ZhiyanReportDocument) -> None:
+def _require_evidence_for_deterministic_verdicts(document: ZhiyanReportDocument) -> None:
     for fact in document.facts.items:
-        cites_evidence = bool(fact.evidence_refs)
-        if cites_evidence != (fact.verdict in EVIDENCE_BEARING_VERDICTS):
+        if fact.verdict in DETERMINISTIC_VERDICTS and not fact.evidence_ids:
             raise ZhiyanRejected(
                 "unsupported_fact_verdict",
                 INVALID_EVIDENCE_MESSAGE,
-                internal_error=f"Fact {fact.id} pairs verdict {fact.verdict} with "
-                f"{len(fact.evidence_refs)} evidence references.",
+                internal_error=f"Fact {fact.id} states {fact.verdict} without evidence.",
             )
 
 
@@ -126,7 +154,7 @@ def _require_used_and_opened_evidence(
     opened_urls: Sequence[str],
 ) -> None:
     opened = {_comparable_url(url) for url in opened_urls}
-    used = {ref for fact in document.facts.items for ref in fact.evidence_refs}
+    used = {ref for fact in document.facts.items for ref in fact.evidence_ids}
     for evidence in document.evidence.items:
         if urlsplit(evidence.url).scheme.casefold() not in {"http", "https"}:
             raise ZhiyanRejected(
@@ -159,24 +187,6 @@ def _comparable_url(url: str) -> str:
             "",
         )
     )
-
-
-class Identified(Protocol):
-    @property
-    def id(self) -> str: ...
-
-
-class ListSection(Protocol):
-    @property
-    def items(self) -> Sequence[Identified]: ...
-
-    @property
-    def empty_statement(self) -> str | None: ...
-
-
-class Reasoning(Identified, Protocol):
-    @property
-    def refs(self) -> Sequence[str]: ...
 
 
 def _identified_sections(

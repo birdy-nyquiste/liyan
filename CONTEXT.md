@@ -29,8 +29,8 @@ The trustworthy, immutable analysis produced for one source revision, covering s
 _Avoid_: 分析结果, 事实核查报告
 
 **事实结论**:
-The verdict a 知言报告 assigns to one externally verifiable claim. It is exactly one of 属实, 部分属实, 存在争议, 不属实, or 暂时无法核实. Every verdict other than 暂时无法核实 must cite evidence the run actually opened, and 暂时无法核实 cites none.
-_Avoid_: 事实评分, 可信度
+The verdict a 知言报告 assigns to one externally verifiable claim. It is exactly one of 有证据支持, 有证据反驳, 部分准确, 存在争议, or 暂无法核实. The four deterministic verdicts must each cite evidence the run actually opened; 暂无法核实 is what a run states when no reliable material was found.
+_Avoid_: 事实评分, 可信度, 置信度
 
 **立言指令**:
 The user's optional editorial direction for generating or revising a 立言文章. It may override the default editorial treatment of conclusions in a 知言报告.

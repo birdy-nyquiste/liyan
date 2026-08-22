@@ -4,20 +4,13 @@ export type ZhiyanReportDocument = components["schemas"]["ZhiyanReportDocument"]
 type FactItem = components["schemas"]["FactItem"];
 type FactVerdict = FactItem["verdict"];
 
-const VERDICT_LABELS: Record<FactVerdict, string> = {
-  supported: "属实",
-  partially_supported: "部分属实",
-  disputed: "存在争议",
-  contradicted: "不属实",
-  unverifiable: "暂时无法核实",
-};
-
+/** The five 事实结论 of Agent Spec 知言 v0.4 §4.4, in report order. */
 const VERDICT_TONES: Record<FactVerdict, string> = {
-  supported: "verdict--supported",
-  partially_supported: "verdict--partial",
-  disputed: "verdict--disputed",
-  contradicted: "verdict--contradicted",
-  unverifiable: "verdict--unverifiable",
+  有证据支持: "verdict--supported",
+  部分准确: "verdict--partial",
+  存在争议: "verdict--disputed",
+  有证据反驳: "verdict--contradicted",
+  暂无法核实: "verdict--unverifiable",
 };
 
 /** Only a plain web address may become a link; anything else stays inert text. */
@@ -33,25 +26,40 @@ function webAddress(url: string): string | null {
 function Section({
   id,
   heading,
-  count,
-  emptyStatement,
   children,
 }: {
   id: string;
   heading: string;
-  count: number;
-  emptyStatement: string | null;
   children: React.ReactNode;
 }) {
   return (
     <section className="zhiyan-section" aria-labelledby={id}>
       <h4 id={id}>{heading}</h4>
-      {count === 0 ? (
-        <p className="zhiyan-empty">{emptyStatement ?? "本部分没有内容。"}</p>
-      ) : (
-        children
-      )}
+      {children}
     </section>
+  );
+}
+
+/** §4.1: a section with no content states why, rather than disappearing. */
+function EmptyState({ items, reason }: { items: number; reason: string | null }) {
+  return items === 0 ? <p className="zhiyan-empty">{reason ?? "本部分没有内容。"}</p> : null;
+}
+
+function Quote({ text }: { text: string }) {
+  return <blockquote className="zhiyan-quote">{text}</blockquote>;
+}
+
+function Refs({ label, refs }: { label: string; refs: string[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <p className="zhiyan-item__refs">
+      {label}
+      {refs.map((ref) => (
+        <span key={ref} className="zhiyan-ref">
+          {ref}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -67,123 +75,129 @@ export function ZhiyanReportView({
 }) {
   return (
     <article className="zhiyan-report" aria-label={`知言报告 ${sourceTitle}`}>
-      <section className="zhiyan-section" aria-labelledby={`${idPrefix}-overview`}>
-        <h4 id={`${idPrefix}-overview`}>总览</h4>
-        <p>{report.overview}</p>
-      </section>
-
-      <section className="zhiyan-section" aria-labelledby={`${idPrefix}-source`}>
-        <h4 id={`${idPrefix}-source`}>来源</h4>
-        <dl className="zhiyan-facts-list">
-          <dt>标题</dt>
-          <dd>{report.source.title}</dd>
-          <dt>出处</dt>
-          <dd>{report.source.origin}</dd>
-          <dt>材料类型</dt>
-          <dd>{report.source.material_type}</dd>
-          <dt>背景</dt>
-          <dd>{report.source.context}</dd>
+      <Section id={`${idPrefix}-overview`} heading="概要">
+        <dl className="zhiyan-detail-list">
+          <dt>内容概要</dt>
+          <dd>{report.overview.content_summary}</dd>
+          <dt>核查概况</dt>
+          <dd>{report.overview.fact_check_summary}</dd>
+          <dt>阅读提示</dt>
+          <dd>{report.overview.reading_note}</dd>
         </dl>
-      </section>
+        {report.overview.key_findings.length > 0 ? (
+          <ul className="zhiyan-items zhiyan-items--tight">
+            {report.overview.key_findings.map((finding) => (
+              <li key={finding.ref_id} className="zhiyan-item__refs">
+                <span className="zhiyan-ref">{finding.ref_id}</span>
+                <span>{finding.text}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Section>
 
-      <Section
-        id={`${idPrefix}-facts`}
-        heading="事实"
-        count={report.facts.items.length}
-        emptyStatement={report.facts.empty_statement}
-      >
+      <Section id={`${idPrefix}-source`} heading="“知”来源">
+        <dl className="zhiyan-detail-list">
+          <dt>体裁</dt>
+          <dd>{report.source.genre}</dd>
+          <dt>出处性质</dt>
+          <dd>{report.source.provenance}</dd>
+          <dt>完整性</dt>
+          <dd>{report.source.completeness}</dd>
+          <dt>来源说明</dt>
+          <dd>{report.source.note}</dd>
+        </dl>
+      </Section>
+
+      <Section id={`${idPrefix}-facts`} heading="“知”事实">
+        <EmptyState items={report.facts.items.length} reason={report.facts.empty_state} />
         <ul className="zhiyan-items">
           {report.facts.items.map((fact) => (
             <li key={fact.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{fact.id}</span>
                 <span className={`zhiyan-verdict ${VERDICT_TONES[fact.verdict]}`}>
-                  {VERDICT_LABELS[fact.verdict]}
+                  {fact.verdict}
                 </span>
               </p>
+              <Quote text={fact.quote} />
               <p className="zhiyan-item__claim">{fact.claim}</p>
-              <p>{fact.reasoning}</p>
-              {fact.evidence_refs.length > 0 ? (
-                <p className="zhiyan-item__refs">
-                  证据：
-                  {fact.evidence_refs.map((ref) => (
-                    <span key={ref} className="zhiyan-ref">
-                      {ref}
-                    </span>
-                  ))}
-                </p>
-              ) : null}
+              <p>{fact.explanation}</p>
+              <Refs label="依据：" refs={fact.evidence_ids} />
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section
-        id={`${idPrefix}-viewpoints`}
-        heading="观点"
-        count={report.viewpoints.items.length}
-        emptyStatement={report.viewpoints.empty_statement}
-      >
+      <Section id={`${idPrefix}-viewpoints`} heading="“知”观点">
+        <EmptyState
+          items={report.viewpoints.items.length}
+          reason={report.viewpoints.empty_state}
+        />
         <ul className="zhiyan-items">
           {report.viewpoints.items.map((viewpoint) => (
             <li key={viewpoint.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{viewpoint.id}</span>
-                <span className="zhiyan-holder">{viewpoint.holder}</span>
+                <span className="zhiyan-holder">{viewpoint.owner}</span>
               </p>
-              <p className="zhiyan-item__claim">{viewpoint.statement}</p>
-              <p>{viewpoint.assessment}</p>
+              <Quote text={viewpoint.quote} />
+              <p className="zhiyan-item__claim">{viewpoint.viewpoint}</p>
+              <p>{viewpoint.analysis}</p>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section
-        id={`${idPrefix}-logic`}
-        heading="逻辑"
-        count={report.logic.items.length}
-        emptyStatement={report.logic.empty_statement}
-      >
+      <Section id={`${idPrefix}-logic`} heading="“知”逻辑">
+        <p className="zhiyan-argument-chain">{report.logic.argument_chain}</p>
+        <EmptyState items={report.logic.items.length} reason={report.logic.empty_state} />
         <ul className="zhiyan-items">
           {report.logic.items.map((item) => (
             <li key={item.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{item.id}</span>
               </p>
-              <p className="zhiyan-item__claim">{item.finding}</p>
-              <p>{item.assessment}</p>
-              <ReferenceList refs={item.refs} />
+              <Quote text={item.quote} />
+              <p className="zhiyan-item__claim">{item.judgment}</p>
+              <p>{item.explanation}</p>
+              <Refs label="关联：" refs={item.related_ids} />
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section
-        id={`${idPrefix}-intent`}
-        heading="意图"
-        count={report.intent.items.length}
-        emptyStatement={report.intent.empty_statement}
-      >
+      <Section id={`${idPrefix}-intent`} heading="“知”意图">
+        <dl className="zhiyan-detail-list">
+          <dt>明确目的</dt>
+          <dd>{report.intent.explicit_purpose}</dd>
+          <dt>目标受众</dt>
+          <dd>{report.intent.target_audience}</dd>
+        </dl>
+        {report.intent.expression_methods.length > 0 ? (
+          <ul className="zhiyan-items zhiyan-items--tight">
+            {report.intent.expression_methods.map((method) => (
+              <li key={method}>{method}</li>
+            ))}
+          </ul>
+        ) : null}
+        <EmptyState items={report.intent.items.length} reason={report.intent.empty_state} />
         <ul className="zhiyan-items">
           {report.intent.items.map((item) => (
             <li key={item.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{item.id}</span>
               </p>
-              <p className="zhiyan-item__claim">{item.finding}</p>
-              <p>{item.reasoning}</p>
-              <ReferenceList refs={item.refs} />
+              <Quote text={item.quote} />
+              <p className="zhiyan-item__claim">{item.possible_intent}</p>
+              <p>{item.explanation}</p>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section
-        id={`${idPrefix}-evidence`}
-        heading="证据"
-        count={report.evidence.items.length}
-        emptyStatement={report.evidence.empty_statement}
-      >
+      <Section id={`${idPrefix}-evidence`} heading="“知”依据">
+        <EmptyState items={report.evidence.items.length} reason={report.evidence.empty_state} />
         <ul className="zhiyan-items">
           {report.evidence.items.map((evidence) => {
             const address = webAddress(evidence.url);
@@ -191,36 +205,25 @@ export function ZhiyanReportView({
               <li key={evidence.id} className="zhiyan-item">
                 <p className="zhiyan-item__head">
                   <span className="zhiyan-ref">{evidence.id}</span>
-                  <span className="zhiyan-holder">{evidence.publisher}</span>
                 </p>
-                <p className="zhiyan-item__claim">{evidence.title}</p>
-                <p>{evidence.relevance}</p>
                 {address ? (
-                  <a href={address} target="_blank" rel="noopener noreferrer nofollow">
-                    {address}
-                  </a>
+                  <p className="zhiyan-item__claim">
+                    <a href={address} target="_blank" rel="noopener noreferrer nofollow">
+                      {evidence.title}
+                    </a>
+                  </p>
                 ) : (
-                  <p className="zhiyan-empty">该证据地址不可作为链接打开：{evidence.url}</p>
+                  <>
+                    <p className="zhiyan-item__claim">{evidence.title}</p>
+                    <p className="zhiyan-empty">该依据地址不可作为链接打开：{evidence.url}</p>
+                  </>
                 )}
+                <p>{evidence.explanation}</p>
               </li>
             );
           })}
         </ul>
       </Section>
     </article>
-  );
-}
-
-function ReferenceList({ refs }: { refs: string[] }) {
-  if (refs.length === 0) return null;
-  return (
-    <p className="zhiyan-item__refs">
-      依据：
-      {refs.map((ref) => (
-        <span key={ref} className="zhiyan-ref">
-          {ref}
-        </span>
-      ))}
-    </p>
   );
 }

@@ -22,60 +22,70 @@ from liyan_server.zhiyan.provider import (
 )
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
-OPENED_URL = "https://gov.example/report"
+OPENED_URL = "https://autonomy.work/four-day-week-pilot"
 
 
-def report_document(overview: str = "这篇来源混合了统计声明与作者立场。") -> dict[str, Any]:
+DEFAULT_SUMMARY = "原文以英国四天工作制试验为依据，呼吁全面强制实施。"
+
+
+def report_document(summary: str = DEFAULT_SUMMARY) -> dict[str, Any]:
     return {
-        "overview": overview,
+        "overview": {
+            "content_summary": summary,
+            "fact_check_summary": "共核查 1 项重要事实：1 项部分准确。",
+            "key_findings": [{"ref_id": "F-01", "text": "35% 不代表所有企业。"}],
+            "reading_note": "原文引用了真实试验，但改变了指标的适用范围。",
+        },
         "source": {
-            "title": "城市空气质量年度回顾",
-            "origin": "示例日报",
-            "material_type": "新闻评论",
-            "context": "发表于年度环境公报之后。",
+            "genre": "政策评论",
+            "provenance": "二手转述",
+            "completeness": "完整短文",
+            "note": "原文没有提供试验报告链接。",
         },
         "facts": {
             "items": [
                 {
-                    "id": "F1",
-                    "claim": "细颗粒物年均浓度下降百分之十二。",
-                    "verdict": "supported",
-                    "reasoning": "官方公报给出相同降幅。",
-                    "evidence_refs": ["E1"],
+                    "id": "F-01",
+                    "quote": "所有企业实行四天工作制后，营收都会增长35%。",
+                    "claim": "英国试验中的所有企业营收均增长 35%。",
+                    "verdict": "部分准确",
+                    "explanation": "35% 是提交数据企业相较往年同期的平均变化。",
+                    "evidence_ids": ["E-01"],
                 }
             ],
-            "empty_statement": None,
+            "empty_state": None,
         },
-        "viewpoints": {
-            "items": [],
-            "empty_statement": "来源中没有可归属的观点表达。",
-        },
+        "viewpoints": {"items": [], "empty_state": "来源中没有可归属的观点表达。"},
         "logic": {
+            "argument_chain": "试验出现积极结果 → 政府应全面强制实施。",
             "items": [
                 {
-                    "id": "L1",
-                    "finding": "以时间先后推断因果。",
-                    "assessment": "同期发生不足以证明因果关系。",
-                    "refs": ["F1"],
+                    "id": "L-01",
+                    "quote": "数据已经证明四天工作制对所有行业都有效。",
+                    "judgment": "结论超出了试验能够支持的范围。",
+                    "explanation": "特定参与企业的试验不能证明所有行业获得相同结果。",
+                    "related_ids": ["F-01"],
                 }
             ],
-            "empty_statement": None,
+            "empty_state": None,
         },
         "intent": {
+            "explicit_purpose": "支持四天工作制并呼吁政府全面实施。",
             "items": [],
-            "empty_statement": "没有可支持的意图判断。",
+            "target_audience": "关心劳动政策的公众和决策者。",
+            "expression_methods": ["使用具体数字增强权威感"],
+            "empty_state": "没有可支持的额外意图推断。",
         },
         "evidence": {
             "items": [
                 {
-                    "id": "E1",
-                    "title": "年度环境公报",
+                    "id": "E-01",
+                    "title": "Autonomy: The UK's Four-Day Week Pilot",
                     "url": OPENED_URL,
-                    "publisher": "示例市生态环境局",
-                    "relevance": "给出官方年度降幅。",
+                    "explanation": "说明参与企业数量与营收指标的实际统计口径。",
                 }
             ],
-            "empty_statement": None,
+            "empty_state": None,
         },
     }
 
@@ -112,7 +122,7 @@ class DeterministicZhiyanProvider:
                     SearchAction(kind="search", query="细颗粒物"),
                     SearchAction(kind="open_page", url=OPENED_URL),
                 ),
-                model="deepseek-v4-pro",
+                model="deepseek-v4-flash",
                 response_id="resp_1",
             )
         )
@@ -169,8 +179,8 @@ def confirmed_task(tmp_path: Path) -> tuple[TestClient, dict[str, str], Recordin
         json={
             "idempotency_key": "key-1",
             "source": {
-                "title": "城市空气质量年度回顾",
-                "body": "细颗粒物年均浓度下降百分之十二。" * 40,
+                "title": "四天工作制已经没有争议",
+                "body": "英国2022年的四天工作制试验已经证明了显著效果。" * 40,
                 "provenance": "https://press.example/story",
             },
         },
@@ -203,11 +213,11 @@ def test_a_run_receives_only_the_accepted_revision_and_server_owned_policy(
     assert started.json()["execution"]["operation"] == "analyze_source"
     assert started.json()["capabilities"] == {"can_start": False, "can_cancel": True}
     request = dispatcher.provider.requests[0]
-    assert request.model == "deepseek-v4-pro"
+    assert request.model == "deepseek-v4-flash"
     assert request.prompt_version
-    assert "<untrusted-source-content>" in request.input_text
+    assert "<source-content>" in request.input_text
     assert revision_id in request.input_text
-    assert "细颗粒物年均浓度下降百分之十二。" in request.input_text
+    assert "四天工作制" in request.input_text
     assert "instructions" not in request.input_text
     assert request.tool_policy.web_search_enabled is True
 
@@ -234,12 +244,19 @@ def test_a_successful_run_yields_the_seven_sections_and_stable_references(
         "intent",
         "evidence",
     }
-    assert document["facts"]["items"][0]["evidence_refs"] == ["E1"]
-    assert document["evidence"]["items"][0]["id"] == "E1"
+    assert document["facts"]["items"][0]["evidence_ids"] == ["E-01"]
+    assert document["facts"]["items"][0]["quote"].startswith("所有企业")
+    assert document["facts"]["items"][0]["verdict"] == "部分准确"
+    assert document["logic"]["argument_chain"].startswith("试验出现积极结果")
+    assert document["intent"]["target_audience"] == "关心劳动政策的公众和决策者。"
+    assert document["overview"]["key_findings"] == [
+        {"ref_id": "F-01", "text": "35% 不代表所有企业。"}
+    ]
+    assert document["evidence"]["items"][0]["id"] == "E-01"
     assert document["viewpoints"]["items"] == []
-    assert document["viewpoints"]["empty_statement"] == "来源中没有可归属的观点表达。"
+    assert document["viewpoints"]["empty_state"] == "来源中没有可归属的观点表达。"
     assert state["report"]["prompt_version"]
-    assert state["report"]["model"] == "deepseek-v4-pro"
+    assert state["report"]["model"] == "deepseek-v4-flash"
 
 
 def test_a_successful_report_cannot_be_regenerated(tmp_path: Path) -> None:
@@ -287,12 +304,12 @@ def test_a_provider_failure_leaves_the_revision_without_a_report(tmp_path: Path)
 def test_an_invalid_provider_report_is_rejected_deterministically(tmp_path: Path) -> None:
     client, headers, dispatcher, revision_id = confirmed_task(tmp_path)
     invalid = report_document()
-    invalid["facts"]["items"][0]["verdict"] = "unverifiable"
+    invalid["facts"]["items"][0]["evidence_ids"] = []
     dispatcher.provider.outcomes.append(
         ZhiyanProviderResult(
             report_text=json.dumps(invalid, ensure_ascii=False),
             search_actions=(SearchAction(kind="open_page", url=OPENED_URL),),
-            model="deepseek-v4-pro",
+            model="deepseek-v4-flash",
         )
     )
     client.post(f"/source-revisions/{revision_id}/zhiyan-runs", headers=headers)
@@ -310,7 +327,7 @@ def test_evidence_the_provider_never_opened_is_rejected(tmp_path: Path) -> None:
         ZhiyanProviderResult(
             report_text=json.dumps(report_document(), ensure_ascii=False),
             search_actions=(SearchAction(kind="search", query="细颗粒物"),),
-            model="deepseek-v4-pro",
+            model="deepseek-v4-flash",
         )
     )
     client.post(f"/source-revisions/{revision_id}/zhiyan-runs", headers=headers)
@@ -370,9 +387,9 @@ def test_a_late_result_cannot_replace_an_accepted_report(tmp_path: Path) -> None
     dispatcher.execution_ids.append(first_execution)
     dispatcher.provider.outcomes.append(
         ZhiyanProviderResult(
-            report_text=json.dumps(report_document("迟到的分析。"), ensure_ascii=False),
+            report_text=json.dumps(report_document("迟到的分析结论。"), ensure_ascii=False),
             search_actions=(SearchAction(kind="open_page", url=OPENED_URL),),
-            model="deepseek-v4-pro",
+            model="deepseek-v4-flash",
         )
     )
     dispatcher.run_next()
@@ -439,4 +456,4 @@ def test_the_current_version_exposes_its_source_revisions(tmp_path: Path) -> Non
 
     assert version["number"] == 1
     assert [source["id"] for source in version["source_revisions"]] == [revision_id]
-    assert version["source_revisions"][0]["title"] == "城市空气质量年度回顾"
+    assert version["source_revisions"][0]["title"] == "四天工作制已经没有争议"

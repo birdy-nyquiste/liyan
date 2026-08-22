@@ -474,19 +474,50 @@ h1 {
   font-style: italic;
 }
 
-.zhiyan-facts-list {
+.zhiyan-detail-list {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 14px;
-  margin: 0;
+  margin: 0 0 12px;
 }
 
-.zhiyan-facts-list dt {
+.zhiyan-detail-list dt {
   color: #856b37;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
-.zhiyan-facts-list dd {
+.zhiyan-detail-list dd {
   margin: 0;
   color: #29261f;
+}
+
+.zhiyan-quote {
+  margin: 0 0 6px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid #d9cfb8;
+  color: #6e685b;
+  font-size: 0.92rem;
+}
+
+.zhiyan-argument-chain {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f6f1e5;
+  color: #29261f;
+  font-size: 0.94rem;
+}
+
+.zhiyan-items--tight {
+  gap: 4px;
+  margin-top: 8px;
+  color: #6e685b;
+  font-size: 0.92rem;
+}
+
+.zhiyan-items--tight li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }

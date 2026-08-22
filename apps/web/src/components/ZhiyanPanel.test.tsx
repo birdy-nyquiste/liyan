@@ -7,56 +7,70 @@ import { ZhiyanReportView, type ZhiyanReportDocument } from "./ZhiyanReportView"
 
 function reportDocument(overrides: Partial<ZhiyanReportDocument> = {}): ZhiyanReportDocument {
   return {
-    overview: "这篇来源混合了统计声明与作者立场。",
+    overview: {
+      content_summary: "原文以英国四天工作制试验为依据，呼吁全面强制实施。",
+      fact_check_summary: "共核查 2 项重要事实：1 项部分准确，1 项暂无法核实。",
+      key_findings: [{ ref_id: "F-01", text: "35% 不代表所有企业。" }],
+      reading_note: "原文引用了真实试验，但改变了指标的适用范围。",
+    },
     source: {
-      title: "城市空气质量年度回顾",
-      origin: "示例日报",
-      material_type: "新闻评论",
-      context: "发表于年度环境公报之后。",
+      genre: "政策评论",
+      provenance: "二手转述",
+      completeness: "完整短文",
+      note: "原文没有提供试验报告链接。",
     },
     facts: {
       items: [
         {
-          id: "F1",
-          claim: "细颗粒物年均浓度下降百分之十二。",
-          verdict: "supported",
-          reasoning: "官方公报给出相同降幅。",
-          evidence_refs: ["E1"],
+          id: "F-01",
+          quote: "所有企业实行四天工作制后，营收都会增长35%。",
+          claim: "英国试验中的所有企业营收均增长 35%。",
+          verdict: "部分准确",
+          explanation: "35% 是提交数据企业相较往年同期的平均变化。",
+          evidence_ids: ["E-01"],
         },
         {
-          id: "F2",
-          claim: "新规使工业排放减半。",
-          verdict: "unverifiable",
-          reasoning: "未找到可靠公开数据。",
-          evidence_refs: [],
+          id: "F-02",
+          quote: "员工压力下降71%。",
+          claim: "71% 的员工压力下降。",
+          verdict: "暂无法核实",
+          explanation: "未找到可靠的公开统计口径。",
+          evidence_ids: [],
         },
       ],
-      empty_statement: null,
+      empty_state: null,
     },
-    viewpoints: { items: [], empty_statement: "来源中没有可归属的观点表达。" },
+    viewpoints: { items: [], empty_state: "来源中没有可归属的观点表达。" },
     logic: {
+      argument_chain: "试验出现积极结果 → 政府应全面强制实施。",
       items: [
         {
-          id: "L1",
-          finding: "以时间先后推断因果。",
-          assessment: "同期发生不足以证明因果关系。",
-          refs: ["F1"],
+          id: "L-01",
+          quote: "数据已经证明四天工作制对所有行业都有效。",
+          judgment: "结论超出了试验能够支持的范围。",
+          explanation: "特定参与企业的试验不能证明所有行业获得相同结果。",
+          related_ids: ["F-01"],
         },
       ],
-      empty_statement: null,
+      empty_state: null,
     },
-    intent: { items: [], empty_statement: "没有可支持的意图判断。" },
+    intent: {
+      explicit_purpose: "支持四天工作制并呼吁政府全面实施。",
+      items: [],
+      target_audience: "关心劳动政策的公众和决策者。",
+      expression_methods: ["使用具体数字增强权威感"],
+      empty_state: "没有可支持的额外意图推断。",
+    },
     evidence: {
       items: [
         {
-          id: "E1",
-          title: "年度环境公报",
-          url: "https://gov.example/report",
-          publisher: "示例市生态环境局",
-          relevance: "给出官方年度降幅。",
+          id: "E-01",
+          title: "Autonomy: The UK's Four-Day Week Pilot",
+          url: "https://autonomy.work/four-day-week-pilot",
+          explanation: "说明参与企业数量与营收指标的实际统计口径。",
         },
       ],
-      empty_statement: null,
+      empty_state: null,
     },
     ...overrides,
   };
@@ -71,7 +85,7 @@ function stateResponse(overrides: Record<string, unknown> = {}) {
       id: "report-1",
       source_revision_id: "revision-1",
       prompt_version: "zhiyan-2026-08-22",
-      model: "deepseek-v4-pro",
+      model: "deepseek-v4-flash",
       created_at: "2026-08-22T18:00:00Z",
       document: reportDocument(),
     },
@@ -112,20 +126,45 @@ describe("ZhiyanReportView", () => {
   it("renders all seven sections with stable identifiers and verdict labels", () => {
     render(<ZhiyanReportView document={reportDocument()} sourceTitle="来源一" idPrefix="report-1" />);
 
-    for (const heading of ["总览", "来源", "事实", "观点", "逻辑", "意图", "证据"]) {
+    for (const heading of [
+      "概要",
+      "“知”来源",
+      "“知”事实",
+      "“知”观点",
+      "“知”逻辑",
+      "“知”意图",
+      "“知”依据",
+    ]) {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     }
-    expect(screen.getAllByText("F1")).toHaveLength(2);
-    expect(screen.getByText("属实")).toBeInTheDocument();
-    expect(screen.getByText("暂时无法核实")).toBeInTheDocument();
-    expect(screen.getByText("L1")).toBeInTheDocument();
+    expect(screen.getAllByText("F-01").length).toBeGreaterThan(1);
+    expect(screen.getByText("部分准确")).toBeInTheDocument();
+    expect(screen.getByText("暂无法核实")).toBeInTheDocument();
+    expect(screen.getByText("L-01")).toBeInTheDocument();
   });
 
   it("states why an empty section is empty", () => {
     render(<ZhiyanReportView document={reportDocument()} sourceTitle="来源一" idPrefix="report-1" />);
 
     expect(screen.getByText("来源中没有可归属的观点表达。")).toBeInTheDocument();
-    expect(screen.getByText("没有可支持的意图判断。")).toBeInTheDocument();
+    expect(screen.getByText("没有可支持的额外意图推断。")).toBeInTheDocument();
+  });
+
+  it("shows the source excerpt behind every judgement", () => {
+    render(<ZhiyanReportView document={reportDocument()} sourceTitle="来源一" idPrefix="report-1" />);
+
+    expect(
+      screen.getByText("所有企业实行四天工作制后，营收都会增长35%。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("数据已经证明四天工作制对所有行业都有效。")).toBeInTheDocument();
+  });
+
+  it("renders the argument chain and intent framing the spec asks for", () => {
+    render(<ZhiyanReportView document={reportDocument()} sourceTitle="来源一" idPrefix="report-1" />);
+
+    expect(screen.getByText("试验出现积极结果 → 政府应全面强制实施。")).toBeInTheDocument();
+    expect(screen.getByText("关心劳动政策的公众和决策者。")).toBeInTheDocument();
+    expect(screen.getByText("使用具体数字增强权威感")).toBeInTheDocument();
   });
 
   it("links only plain web evidence addresses", () => {
@@ -135,21 +174,19 @@ describe("ZhiyanReportView", () => {
           evidence: {
             items: [
               {
-                id: "E1",
-                title: "年度环境公报",
-                url: "https://gov.example/report",
-                publisher: "示例市生态环境局",
-                relevance: "给出官方年度降幅。",
+                id: "E-01",
+                title: "Autonomy: The UK's Four-Day Week Pilot",
+                url: "https://autonomy.work/four-day-week-pilot",
+                explanation: "说明参与企业数量。",
               },
               {
-                id: "E2",
+                id: "E-02",
                 title: "可疑地址",
                 url: "javascript:alert(1)",
-                publisher: "未知",
-                relevance: "不应成为链接。",
+                explanation: "不应成为链接。",
               },
             ],
-            empty_statement: null,
+            empty_state: null,
           },
         })}
         sourceTitle="来源一"
@@ -157,10 +194,13 @@ describe("ZhiyanReportView", () => {
       />,
     );
 
-    const link = screen.getByRole("link", { name: "https://gov.example/report" });
+    const link = screen.getByRole("link", {
+      name: "Autonomy: The UK's Four-Day Week Pilot",
+    });
+    expect(link).toHaveAttribute("href", "https://autonomy.work/four-day-week-pilot");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
     expect(screen.queryByRole("link", { name: /javascript/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/该证据地址不可作为链接打开/)).toBeInTheDocument();
+    expect(screen.getByText(/该依据地址不可作为链接打开/)).toBeInTheDocument();
   });
 
   it("keeps section ids unique when a task shows several reports", () => {
@@ -180,7 +220,14 @@ describe("ZhiyanReportView", () => {
   it("renders untrusted report text as text rather than markup", () => {
     render(
       <ZhiyanReportView
-        document={reportDocument({ overview: "<img src=x onerror=alert(1)>注意" })}
+        document={reportDocument({
+          overview: {
+            content_summary: "<img src=x onerror=alert(1)>注意",
+            fact_check_summary: "共核查 0 项。",
+            key_findings: [],
+            reading_note: "留意注入尝试。",
+          },
+        })}
         sourceTitle="来源一"
         idPrefix="report-1"
       />,
@@ -204,7 +251,7 @@ describe("ZhiyanPanel", () => {
     expect(screen.getByText(/不可编辑或重新生成/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /分析/ })).not.toBeInTheDocument();
     expect(
-      within(screen.getByLabelText("知言报告 来源一")).getAllByText("F1"),
+      within(screen.getByLabelText("知言报告 来源一")).getAllByText("F-01"),
     ).not.toHaveLength(0);
   });
 

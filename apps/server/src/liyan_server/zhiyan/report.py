@@ -1,20 +1,29 @@
-"""The typed 知言报告 envelope that both the provider schema and the UI depend on."""
+"""The typed 知言报告 envelope, per Agent Spec 知言 v0.4.
+
+The seven sections, their field names, and the five 事实结论 verdicts are product
+decisions recorded in the Notion Agent Spec. This module is their executable
+form: the provider's JSON Schema and the workbench's typed renderer both derive
+from it, so neither can drift from the other.
+"""
 
 from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 type FactVerdict = Literal[
-    "supported",
-    "partially_supported",
-    "disputed",
-    "contradicted",
-    "unverifiable",
+    "有证据支持",
+    "有证据反驳",
+    "部分准确",
+    "存在争议",
+    "暂无法核实",
 ]
 
 FACT_VERDICTS: frozenset[str] = frozenset(get_args(FactVerdict.__value__))
-EVIDENCE_BEARING_VERDICTS: frozenset[str] = FACT_VERDICTS - {"unverifiable"}
+UNVERIFIABLE_VERDICT = "暂无法核实"
+#: The four verdicts that assert something about the world and so owe evidence.
+DETERMINISTIC_VERDICTS: frozenset[str] = FACT_VERDICTS - {UNVERIFIABLE_VERDICT}
 
+UNATTRIBUTED_OWNER = "归属不明确"
 
 type Narrative = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -23,79 +32,97 @@ class ReportModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EvidenceItem(ReportModel):
-    id: Narrative
-    title: Narrative
-    url: Narrative
-    publisher: Narrative
-    relevance: Narrative
+class KeyFinding(ReportModel):
+    ref_id: Narrative
+    text: Narrative
+
+
+class OverviewSection(ReportModel):
+    content_summary: Narrative
+    fact_check_summary: Narrative
+    key_findings: list[KeyFinding]
+    reading_note: Narrative
+
+
+class SourceSection(ReportModel):
+    genre: Narrative
+    provenance: Narrative
+    completeness: Narrative
+    note: Narrative
 
 
 class FactItem(ReportModel):
     id: Narrative
+    quote: Narrative
     claim: Narrative
     verdict: FactVerdict
-    reasoning: Narrative
-    evidence_refs: list[str]
+    explanation: Narrative
+    evidence_ids: list[str]
 
 
 class ViewpointItem(ReportModel):
     id: Narrative
-    holder: Narrative
-    statement: Narrative
-    assessment: Narrative
+    quote: Narrative
+    viewpoint: Narrative
+    owner: Narrative
+    analysis: Narrative
 
 
 class LogicItem(ReportModel):
     id: Narrative
-    finding: Narrative
-    assessment: Narrative
-    refs: list[str]
+    quote: Narrative
+    judgment: Narrative
+    explanation: Narrative
+    related_ids: list[str]
 
 
 class IntentItem(ReportModel):
     id: Narrative
-    finding: Narrative
-    reasoning: Narrative
-    refs: list[str]
+    quote: Narrative
+    possible_intent: Narrative
+    explanation: Narrative
 
 
-class SourceSection(ReportModel):
+class EvidenceItem(ReportModel):
+    id: Narrative
     title: Narrative
-    origin: Narrative
-    material_type: Narrative
-    context: Narrative
+    url: Narrative
+    explanation: Narrative
 
 
 class FactSection(ReportModel):
     items: list[FactItem]
-    empty_statement: str | None
+    empty_state: str | None
 
 
 class ViewpointSection(ReportModel):
     items: list[ViewpointItem]
-    empty_statement: str | None
+    empty_state: str | None
 
 
 class LogicSection(ReportModel):
+    argument_chain: Narrative
     items: list[LogicItem]
-    empty_statement: str | None
+    empty_state: str | None
 
 
 class IntentSection(ReportModel):
+    explicit_purpose: Narrative
     items: list[IntentItem]
-    empty_statement: str | None
+    target_audience: Narrative
+    expression_methods: list[str]
+    empty_state: str | None
 
 
 class EvidenceSection(ReportModel):
     items: list[EvidenceItem]
-    empty_statement: str | None
+    empty_state: str | None
 
 
 class ZhiyanReportDocument(ReportModel):
     """The seven fixed sections of one 知言报告."""
 
-    overview: Narrative
+    overview: OverviewSection
     source: SourceSection
     facts: FactSection
     viewpoints: ViewpointSection

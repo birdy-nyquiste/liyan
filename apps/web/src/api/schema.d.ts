@@ -505,15 +505,14 @@ export interface components {
             id: components["schemas"]["Narrative"];
             title: components["schemas"]["Narrative"];
             url: components["schemas"]["Narrative"];
-            publisher: components["schemas"]["Narrative"];
-            relevance: components["schemas"]["Narrative"];
+            explanation: components["schemas"]["Narrative"];
         };
         /** EvidenceSection */
         EvidenceSection: {
             /** Items */
             items: components["schemas"]["EvidenceItem"][];
-            /** Empty Statement */
-            empty_statement: string | null;
+            /** Empty State */
+            empty_state: string | null;
         };
         /** ExecutionError */
         ExecutionError: {
@@ -558,21 +557,22 @@ export interface components {
         /** FactItem */
         FactItem: {
             id: components["schemas"]["Narrative"];
+            quote: components["schemas"]["Narrative"];
             claim: components["schemas"]["Narrative"];
             verdict: components["schemas"]["FactVerdict"];
-            reasoning: components["schemas"]["Narrative"];
-            /** Evidence Refs */
-            evidence_refs: string[];
+            explanation: components["schemas"]["Narrative"];
+            /** Evidence Ids */
+            evidence_ids: string[];
         };
         /** FactSection */
         FactSection: {
             /** Items */
             items: components["schemas"]["FactItem"][];
-            /** Empty Statement */
-            empty_statement: string | null;
+            /** Empty State */
+            empty_state: string | null;
         };
         /** @enum {string} */
-        FactVerdict: "supported" | "partially_supported" | "disputed" | "contradicted" | "unverifiable";
+        FactVerdict: "有证据支持" | "有证据反驳" | "部分准确" | "存在争议" | "暂无法核实";
         /** FileSourceCapabilities */
         FileSourceCapabilities: {
             /** Can Retry */
@@ -621,17 +621,25 @@ export interface components {
         /** IntentItem */
         IntentItem: {
             id: components["schemas"]["Narrative"];
-            finding: components["schemas"]["Narrative"];
-            reasoning: components["schemas"]["Narrative"];
-            /** Refs */
-            refs: string[];
+            quote: components["schemas"]["Narrative"];
+            possible_intent: components["schemas"]["Narrative"];
+            explanation: components["schemas"]["Narrative"];
         };
         /** IntentSection */
         IntentSection: {
+            explicit_purpose: components["schemas"]["Narrative"];
             /** Items */
             items: components["schemas"]["IntentItem"][];
-            /** Empty Statement */
-            empty_statement: string | null;
+            target_audience: components["schemas"]["Narrative"];
+            /** Expression Methods */
+            expression_methods: string[];
+            /** Empty State */
+            empty_state: string | null;
+        };
+        /** KeyFinding */
+        KeyFinding: {
+            ref_id: components["schemas"]["Narrative"];
+            text: components["schemas"]["Narrative"];
         };
         /** LivenessResponse */
         LivenessResponse: {
@@ -644,19 +652,29 @@ export interface components {
         /** LogicItem */
         LogicItem: {
             id: components["schemas"]["Narrative"];
-            finding: components["schemas"]["Narrative"];
-            assessment: components["schemas"]["Narrative"];
-            /** Refs */
-            refs: string[];
+            quote: components["schemas"]["Narrative"];
+            judgment: components["schemas"]["Narrative"];
+            explanation: components["schemas"]["Narrative"];
+            /** Related Ids */
+            related_ids: string[];
         };
         /** LogicSection */
         LogicSection: {
+            argument_chain: components["schemas"]["Narrative"];
             /** Items */
             items: components["schemas"]["LogicItem"][];
-            /** Empty Statement */
-            empty_statement: string | null;
+            /** Empty State */
+            empty_state: string | null;
         };
         Narrative: string;
+        /** OverviewSection */
+        OverviewSection: {
+            content_summary: components["schemas"]["Narrative"];
+            fact_check_summary: components["schemas"]["Narrative"];
+            /** Key Findings */
+            key_findings: components["schemas"]["KeyFinding"][];
+            reading_note: components["schemas"]["Narrative"];
+        };
         /** PreparationWarning */
         PreparationWarning: {
             /**
@@ -794,10 +812,10 @@ export interface components {
         };
         /** SourceSection */
         SourceSection: {
-            title: components["schemas"]["Narrative"];
-            origin: components["schemas"]["Narrative"];
-            material_type: components["schemas"]["Narrative"];
-            context: components["schemas"]["Narrative"];
+            genre: components["schemas"]["Narrative"];
+            provenance: components["schemas"]["Narrative"];
+            completeness: components["schemas"]["Narrative"];
+            note: components["schemas"]["Narrative"];
         };
         /** SourceWarning */
         SourceWarning: {
@@ -920,16 +938,17 @@ export interface components {
         /** ViewpointItem */
         ViewpointItem: {
             id: components["schemas"]["Narrative"];
-            holder: components["schemas"]["Narrative"];
-            statement: components["schemas"]["Narrative"];
-            assessment: components["schemas"]["Narrative"];
+            quote: components["schemas"]["Narrative"];
+            viewpoint: components["schemas"]["Narrative"];
+            owner: components["schemas"]["Narrative"];
+            analysis: components["schemas"]["Narrative"];
         };
         /** ViewpointSection */
         ViewpointSection: {
             /** Items */
             items: components["schemas"]["ViewpointItem"][];
-            /** Empty Statement */
-            empty_statement: string | null;
+            /** Empty State */
+            empty_state: string | null;
         };
         /** ZhiyanCapabilities */
         ZhiyanCapabilities: {
@@ -943,7 +962,7 @@ export interface components {
          * @description The seven fixed sections of one 知言报告.
          */
         ZhiyanReportDocument: {
-            overview: components["schemas"]["Narrative"];
+            overview: components["schemas"]["OverviewSection"];
             source: components["schemas"]["SourceSection"];
             facts: components["schemas"]["FactSection"];
             viewpoints: components["schemas"]["ViewpointSection"];

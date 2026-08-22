@@ -17,6 +17,8 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
 
    Configure `.env` with a Supabase project that uses asymmetric JWT signing keys and an Email OTP template containing `{{ .Token }}`, plus a Cloudflare R2 bucket and S3-compatible endpoint credentials. Set `LIYAN_ALLOWED_EMAILS` and all R2 values only on the server; they are deliberately not `VITE_` values and are never sent to the browser. The Supabase publishable key is safe for browser use. File byte, page, normalized-text, timeout, and DOCX archive limits are configurable through the corresponding `LIYAN_FILE_*` values.
 
+   知言 needs `LIYAN_DEEPSEEK_API_KEY`. Without it a run fails immediately with `provider_unconfigured` and no report is produced; everything else in the workbench still works. `LIYAN_ZHIYAN_MODEL` defaults to the confirmed `deepseek-v4-flash`, and `LIYAN_DEEPSEEK_BASE_URL` and `LIYAN_ZHIYAN_TIMEOUT_SECONDS` have working defaults. The deterministic test suite never calls DeepSeek, so no key is needed to run the checks below.
+
 2. Start PostgreSQL and Redis, then apply all migrations:
 
    ```sh
@@ -42,7 +44,7 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    uv run celery -A liyan_server.celery_worker:celery_app worker -Q source-processing --loglevel=INFO
    ```
 
-Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare pasted text, a public article URL, or an uploaded PDF, DOCX, TXT, or Markdown document before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI; file parsing is deterministic and uses no LLM or OCR. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
+Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare pasted text, a public article URL, or an uploaded PDF, DOCX, TXT, or Markdown document before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI; file parsing is deterministic and uses no LLM or OCR. Opening a task starts one 知言 run per source Revision of its current version and renders each immutable 知言报告 through typed components. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
 
 ## Verify changes
 

@@ -17,6 +17,7 @@ from liyan_server.task_creation.confirmation import task_creation_router
 from liyan_server.task_creation.file_api import file_source_router
 from liyan_server.task_creation.session_api import task_creation_session_router
 from liyan_server.task_creation.url_api import url_source_router
+from liyan_server.zhiyan.api import zhiyan_router
 
 
 def create_app(
@@ -70,6 +71,9 @@ def create_app(
     )
     application.include_router(
         file_source_router(current_settings, database, current_user, dispatcher, storage)
+    )
+    application.include_router(
+        zhiyan_router(current_settings, database, current_user, dispatcher)
     )
     return application
 

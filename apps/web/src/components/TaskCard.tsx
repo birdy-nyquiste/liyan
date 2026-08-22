@@ -1,26 +1,45 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { renameTask } from "../api/client";
+import { getCurrentTaskVersion, renameTask, type TaskVersionDetail } from "../api/client";
 import type { TaskSummary } from "../auth/state";
+import { ZhiyanPanel } from "./ZhiyanPanel";
 
 export function TaskCard({
   task: initialTask,
   accessToken,
   opened = false,
+  onOpen,
 }: {
   task: TaskSummary;
   accessToken: string;
   opened?: boolean;
+  onOpen?(taskId: string): void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState<TaskVersionDetail | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (opened) cardRef.current?.focus();
   }, [opened]);
+
+  useEffect(() => {
+    if (!opened || version) return;
+    let current = true;
+    void getCurrentTaskVersion(accessToken, task.id)
+      .then((loaded) => {
+        if (current) setVersion(loaded);
+      })
+      .catch(() => {
+        if (current) setError("任务版本加载失败，请稍后重试。");
+      });
+    return () => {
+      current = false;
+    };
+  }, [opened, version, accessToken, task.id]);
 
   async function saveName(event: FormEvent) {
     event.preventDefault();
@@ -63,16 +82,40 @@ export function TaskCard({
               另有 {task.additional_source_count} 个来源 · {new Date(task.created_at).toLocaleDateString("zh-CN")}
             </p>
           </div>
-          <button
-            className="button button--quiet"
-            type="button"
-            aria-label={`重命名 ${task.display_name}`}
-            onClick={() => setEditing(true)}
-          >
-            重命名
-          </button>
+          <div className="workspace__actions">
+            {opened ? null : (
+              <button
+                className="button button--quiet"
+                type="button"
+                aria-label={`打开 ${task.display_name}`}
+                onClick={() => onOpen?.(task.id)}
+              >
+                打开
+              </button>
+            )}
+            <button
+              className="button button--quiet"
+              type="button"
+              aria-label={`重命名 ${task.display_name}`}
+              onClick={() => setEditing(true)}
+            >
+              重命名
+            </button>
+          </div>
         </div>
       )}
+      {opened && version ? (
+        <div className="task-card__zhiyan">
+          {version.source_revisions.map((revision) => (
+            <ZhiyanPanel
+              key={revision.id}
+              accessToken={accessToken}
+              sourceRevisionId={revision.id}
+              sourceTitle={revision.title}
+            />
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

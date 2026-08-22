@@ -168,6 +168,54 @@
         }
       }
     },
+    "/tasks/{task_id}/current-version": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Current Task Version",
+        "operationId": "get_current_task_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/task-creation/prepare": {
       "post": {
         "tags": [
@@ -1059,6 +1107,102 @@
           }
         }
       }
+    },
+    "/source-revisions/{source_revision_id}/zhiyan-runs": {
+      "post": {
+        "tags": [
+          "zhiyan"
+        ],
+        "summary": "Start Zhiyan Run",
+        "operationId": "start_zhiyan_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Source Revision Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZhiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/source-revisions/{source_revision_id}/zhiyan": {
+      "get": {
+        "tags": [
+          "zhiyan"
+        ],
+        "summary": "Get Zhiyan State",
+        "operationId": "get_zhiyan_state",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Source Revision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZhiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1315,6 +1459,64 @@
         ],
         "title": "EditSourceContentRequest"
       },
+      "EvidenceItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "url": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "publisher": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "relevance": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url",
+          "publisher",
+          "relevance"
+        ],
+        "title": "EvidenceItem"
+      },
+      "EvidenceSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Statement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "empty_statement"
+        ],
+        "title": "EvidenceSection"
+      },
       "ExecutionError": {
         "properties": {
           "code": {
@@ -1343,7 +1545,8 @@
             "type": "string",
             "enum": [
               "fetch_url",
-              "parse_file"
+              "parse_file",
+              "analyze_source"
             ],
             "title": "Operation"
           },
@@ -1452,6 +1655,78 @@
           "failed",
           "stale",
           "succeeded"
+        ]
+      },
+      "FactItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "claim": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/FactVerdict"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "claim",
+          "verdict",
+          "reasoning",
+          "evidence_refs"
+        ],
+        "title": "FactItem"
+      },
+      "FactSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Statement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "empty_statement"
+        ],
+        "title": "FactSection"
+      },
+      "FactVerdict": {
+        "type": "string",
+        "enum": [
+          "supported",
+          "partially_supported",
+          "disputed",
+          "contradicted",
+          "unverifiable"
         ]
       },
       "FileSourceCapabilities": {
@@ -1612,6 +1887,64 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IntentItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "finding": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "finding",
+          "reasoning",
+          "refs"
+        ],
+        "title": "IntentItem"
+      },
+      "IntentSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IntentItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Statement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "empty_statement"
+        ],
+        "title": "IntentSection"
+      },
       "LivenessResponse": {
         "properties": {
           "status": {
@@ -1625,6 +1958,68 @@
           "status"
         ],
         "title": "LivenessResponse"
+      },
+      "LogicItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "finding": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "finding",
+          "assessment",
+          "refs"
+        ],
+        "title": "LogicItem"
+      },
+      "LogicSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LogicItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Statement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "empty_statement"
+        ],
+        "title": "LogicSection"
+      },
+      "Narrative": {
+        "type": "string",
+        "minLength": 1
       },
       "PreparationWarning": {
         "properties": {
@@ -1999,6 +2394,61 @@
         ],
         "title": "SourceRevisionResponse"
       },
+      "SourceRevisionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "provenance"
+        ],
+        "title": "SourceRevisionSummary"
+      },
+      "SourceSection": {
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "material_type": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "context": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "origin",
+          "material_type",
+          "context"
+        ],
+        "title": "SourceSection"
+      },
       "SourceWarning": {
         "properties": {
           "code": {
@@ -2135,6 +2585,38 @@
           "current_version_number"
         ],
         "title": "TaskSummary"
+      },
+      "TaskVersionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "source_revisions": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRevisionSummary"
+            },
+            "type": "array",
+            "title": "Source Revisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "created_at",
+          "source_revisions"
+        ],
+        "title": "TaskVersionDetail"
       },
       "UrlSourceCapabilities": {
         "properties": {
@@ -2310,6 +2792,212 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ViewpointItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "holder": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "statement": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "holder",
+          "statement",
+          "assessment"
+        ],
+        "title": "ViewpointItem"
+      },
+      "ViewpointSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ViewpointItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Statement"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "empty_statement"
+        ],
+        "title": "ViewpointSection"
+      },
+      "ZhiyanCapabilities": {
+        "properties": {
+          "can_start": {
+            "type": "boolean",
+            "title": "Can Start"
+          },
+          "can_cancel": {
+            "type": "boolean",
+            "title": "Can Cancel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_start",
+          "can_cancel"
+        ],
+        "title": "ZhiyanCapabilities"
+      },
+      "ZhiyanReportDocument": {
+        "properties": {
+          "overview": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceSection"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactSection"
+          },
+          "viewpoints": {
+            "$ref": "#/components/schemas/ViewpointSection"
+          },
+          "logic": {
+            "$ref": "#/components/schemas/LogicSection"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/IntentSection"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidenceSection"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "overview",
+          "source",
+          "facts",
+          "viewpoints",
+          "logic",
+          "intent",
+          "evidence"
+        ],
+        "title": "ZhiyanReportDocument",
+        "description": "The seven fixed sections of one 知言报告."
+      },
+      "ZhiyanReportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "title": "Source Revision Id"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "document": {
+            "$ref": "#/components/schemas/ZhiyanReportDocument"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_revision_id",
+          "prompt_version",
+          "model",
+          "created_at",
+          "document"
+        ],
+        "title": "ZhiyanReportResponse"
+      },
+      "ZhiyanStateResponse": {
+        "properties": {
+          "source_revision_id": {
+            "type": "string",
+            "title": "Source Revision Id"
+          },
+          "source_title": {
+            "type": "string",
+            "title": "Source Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ZhiyanStatus"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ZhiyanReportResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ZhiyanCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_revision_id",
+          "source_title",
+          "status",
+          "report",
+          "execution",
+          "capabilities"
+        ],
+        "title": "ZhiyanStateResponse"
+      },
+      "ZhiyanStatus": {
+        "type": "string",
+        "enum": [
+          "absent",
+          "running",
+          "cancelled",
+          "failed",
+          "succeeded"
+        ]
       }
     },
     "securitySchemes": {

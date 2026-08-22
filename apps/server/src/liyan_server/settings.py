@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     file_parse_timeout_seconds: int = 60
     file_max_docx_entries: int = 2_000
     file_max_docx_uncompressed_bytes: int = 50 * 1024 * 1024
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    zhiyan_model: str = "deepseek-v4-pro"
+    zhiyan_timeout_seconds: int = 300
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

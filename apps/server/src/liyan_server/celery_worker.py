@@ -10,6 +10,8 @@ from liyan_server.file_parsing import FileParseLimits
 from liyan_server.object_storage import R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.url_fetch_worker import process_url_fetch
+from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
+from liyan_server.zhiyan.worker import process_zhiyan_run
 
 settings = Settings()
 celery_app = Celery("liyan-worker", broker=settings.broker_url)
@@ -43,6 +45,21 @@ def process_execution(execution_id: str) -> None:
             ),
             short_source_characters=settings.short_source_characters,
         )
+    elif operation == "analyze_source":
+        analyze_source_execution(execution_id)
+
+
+@celery_app.task(name="liyan.analyze_source")  # type: ignore[untyped-decorator]
+def analyze_source_execution(execution_id: str) -> None:
+    process_zhiyan_run(
+        settings.database_url,
+        UUID(execution_id),
+        DeepSeekZhiyanProvider(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            timeout_seconds=settings.zhiyan_timeout_seconds,
+        ),
+    )
 
 
 @celery_app.task(name="liyan.fetch_url")  # type: ignore[untyped-decorator]

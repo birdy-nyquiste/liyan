@@ -353,3 +353,140 @@ h1 {
     flex-direction: column;
   }
 }
+
+.task-card__zhiyan {
+  display: grid;
+  gap: 20px;
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+.zhiyan-panel {
+  padding: 20px;
+  border: 1px solid rgb(66 57 39 / 14%);
+  border-radius: 14px;
+  background: #fffefb;
+}
+
+.zhiyan-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.zhiyan-panel h3 {
+  margin: 0;
+}
+
+.zhiyan-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}
+
+.zhiyan-section h4 {
+  margin: 0 0 8px;
+  color: #856b37;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.zhiyan-items {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zhiyan-item p {
+  margin: 0 0 5px;
+  color: #6e685b;
+}
+
+.zhiyan-item__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zhiyan-item__claim {
+  color: #29261f !important;
+  font-weight: 650;
+}
+
+.zhiyan-item__refs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.zhiyan-ref {
+  padding: 1px 7px;
+  border: 1px solid rgb(66 57 39 / 18%);
+  border-radius: 999px;
+  color: #655e51;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.zhiyan-verdict {
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.verdict--supported {
+  background: #e4eede;
+  color: #3f5c33;
+}
+
+.verdict--partial {
+  background: #f2ecdb;
+  color: #7a6427;
+}
+
+.verdict--disputed {
+  background: #efe6f0;
+  color: #6a4a70;
+}
+
+.verdict--contradicted {
+  background: #f4e2df;
+  color: #95473d;
+}
+
+.verdict--unverifiable {
+  background: #e8e6e1;
+  color: #5d5850;
+}
+
+.zhiyan-holder {
+  color: #655e51;
+  font-size: 0.9rem;
+}
+
+.zhiyan-empty {
+  color: #6e685b;
+  font-style: italic;
+}
+
+.zhiyan-facts-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+}
+
+.zhiyan-facts-list dt {
+  color: #856b37;
+  font-size: 0.9rem;
+}
+
+.zhiyan-facts-list dd {
+  margin: 0;
+  color: #29261f;
+}

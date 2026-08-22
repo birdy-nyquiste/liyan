@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -20,6 +20,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from liyan_server.execution_states import ExecutionStatus, SourcePreparationStatus
+
+
+def aware_utc(moment: datetime) -> datetime:
+    """SQLite returns naive timestamps; every stored moment is UTC."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 class Base(DeclarativeBase):
@@ -202,10 +207,7 @@ class Execution(Base):
     )
     operation: Mapped[str] = mapped_column(String(64))
     target_type: Mapped[str] = mapped_column(String(64))
-    target_id: Mapped[UUID] = mapped_column(
-        Uuid,
-        ForeignKey("source_preparations.id", ondelete="CASCADE"),
-    )
+    target_id: Mapped[UUID] = mapped_column(Uuid)
     input_version: Mapped[int] = mapped_column(Integer)
     input_identity: Mapped[str] = mapped_column(String(64))
     input_snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
@@ -257,6 +259,35 @@ class FileParseResult(Base):
     provenance: Mapped[str] = mapped_column(Text)
     document_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON)
     content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ZhiyanReport(Base):
+    """One immutable 知言报告 accepted for exactly one source Revision."""
+
+    __tablename__ = "zhiyan_reports"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    execution_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_revision_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("source_revisions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    prompt_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    provider_response_id: Mapped[str | None] = mapped_column(String(128))
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    search_actions: Mapped[list[dict[str, object]]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

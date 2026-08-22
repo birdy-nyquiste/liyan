@@ -9,6 +9,8 @@ export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
 export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
+export type TaskVersionDetail = components["schemas"]["TaskVersionDetail"];
+export type ZhiyanStateResponse = components["schemas"]["ZhiyanStateResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -288,6 +290,41 @@ export async function editFileSourceContent(
   const result = await authenticatedApi(accessToken).PATCH(
     "/task-creation/file-sources/{source_id}/content",
     { params: { path: { source_id: sourceId } }, body: source },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getCurrentTaskVersion(
+  accessToken: string,
+  taskId: string,
+): Promise<TaskVersionDetail> {
+  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/current-version", {
+    params: { path: { task_id: taskId } },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getZhiyanState(
+  accessToken: string,
+  sourceRevisionId: string,
+): Promise<ZhiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/source-revisions/{source_revision_id}/zhiyan",
+    { params: { path: { source_revision_id: sourceRevisionId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function startZhiyanRun(
+  accessToken: string,
+  sourceRevisionId: string,
+): Promise<ZhiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/source-revisions/{source_revision_id}/zhiyan-runs",
+    { params: { path: { source_revision_id: sourceRevisionId } } },
   );
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;

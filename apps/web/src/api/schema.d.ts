@@ -89,6 +89,23 @@ export interface paths {
         patch: operations["rename_task"];
         trace?: never;
     };
+    "/tasks/{task_id}/current-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Current Task Version */
+        get: operations["get_current_task_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/task-creation/prepare": {
         parameters: {
             query?: never;
@@ -363,6 +380,40 @@ export interface paths {
         patch: operations["edit_file_source_content"];
         trace?: never;
     };
+    "/source-revisions/{source_revision_id}/zhiyan-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Zhiyan Run */
+        post: operations["start_zhiyan_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/source-revisions/{source_revision_id}/zhiyan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Zhiyan State */
+        get: operations["get_zhiyan_state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -449,6 +500,21 @@ export interface components {
             /** Provenance */
             provenance?: string | null;
         };
+        /** EvidenceItem */
+        EvidenceItem: {
+            id: components["schemas"]["Narrative"];
+            title: components["schemas"]["Narrative"];
+            url: components["schemas"]["Narrative"];
+            publisher: components["schemas"]["Narrative"];
+            relevance: components["schemas"]["Narrative"];
+        };
+        /** EvidenceSection */
+        EvidenceSection: {
+            /** Items */
+            items: components["schemas"]["EvidenceItem"][];
+            /** Empty Statement */
+            empty_statement: string | null;
+        };
         /** ExecutionError */
         ExecutionError: {
             /** Code */
@@ -464,7 +530,7 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "fetch_url" | "parse_file";
+            operation: "fetch_url" | "parse_file" | "analyze_source";
             status: components["schemas"]["ExecutionStatus"];
             /** Attempt */
             attempt: number;
@@ -489,6 +555,24 @@ export interface components {
         };
         /** @enum {string} */
         ExecutionStatus: "queued" | "running" | "cancel_requested" | "cancelled" | "failed" | "stale" | "succeeded";
+        /** FactItem */
+        FactItem: {
+            id: components["schemas"]["Narrative"];
+            claim: components["schemas"]["Narrative"];
+            verdict: components["schemas"]["FactVerdict"];
+            reasoning: components["schemas"]["Narrative"];
+            /** Evidence Refs */
+            evidence_refs: string[];
+        };
+        /** FactSection */
+        FactSection: {
+            /** Items */
+            items: components["schemas"]["FactItem"][];
+            /** Empty Statement */
+            empty_statement: string | null;
+        };
+        /** @enum {string} */
+        FactVerdict: "supported" | "partially_supported" | "disputed" | "contradicted" | "unverifiable";
         /** FileSourceCapabilities */
         FileSourceCapabilities: {
             /** Can Retry */
@@ -534,6 +618,21 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IntentItem */
+        IntentItem: {
+            id: components["schemas"]["Narrative"];
+            finding: components["schemas"]["Narrative"];
+            reasoning: components["schemas"]["Narrative"];
+            /** Refs */
+            refs: string[];
+        };
+        /** IntentSection */
+        IntentSection: {
+            /** Items */
+            items: components["schemas"]["IntentItem"][];
+            /** Empty Statement */
+            empty_statement: string | null;
+        };
         /** LivenessResponse */
         LivenessResponse: {
             /**
@@ -542,6 +641,22 @@ export interface components {
              */
             status: "alive";
         };
+        /** LogicItem */
+        LogicItem: {
+            id: components["schemas"]["Narrative"];
+            finding: components["schemas"]["Narrative"];
+            assessment: components["schemas"]["Narrative"];
+            /** Refs */
+            refs: string[];
+        };
+        /** LogicSection */
+        LogicSection: {
+            /** Items */
+            items: components["schemas"]["LogicItem"][];
+            /** Empty Statement */
+            empty_statement: string | null;
+        };
+        Narrative: string;
         /** PreparationWarning */
         PreparationWarning: {
             /**
@@ -668,6 +783,22 @@ export interface components {
             /** Provenance */
             provenance: string | null;
         };
+        /** SourceRevisionSummary */
+        SourceRevisionSummary: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Provenance */
+            provenance: string | null;
+        };
+        /** SourceSection */
+        SourceSection: {
+            title: components["schemas"]["Narrative"];
+            origin: components["schemas"]["Narrative"];
+            material_type: components["schemas"]["Narrative"];
+            context: components["schemas"]["Narrative"];
+        };
         /** SourceWarning */
         SourceWarning: {
             /** Code */
@@ -723,6 +854,20 @@ export interface components {
             /** Current Version Number */
             current_version_number: number;
         };
+        /** TaskVersionDetail */
+        TaskVersionDetail: {
+            /** Id */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Source Revisions */
+            source_revisions: components["schemas"]["SourceRevisionSummary"][];
+        };
         /** UrlSourceCapabilities */
         UrlSourceCapabilities: {
             /** Can Retry */
@@ -772,6 +917,70 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** ViewpointItem */
+        ViewpointItem: {
+            id: components["schemas"]["Narrative"];
+            holder: components["schemas"]["Narrative"];
+            statement: components["schemas"]["Narrative"];
+            assessment: components["schemas"]["Narrative"];
+        };
+        /** ViewpointSection */
+        ViewpointSection: {
+            /** Items */
+            items: components["schemas"]["ViewpointItem"][];
+            /** Empty Statement */
+            empty_statement: string | null;
+        };
+        /** ZhiyanCapabilities */
+        ZhiyanCapabilities: {
+            /** Can Start */
+            can_start: boolean;
+            /** Can Cancel */
+            can_cancel: boolean;
+        };
+        /**
+         * ZhiyanReportDocument
+         * @description The seven fixed sections of one 知言报告.
+         */
+        ZhiyanReportDocument: {
+            overview: components["schemas"]["Narrative"];
+            source: components["schemas"]["SourceSection"];
+            facts: components["schemas"]["FactSection"];
+            viewpoints: components["schemas"]["ViewpointSection"];
+            logic: components["schemas"]["LogicSection"];
+            intent: components["schemas"]["IntentSection"];
+            evidence: components["schemas"]["EvidenceSection"];
+        };
+        /** ZhiyanReportResponse */
+        ZhiyanReportResponse: {
+            /** Id */
+            id: string;
+            /** Source Revision Id */
+            source_revision_id: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Model */
+            model: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["ZhiyanReportDocument"];
+        };
+        /** ZhiyanStateResponse */
+        ZhiyanStateResponse: {
+            /** Source Revision Id */
+            source_revision_id: string;
+            /** Source Title */
+            source_title: string;
+            status: components["schemas"]["ZhiyanStatus"];
+            report: components["schemas"]["ZhiyanReportResponse"] | null;
+            execution: components["schemas"]["ExecutionResponse"] | null;
+            capabilities: components["schemas"]["ZhiyanCapabilities"];
+        };
+        /** @enum {string} */
+        ZhiyanStatus: "absent" | "running" | "cancelled" | "failed" | "succeeded";
     };
     responses: never;
     parameters: never;
@@ -892,6 +1101,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_task_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionDetail"];
                 };
             };
             /** @description Validation Error */
@@ -1478,6 +1718,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_zhiyan_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZhiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_zhiyan_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZhiyanStateResponse"];
                 };
             };
             /** @description Validation Error */

@@ -73,6 +73,7 @@ export function TaskWorkspace({
             task={task}
             accessToken={accessToken}
             opened={task.id === openedTaskId}
+            onOpen={setOpenedTaskId}
           />
         ))}
       </div>

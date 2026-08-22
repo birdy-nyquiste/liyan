@@ -13,4 +13,8 @@ class CeleryExecutionDispatcher:
         self._celery = Celery("liyan-api-producer", broker=broker_url)
 
     def dispatch(self, execution_id: UUID) -> None:
-        self._celery.send_task("liyan.fetch_url", args=[str(execution_id)], queue="url-fetch")
+        self._celery.send_task(
+            "liyan.process_execution",
+            args=[str(execution_id)],
+            queue="source-processing",
+        )

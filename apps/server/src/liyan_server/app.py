@@ -8,8 +8,10 @@ from liyan_server.auth import HttpJwksLoader, JwksJwtVerifier, JwtVerifier
 from liyan_server.authentication import Authenticator, current_user_dependency
 from liyan_server.database import Database
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher, ExecutionDispatcher
+from liyan_server.file_source_api import file_source_router
 from liyan_server.health import health_router
 from liyan_server.identity_api import identity_router
+from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.task_api import task_router
 from liyan_server.task_creation_api import task_creation_router
@@ -21,6 +23,7 @@ def create_app(
     *,
     jwt_verifier: JwtVerifier | None = None,
     execution_dispatcher: ExecutionDispatcher | None = None,
+    object_storage: ObjectStorage | None = None,
 ) -> FastAPI:
     current_settings = settings or Settings()
     database = Database(current_settings.database_url)
@@ -34,6 +37,7 @@ def create_app(
         database,
     )
     dispatcher = execution_dispatcher or CeleryExecutionDispatcher(current_settings.broker_url)
+    storage = object_storage or R2ObjectStorage(current_settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -59,6 +63,9 @@ def create_app(
     application.include_router(task_creation_router(current_settings, database, current_user))
     application.include_router(
         url_source_router(current_settings, database, current_user, dispatcher)
+    )
+    application.include_router(
+        file_source_router(current_settings, database, current_user, dispatcher, storage)
     )
     return application
 

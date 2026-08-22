@@ -32,7 +32,7 @@ class CreateUrlSourceRequest(BaseModel):
     url: str
 
 
-class EditUrlSourceContentRequest(BaseModel):
+class EditSourceContentRequest(BaseModel):
     title: str
     body: str
     provenance: str | None = None
@@ -59,7 +59,7 @@ class ExecutionError(BaseModel):
 
 class ExecutionResponse(BaseModel):
     id: str
-    operation: Literal["fetch_url"]
+    operation: Literal["fetch_url", "parse_file"]
     status: ExecutionStatus
     attempt: int
     input_version: int
@@ -145,6 +145,8 @@ def new_url_fetch_execution(
     attempt: int,
     created_at: datetime,
 ) -> Execution:
+    if source.normalized_url is None:
+        raise ValueError("A URL source requires a normalized URL.")
     input_identity = hashlib.sha256(f"url:{source.normalized_url}".encode()).hexdigest()
     return Execution(
         owner_id=source.owner_id,
@@ -171,7 +173,7 @@ def execution_response(execution: Execution) -> ExecutionResponse:
     )
     return ExecutionResponse(
         id=str(execution.id),
-        operation="fetch_url",
+        operation=execution.operation,  # type: ignore[arg-type]
         status=execution.status,
         attempt=execution.attempt,
         input_version=execution.input_version,
@@ -188,6 +190,8 @@ def execution_response(execution: Execution) -> ExecutionResponse:
 def url_source_response(
     source: SourcePreparation, execution: Execution | None
 ) -> UrlSourceResponse:
+    if source.input_url is None or source.normalized_url is None:
+        raise ValueError("URL source metadata is incomplete.")
     failure = (
         SourceFailure(code=source.failure_code, message=source.failure_message)
         if source.failure_code and source.failure_message
@@ -210,8 +214,7 @@ def url_source_response(
         capabilities=UrlSourceCapabilities(
             can_retry=source.status == "failure",
             can_replace=execution is None or execution.status not in ACTIVE_EXECUTION_STATUSES,
-            can_cancel=execution is not None
-            and execution.status in ACTIVE_EXECUTION_STATUSES,
+            can_cancel=execution is not None and execution.status in ACTIVE_EXECUTION_STATUSES,
         ),
     )
 
@@ -356,9 +359,7 @@ def url_source_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> UrlSourceResponse:
-        source = owned_source(
-            session, source_id=source_id, owner_id=user.id, for_update=True
-        )
+        source = owned_source(session, source_id=source_id, owner_id=user.id, for_update=True)
         current_execution = (
             session.get(Execution, source.active_execution_id)
             if source.active_execution_id
@@ -396,13 +397,11 @@ def url_source_router(
     )
     def edit_url_source_content(
         source_id: UUID,
-        request: EditUrlSourceContentRequest,
+        request: EditSourceContentRequest,
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> UrlSourceResponse:
-        source = owned_source(
-            session, source_id=source_id, owner_id=user.id, for_update=True
-        )
+        source = owned_source(session, source_id=source_id, owner_id=user.id, for_update=True)
         if source.status not in {"ready", "warning"}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -445,9 +444,7 @@ def url_source_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> UrlSourceResponse:
-        source = owned_source(
-            session, source_id=source_id, owner_id=user.id, for_update=True
-        )
+        source = owned_source(session, source_id=source_id, owner_id=user.id, for_update=True)
         input_url, normalized_url = normalize_public_url(request.url)
         now = datetime.now(UTC)
         current_execution = (
@@ -537,6 +534,11 @@ def url_source_router(
         now = datetime.now(UTC)
         execution.cancellation_requested_at = execution.cancellation_requested_at or now
         source = session.get(SourcePreparation, execution.target_id)
+        cancelled_message = (
+            "Parsing was cancelled. Retry it or replace this source."
+            if execution.operation == "parse_file"
+            else "Fetching was cancelled. Retry it or replace this source."
+        )
         if execution.status == "queued":
             execution.status = "cancelled"
             execution.finished_at = now
@@ -547,7 +549,7 @@ def url_source_router(
             ):
                 source.status = "failure"
                 source.failure_code = "cancelled"
-                source.failure_message = "Fetching was cancelled. Retry it or replace this source."
+                source.failure_message = cancelled_message
                 source.updated_at = now
         else:
             execution.status = "cancel_requested"

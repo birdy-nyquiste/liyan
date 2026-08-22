@@ -225,6 +225,94 @@ describe("task creation session", () => {
     expect(requests.every((request) => request.headers.get("Authorization") === "Bearer access-token"))
       .toBe(true);
   });
+
+  it("uploads a document and shows editable deterministic parse output", async () => {
+    const execution = {
+      id: "execution-file-1",
+      operation: "parse_file",
+      status: "queued",
+      attempt: 1,
+      input_version: 1,
+      trace_id: "trace-file-1",
+      created_at: "2026-08-22T18:00:00Z",
+      started_at: null,
+      finished_at: null,
+      cancellation_requested_at: null,
+      result_id: null,
+      error: null,
+    };
+    const processing = {
+      id: "file-source-1",
+      client_session_id: "session-1",
+      client_source_id: "source-1",
+      filename: "brief.md",
+      content_type: "text/markdown",
+      content_hash: "abc123",
+      size_bytes: 24,
+      input_version: 1,
+      status: "processing",
+      title: null,
+      body: null,
+      provenance: null,
+      warnings: [],
+      failure: null,
+      active_execution: execution,
+      capabilities: { can_retry: false, can_replace: false, can_cancel: true },
+    };
+    const ready = {
+      ...processing,
+      status: "ready",
+      title: "brief",
+      body: "# Brief\n\nParsed content.",
+      provenance: "brief.md",
+      active_execution: {
+        ...execution,
+        status: "succeeded",
+        result_id: "result-file-1",
+        started_at: "2026-08-22T18:00:01Z",
+        finished_at: "2026-08-22T18:00:02Z",
+      },
+      capabilities: { can_retry: false, can_replace: true, can_cancel: false },
+    };
+    const fetch = vi.fn().mockImplementation(async (request: Request) => {
+      if (request.method === "POST" && request.url.endsWith("/task-creation/file-sources")) {
+        return Response.json(processing, { status: 201 });
+      }
+      if (request.method === "GET" && request.url.endsWith("/file-source-1")) {
+        return Response.json(ready);
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    render(
+      <TaskWorkspace
+        identity={{ id: "user-1", email: "writer@example.com" }}
+        accessToken="access-token"
+        tasks={[]}
+        onTaskCreated={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
+    await user.click(screen.getByRole("button", { name: "上传文件" }));
+    await user.upload(
+      screen.getByLabelText("来源文件"),
+      new File(["# Brief\n\nParsed content."], "brief.md", { type: "text/markdown" }),
+    );
+    await user.click(screen.getByRole("button", { name: "开始解析" }));
+
+    expect(await screen.findByText("解析完成")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("brief")).toBeInTheDocument();
+    expect(document.getElementById("file-source-body")).toHaveValue(
+      "# Brief\n\nParsed content.",
+    );
+    expect(screen.getByText("brief.md · 24 字节")).toBeInTheDocument();
+    const uploadRequest = fetch.mock.calls[0]?.[0] as Request;
+    expect(uploadRequest.headers.get("Authorization")).toBe("Bearer access-token");
+    expect(uploadRequest.headers.get("Content-Type")).toMatch(/^multipart\/form-data; boundary=/);
+  });
 });
 
 describe("立言任务 list", () => {

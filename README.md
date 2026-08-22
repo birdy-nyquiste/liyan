@@ -15,7 +15,7 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    CRAWL4_AI_BASE_DIRECTORY=/tmp/liyan-crawl4ai uv run crawl4ai-setup
    ```
 
-   Configure `.env` with a Supabase project that uses asymmetric JWT signing keys and an Email OTP template containing `{{ .Token }}`. Set `LIYAN_ALLOWED_EMAILS` only on the server; it is deliberately not a `VITE_` value and is never sent to the browser. The Supabase publishable key is safe for browser use.
+   Configure `.env` with a Supabase project that uses asymmetric JWT signing keys and an Email OTP template containing `{{ .Token }}`, plus a Cloudflare R2 bucket and S3-compatible endpoint credentials. Set `LIYAN_ALLOWED_EMAILS` and all R2 values only on the server; they are deliberately not `VITE_` values and are never sent to the browser. The Supabase publishable key is safe for browser use. File byte, page, normalized-text, timeout, and DOCX archive limits are configurable through the corresponding `LIYAN_FILE_*` values.
 
 2. Start PostgreSQL and Redis, then apply all migrations:
 
@@ -36,13 +36,13 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    npm run dev:web
    ```
 
-5. In another terminal, start the URL-fetch worker:
+5. In another terminal, start the source-processing worker:
 
    ```sh
-   uv run celery -A liyan_server.celery_worker:celery_app worker -Q url-fetch --loglevel=INFO
+   uv run celery -A liyan_server.celery_worker:celery_app worker -Q source-processing --loglevel=INFO
    ```
 
-Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare either pasted text or a public article URL before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI without LLM extraction or a fallback crawler. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
+Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare pasted text, a public article URL, or an uploaded PDF, DOCX, TXT, or Markdown document before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI; file parsing is deterministic and uses no LLM or OCR. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
 
 ## Verify changes
 

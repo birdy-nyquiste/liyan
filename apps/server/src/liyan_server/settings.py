@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     broker_url: str = "redis://localhost:6379/0"
     crawl4ai_base_directory: str = "/tmp/liyan-crawl4ai"
     url_fetch_timeout_seconds: int = 60
+    r2_endpoint_url: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = ""
+    file_max_bytes: int = 10 * 1024 * 1024
+    file_max_pages: int = 100
+    file_max_normalized_characters: int = 500_000
+    file_parse_timeout_seconds: int = 60
+    file_max_docx_entries: int = 2_000
+    file_max_docx_uncompressed_bytes: int = 50 * 1024 * 1024
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

@@ -65,9 +65,7 @@ class Task(Base):
 
 class TaskVersion(Base):
     __tablename__ = "task_versions"
-    __table_args__ = (
-        UniqueConstraint("task_id", "number", name="uq_task_versions_task_number"),
-    )
+    __table_args__ = (UniqueConstraint("task_id", "number", name="uq_task_versions_task_number"),)
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     task_id: Mapped[UUID] = mapped_column(
@@ -142,8 +140,13 @@ class SourcePreparation(Base):
     client_session_id: Mapped[str] = mapped_column(String(255))
     client_source_id: Mapped[str] = mapped_column(String(255))
     kind: Mapped[str] = mapped_column(String(32))
-    input_url: Mapped[str] = mapped_column(Text)
-    normalized_url: Mapped[str] = mapped_column(Text)
+    input_url: Mapped[str | None] = mapped_column(Text)
+    normalized_url: Mapped[str | None] = mapped_column(Text)
+    filename: Mapped[str | None] = mapped_column(String(255))
+    content_type: Mapped[str | None] = mapped_column(String(255))
+    object_key: Mapped[str | None] = mapped_column(Text)
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
     input_version: Mapped[int] = mapped_column(Integer)
     status: Mapped[SourcePreparationStatus] = mapped_column(String(32))
     title: Mapped[str | None] = mapped_column(String(255))
@@ -162,11 +165,6 @@ class SourcePreparation(Base):
     )
     accepted_result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
-        ForeignKey(
-            "url_fetch_results.id",
-            name="fk_source_preparations_accepted_result_id",
-            use_alter=True,
-        ),
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -218,7 +216,6 @@ class Execution(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
-        ForeignKey("url_fetch_results.id", name="fk_executions_result_id", use_alter=True),
     )
 
 
@@ -236,6 +233,24 @@ class UrlFetchResult(Base):
     body: Mapped[str] = mapped_column(Text)
     provenance: Mapped[str] = mapped_column(Text)
     page_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class FileParseResult(Base):
+    __tablename__ = "file_parse_results"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    execution_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    input_identity: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    provenance: Mapped[str] = mapped_column(Text)
+    document_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON)
     content_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

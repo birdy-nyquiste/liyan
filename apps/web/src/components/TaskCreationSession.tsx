@@ -6,6 +6,7 @@ import {
   type PreparedSourceResponse,
 } from "../api/client";
 import type { TaskSummary } from "../auth/state";
+import { FileSourcePanel } from "./FileSourcePanel";
 import { UrlSourcePanel } from "./UrlSourcePanel";
 
 type DraftSource = { title: string; body: string; provenance: string };
@@ -26,13 +27,15 @@ export function TaskCreationSession({
   const [prepared, setPrepared] = useState<PreparedSourceResponse | null>(null);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [clientSessionId] = useState(() => crypto.randomUUID());
-  const [mode, setMode] = useState<"paste" | "url">("paste");
+  const [mode, setMode] = useState<"paste" | "url" | "file">("paste");
   const [urlDirty, setUrlDirty] = useState(false);
+  const [fileDirty, setFileDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirty =
     prepared !== null ||
     urlDirty ||
+    fileDirty ||
     Object.values(draft).some((value) => value.length > 0);
 
   useEffect(() => {
@@ -85,7 +88,7 @@ export function TaskCreationSession({
     }
   }
 
-  async function prepareUrlSource(source: {
+  async function prepareExtractedSource(source: {
     title: string;
     body: string;
     provenance?: string | null;
@@ -116,7 +119,15 @@ export function TaskCreationSession({
       <div className="creation-session__heading">
         <div>
           <p className="section-kicker">仅保留在当前浏览器页面</p>
-          <h3>{prepared ? "确认来源" : mode === "url" ? "提取公共文章" : "粘贴一个来源"}</h3>
+          <h3>
+            {prepared
+              ? "确认来源"
+              : mode === "url"
+                ? "提取公共文章"
+                : mode === "file"
+                  ? "解析上传文件"
+                  : "粘贴一个来源"}
+          </h3>
         </div>
         <button className="button button--quiet" type="button" onClick={close}>
           关闭
@@ -137,6 +148,13 @@ export function TaskCreationSession({
             onClick={() => setMode("url")}
           >
             公共文章链接
+          </button>
+          <button
+            className={`button ${mode === "file" ? "" : "button--quiet"}`}
+            type="button"
+            onClick={() => setMode("file")}
+          >
+            上传文件
           </button>
         </div>
       ) : null}
@@ -174,7 +192,15 @@ export function TaskCreationSession({
           accessToken={accessToken}
           clientSessionId={clientSessionId}
           onDirtyChange={setUrlDirty}
-          onPrepared={(source) => void prepareUrlSource(source)}
+          onPrepared={(source) => void prepareExtractedSource(source)}
+        />
+      </div>
+      <div hidden={prepared !== null || mode !== "file"}>
+        <FileSourcePanel
+          accessToken={accessToken}
+          clientSessionId={clientSessionId}
+          onDirtyChange={setFileDirty}
+          onPrepared={(source) => void prepareExtractedSource(source)}
         />
       </div>
       <form

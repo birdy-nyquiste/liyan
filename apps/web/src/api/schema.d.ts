@@ -226,10 +226,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/task-creation/file-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create File Source */
+        post: operations["create_file_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/file-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get File Source */
+        get: operations["get_file_source"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/file-sources/{source_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry File Source */
+        post: operations["retry_file_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/file-sources/{source_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit File Source Content */
+        patch: operations["edit_file_source_content"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_create_file_source */
+        Body_create_file_source: {
+            /** Client Session Id */
+            client_session_id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /** File */
+            file: string;
+        };
         /** ConfirmTaskRequest */
         ConfirmTaskRequest: {
             /** Idempotency Key */
@@ -257,8 +334,8 @@ export interface components {
             /** Email */
             email: string;
         };
-        /** EditUrlSourceContentRequest */
-        EditUrlSourceContentRequest: {
+        /** EditSourceContentRequest */
+        EditSourceContentRequest: {
             /** Title */
             title: string;
             /** Body */
@@ -279,9 +356,9 @@ export interface components {
             id: string;
             /**
              * Operation
-             * @constant
+             * @enum {string}
              */
-            operation: "fetch_url";
+            operation: "fetch_url" | "parse_file";
             status: components["schemas"]["ExecutionStatus"];
             /** Attempt */
             attempt: number;
@@ -306,6 +383,46 @@ export interface components {
         };
         /** @enum {string} */
         ExecutionStatus: "queued" | "running" | "cancel_requested" | "cancelled" | "failed" | "stale" | "succeeded";
+        /** FileSourceCapabilities */
+        FileSourceCapabilities: {
+            /** Can Retry */
+            can_retry: boolean;
+            /** Can Replace */
+            can_replace: boolean;
+            /** Can Cancel */
+            can_cancel: boolean;
+        };
+        /** FileSourceResponse */
+        FileSourceResponse: {
+            /** Id */
+            id: string;
+            /** Client Session Id */
+            client_session_id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /** Filename */
+            filename: string;
+            /** Content Type */
+            content_type: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Input Version */
+            input_version: number;
+            status: components["schemas"]["SourcePreparationStatus"];
+            /** Title */
+            title: string | null;
+            /** Body */
+            body: string | null;
+            /** Provenance */
+            provenance: string | null;
+            /** Warnings */
+            warnings: components["schemas"]["SourceWarning"][];
+            failure: components["schemas"]["SourceFailure"] | null;
+            active_execution: components["schemas"]["ExecutionResponse"] | null;
+            capabilities: components["schemas"]["FileSourceCapabilities"];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -829,7 +946,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EditUrlSourceContentRequest"];
+                "application/json": components["schemas"]["EditSourceContentRequest"];
             };
         };
         responses: {
@@ -902,6 +1019,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_file_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_file_source"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_file_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_file_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_file_source_content: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditSourceContentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSourceResponse"];
                 };
             };
             /** @description Validation Error */

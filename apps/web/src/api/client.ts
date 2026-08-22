@@ -7,6 +7,7 @@ export type SourceInput = components["schemas"]["SourceInput"];
 export type PreparedSourceResponse = components["schemas"]["PrepareSourceResponse"];
 export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
 export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
+export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -162,4 +163,63 @@ export async function cancelExecution(
     { params: { path: { execution_id: executionId } } },
   );
   if (!result.data) throw new ApiError(result.response.status);
+}
+
+export async function createFileSource(
+  accessToken: string,
+  clientSessionId: string,
+  clientSourceId: string,
+  file: File,
+): Promise<FileSourceResponse> {
+  const form = new FormData();
+  form.set("client_session_id", clientSessionId);
+  form.set("client_source_id", clientSourceId);
+  form.set("file", file);
+  const result = await authenticatedApi(accessToken).POST("/task-creation/file-sources", {
+    body: {
+      client_session_id: clientSessionId,
+      client_source_id: clientSourceId,
+      file: file.name,
+    },
+    bodySerializer: () => form,
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getFileSource(
+  accessToken: string,
+  sourceId: string,
+): Promise<FileSourceResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/task-creation/file-sources/{source_id}",
+    { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function retryFileSource(
+  accessToken: string,
+  sourceId: string,
+): Promise<FileSourceResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/task-creation/file-sources/{source_id}/retry",
+    { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function editFileSourceContent(
+  accessToken: string,
+  sourceId: string,
+  source: SourceInput,
+): Promise<FileSourceResponse> {
+  const result = await authenticatedApi(accessToken).PATCH(
+    "/task-creation/file-sources/{source_id}/content",
+    { params: { path: { source_id: sourceId } }, body: source },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
 }

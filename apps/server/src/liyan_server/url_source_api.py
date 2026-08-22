@@ -22,6 +22,12 @@ from liyan_server.execution_states import (
 )
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
+from liyan_server.task_creation_sessions import (
+    ensure_session_capacity,
+    ensure_unique_identity,
+    lock_owner,
+    normalized_session_identity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +273,8 @@ def url_source_router(
         statement = select(SourcePreparation).where(
             SourcePreparation.id == source_id,
             SourcePreparation.owner_id == owner_id,
+            SourcePreparation.kind == "url",
+            SourcePreparation.confirmed_task_id.is_(None),
         )
         if for_update:
             statement = statement.with_for_update()
@@ -287,14 +295,27 @@ def url_source_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> UrlSourceResponse:
-        client_session_id = request.client_session_id.strip()
+        client_session_id = normalized_session_identity(request.client_session_id)
         client_source_id = request.client_source_id.strip()
-        if not client_session_id or not client_source_id:
+        if not client_source_id:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Client source identity is required.",
             )
         input_url, normalized_url = normalize_public_url(request.url)
+        ensure_session_capacity(
+            session,
+            owner_id=user.id,
+            client_session_id=client_session_id,
+        )
+        ensure_unique_identity(
+            session,
+            owner_id=user.id,
+            client_session_id=client_session_id,
+            kind="url",
+            identity_column=SourcePreparation.normalized_url,
+            identity=normalized_url,
+        )
         now = datetime.now(UTC)
         source = SourcePreparation(
             owner_id=user.id,
@@ -420,6 +441,7 @@ def url_source_router(
         source.title = normalized.title
         source.body = normalized.body
         source.provenance = normalized.provenance
+        source.input_version += 1
         source.warnings = warnings
         source.status = "warning" if warnings else "ready"
         source.updated_at = datetime.now(UTC)
@@ -444,8 +466,18 @@ def url_source_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> UrlSourceResponse:
+        lock_owner(session, user.id)
         source = owned_source(session, source_id=source_id, owner_id=user.id, for_update=True)
         input_url, normalized_url = normalize_public_url(request.url)
+        ensure_unique_identity(
+            session,
+            owner_id=user.id,
+            client_session_id=source.client_session_id,
+            kind="url",
+            identity_column=SourcePreparation.normalized_url,
+            identity=normalized_url,
+            excluding_source_id=source.id,
+        )
         now = datetime.now(UTC)
         current_execution = (
             session.get(Execution, source.active_execution_id)

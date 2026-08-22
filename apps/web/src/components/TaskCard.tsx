@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
@@ -6,14 +6,21 @@ import type { TaskSummary } from "../auth/state";
 export function TaskCard({
   task: initialTask,
   accessToken,
+  opened = false,
 }: {
   task: TaskSummary;
   accessToken: string;
+  opened?: boolean;
 }) {
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (opened) cardRef.current?.focus();
+  }, [opened]);
 
   async function saveName(event: FormEvent) {
     event.preventDefault();
@@ -27,7 +34,12 @@ export function TaskCard({
   }
 
   return (
-    <article className="task-card">
+    <article
+      ref={cardRef}
+      className={`task-card ${opened ? "task-card--opened" : ""}`}
+      aria-label={opened ? `已打开任务 ${task.display_name}` : undefined}
+      tabIndex={opened ? -1 : undefined}
+    >
       <div className="task-card__number">#{task.number}</div>
       {editing ? (
         <form className="rename-form" onSubmit={(event) => void saveName(event)}>

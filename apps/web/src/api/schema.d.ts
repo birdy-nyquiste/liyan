@@ -123,6 +123,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/task-creation/pasted-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Pasted Source */
+        post: operations["create_pasted_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/pasted-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Pasted Source */
+        patch: operations["edit_pasted_source"];
+        trace?: never;
+    };
+    "/task-creation/sessions/{client_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task Creation Session */
+        get: operations["get_task_creation_session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Task Creation Source */
+        delete: operations["delete_task_creation_source"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/task-creation/url-sources": {
         parameters: {
             query?: never;
@@ -252,7 +320,8 @@ export interface paths {
         };
         /** Get File Source */
         get: operations["get_file_source"];
-        put?: never;
+        /** Replace File Source */
+        put: operations["replace_file_source"];
         post?: never;
         delete?: never;
         options?: never;
@@ -307,16 +376,44 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_replace_file_source */
+        Body_replace_file_source: {
+            /** File */
+            file: string;
+        };
         /** ConfirmTaskRequest */
         ConfirmTaskRequest: {
             /** Idempotency Key */
             idempotency_key: string;
-            source: components["schemas"]["SourceInput"];
+            source?: components["schemas"]["SourceInput"] | null;
+            /** Client Session Id */
+            client_session_id?: string | null;
+            /** Source Ids */
+            source_ids?: string[];
+            /** Accepted Warning Versions */
+            accepted_warning_versions?: {
+                [key: string]: number;
+            };
         };
         /** ConfirmTaskResponse */
         ConfirmTaskResponse: {
             task: components["schemas"]["TaskSummary"];
             source_revision: components["schemas"]["SourceRevisionResponse"];
+            /** Source Revisions */
+            source_revisions: components["schemas"]["SourceRevisionResponse"][];
+        };
+        /** CreatePastedSourceRequest */
+        CreatePastedSourceRequest: {
+            /** Client Session Id */
+            client_session_id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance?: string | null;
         };
         /** CreateUrlSourceRequest */
         CreateUrlSourceRequest: {
@@ -333,6 +430,15 @@ export interface components {
             id: string;
             /** Email */
             email: string;
+        };
+        /** EditPastedSourceRequest */
+        EditPastedSourceRequest: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance?: string | null;
         };
         /** EditSourceContentRequest */
         EditSourceContentRequest: {
@@ -494,6 +600,45 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** SessionSourceCapabilities */
+        SessionSourceCapabilities: {
+            /** Can Retry */
+            can_retry: boolean;
+            /** Can Replace */
+            can_replace: boolean;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Delete */
+            can_delete: boolean;
+            /** Can Cancel */
+            can_cancel: boolean;
+        };
+        /** SessionSourceResponse */
+        SessionSourceResponse: {
+            /** Id */
+            id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pasted" | "url" | "file";
+            /** Input Version */
+            input_version: number;
+            status: components["schemas"]["SourcePreparationStatus"];
+            /** Title */
+            title: string | null;
+            /** Body */
+            body: string | null;
+            /** Provenance */
+            provenance: string | null;
+            /** Warnings */
+            warnings: components["schemas"]["SourceWarning"][];
+            failure: components["schemas"]["SourceFailure"] | null;
+            active_execution: components["schemas"]["ExecutionResponse"] | null;
+            capabilities: components["schemas"]["SessionSourceCapabilities"];
+        };
         /** SourceFailure */
         SourceFailure: {
             /** Code */
@@ -529,6 +674,27 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /** TaskCreationSessionResponse */
+        TaskCreationSessionResponse: {
+            /** Client Session Id */
+            client_session_id: string;
+            /** Source Count */
+            source_count: number;
+            /**
+             * Max Sources
+             * @default 3
+             * @constant
+             */
+            max_sources: 3;
+            /** Can Add */
+            can_add: boolean;
+            /** Can Confirm */
+            can_confirm: boolean;
+            /** Confirmation Disabled Reason */
+            confirmation_disabled_reason: string | null;
+            /** Sources */
+            sources: components["schemas"]["SessionSourceResponse"][];
         };
         /** TaskListResponse */
         TaskListResponse: {
@@ -793,6 +959,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConfirmTaskResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pasted_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePastedSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_pasted_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditPastedSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_creation_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                client_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreationSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_task_creation_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1078,6 +1372,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_file_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_file_source"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

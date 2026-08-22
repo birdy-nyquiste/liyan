@@ -15,6 +15,7 @@ from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.task_api import task_router
 from liyan_server.task_creation_api import task_creation_router
+from liyan_server.task_creation_session_api import task_creation_session_router
 from liyan_server.url_source_api import url_source_router
 
 
@@ -61,6 +62,9 @@ def create_app(
     application.include_router(identity_router(current_user))
     application.include_router(task_router(database, current_user))
     application.include_router(task_creation_router(current_settings, database, current_user))
+    application.include_router(
+        task_creation_session_router(current_settings, database, current_user, storage)
+    )
     application.include_router(
         url_source_router(current_settings, database, current_user, dispatcher)
     )

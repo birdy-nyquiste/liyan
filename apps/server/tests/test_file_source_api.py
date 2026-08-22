@@ -173,6 +173,18 @@ def test_text_parse_result_is_editable_and_owner_isolated(tmp_path: Path) -> Non
     assert source["body"] == "First line\n\nUseful body."
     assert source["provenance"] == "notes.txt"
     assert source["active_execution"]["status"] == "succeeded"
+    edited = client.patch(
+        f"/task-creation/file-sources/{created['id']}/content",
+        headers=headers,
+        json={
+            "title": "Edited notes",
+            "body": "Edited body.",
+            "provenance": "Notebook",
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["input_version"] == 2
+    assert edited.json()["title"] == "Edited notes"
     assert (
         client.get(
             f"/task-creation/file-sources/{created['id']}",
@@ -401,3 +413,37 @@ def test_zero_parse_timeout_fails_the_source_before_accepting_content(tmp_path: 
     assert source["failure"]["code"] == "parse_timeout"
     assert source["title"] is None
     assert source["body"] is None
+
+
+def test_prepared_file_can_be_replaced_without_losing_its_session_identity(
+    tmp_path: Path,
+) -> None:
+    client, headers, dispatcher, _ = authenticated_client(tmp_path)
+    created = client.post(
+        "/task-creation/file-sources",
+        headers=headers,
+        data={"client_session_id": "session-1", "client_source_id": "source-1"},
+        files={"file": ("old.txt", b"Old file body.", "text/plain")},
+    ).json()
+    dispatcher.run_next()
+
+    replaced = client.put(
+        f"/task-creation/file-sources/{created['id']}",
+        headers=headers,
+        files={"file": ("new.md", b"# New\n\nReplacement body.", "text/markdown")},
+    )
+
+    assert replaced.status_code == 202
+    assert replaced.json()["id"] == created["id"]
+    assert replaced.json()["client_source_id"] == "source-1"
+    assert replaced.json()["filename"] == "new.md"
+    assert replaced.json()["input_version"] == 2
+    assert replaced.json()["status"] == "processing"
+    assert replaced.json()["active_execution"]["attempt"] == 1
+    dispatcher.run_next()
+    ready = client.get(
+        f"/task-creation/file-sources/{created['id']}", headers=headers
+    ).json()
+    assert ready["status"] == "ready"
+    assert ready["title"] == "new"
+    assert ready["body"] == "# New\n\nReplacement body."

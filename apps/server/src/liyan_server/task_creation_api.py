@@ -2,9 +2,10 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,7 @@ from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import (
     Database,
     Source,
+    SourcePreparation,
     SourceRevision,
     Task,
     TaskVersion,
@@ -48,7 +50,10 @@ class PrepareSourceResponse(BaseModel):
 
 class ConfirmTaskRequest(BaseModel):
     idempotency_key: str
-    source: SourceInput
+    source: SourceInput | None = None
+    client_session_id: str | None = None
+    source_ids: list[UUID] = Field(default_factory=list)
+    accepted_warning_versions: dict[UUID, int] = Field(default_factory=dict)
 
 
 class SourceRevisionResponse(BaseModel):
@@ -61,6 +66,7 @@ class SourceRevisionResponse(BaseModel):
 class ConfirmTaskResponse(BaseModel):
     task: TaskSummary
     source_revision: SourceRevisionResponse
+    source_revisions: list[SourceRevisionResponse]
 
 
 def normalize_source(source: SourceInput) -> PreparedSource:
@@ -76,9 +82,9 @@ def normalize_source(source: SourceInput) -> PreparedSource:
     )
 
 
-def _request_hash(source: PreparedSource) -> str:
+def _request_hash(value: object) -> str:
     canonical = json.dumps(
-        source.model_dump(),
+        value,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -86,8 +92,8 @@ def _request_hash(source: PreparedSource) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def _revision_response(session: Session, task: Task) -> SourceRevisionResponse:
-    revision = session.scalar(
+def _revision_responses(session: Session, task: Task) -> list[SourceRevisionResponse]:
+    revisions = session.scalars(
         select(SourceRevision)
         .join(
             TaskVersionSource,
@@ -95,17 +101,20 @@ def _revision_response(session: Session, task: Task) -> SourceRevisionResponse:
         )
         .where(
             TaskVersionSource.task_version_id == task.current_version_id,
-            TaskVersionSource.position == 0,
         )
-    )
-    if revision is None:
+        .order_by(TaskVersionSource.position)
+    ).all()
+    if not revisions:
         raise ValueError("A formal task must have an initial source revision.")
-    return SourceRevisionResponse(
-        id=str(revision.id),
-        title=revision.title,
-        body=revision.body,
-        provenance=revision.provenance,
-    )
+    return [
+        SourceRevisionResponse(
+            id=str(revision.id),
+            title=revision.title,
+            body=revision.body,
+            provenance=revision.provenance,
+        )
+        for revision in revisions
+    ]
 
 
 def task_creation_router(
@@ -153,8 +162,27 @@ def task_creation_router(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="An idempotency key is required.",
             )
-        prepared = normalize_source(request.source)
-        request_hash = _request_hash(prepared)
+        if request.source is not None:
+            prepared_sources = [normalize_source(request.source)]
+            request_identity: object = [prepared_sources[0].model_dump()]
+        else:
+            client_session_id = (request.client_session_id or "").strip()
+            if not client_session_id or not 1 <= len(request.source_ids) <= 3:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Confirmation requires one to three session sources.",
+                )
+            if len(set(request.source_ids)) != len(request.source_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Confirmation source identities must be unique.",
+                )
+            request_identity = {
+                "client_session_id": client_session_id,
+                "source_ids": [str(source_id) for source_id in request.source_ids],
+            }
+            prepared_sources = []
+        request_hash = _request_hash(request_identity)
 
         locked_user = session.scalar(select(User).where(User.id == user.id).with_for_update())
         if locked_user is None:
@@ -174,16 +202,58 @@ def task_creation_router(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="This creation request was already used with different content.",
                 )
+            existing_revisions = _revision_responses(session, existing)
             return ConfirmTaskResponse(
                 task=task_summary(session, existing),
-                source_revision=_revision_response(session, existing),
+                source_revision=existing_revisions[0],
+                source_revisions=existing_revisions,
             )
+
+        if request.source is None:
+            session_sources = session.scalars(
+                select(SourcePreparation).where(
+                    SourcePreparation.owner_id == locked_user.id,
+                    SourcePreparation.client_session_id == client_session_id,
+                    SourcePreparation.confirmed_task_id.is_(None),
+                )
+                .with_for_update()
+            ).all()
+            by_id = {source.id: source for source in session_sources}
+            if set(by_id) != set(request.source_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Confirmation must include every retained session source exactly once.",
+                )
+            ordered_sources = [by_id[source_id] for source_id in request.source_ids]
+            if any(source.status not in {"ready", "warning"} for source in ordered_sources):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Every source must be ready before confirmation.",
+                )
+            warnings_accepted = all(
+                request.accepted_warning_versions.get(source.id) == source.input_version
+                for source in ordered_sources
+                if source.warnings
+            )
+            if not warnings_accepted:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Accept every source warning before confirmation.",
+                )
+            prepared_sources = [
+                PreparedSource(
+                    title=source.title or "",
+                    body=source.body or "",
+                    provenance=source.provenance,
+                )
+                for source in ordered_sources
+            ]
 
         now = datetime.now(UTC)
         task = Task(
             owner_id=locked_user.id,
             number=locked_user.next_task_number,
-            display_name=prepared.title,
+            display_name=prepared_sources[0].title,
             creation_idempotency_key=idempotency_key,
             creation_request_hash=request_hash,
             created_at=now,
@@ -191,37 +261,51 @@ def task_creation_router(
         session.add(task)
         session.flush()
         version = TaskVersion(task_id=task.id, number=1, created_at=now)
-        source = Source(task_id=task.id)
-        session.add_all([version, source])
+        session.add(version)
         session.flush()
-        revision = SourceRevision(
-            source_id=source.id,
-            title=prepared.title,
-            body=prepared.body,
-            provenance=prepared.provenance,
-            content_hash=request_hash,
-            created_at=now,
-        )
-        session.add(revision)
-        session.flush()
-        session.add(
-            TaskVersionSource(
-                task_version_id=version.id,
-                source_revision_id=revision.id,
-                position=0,
+        created_revisions: list[SourceRevision] = []
+        for position, prepared in enumerate(prepared_sources):
+            source = Source(task_id=task.id)
+            session.add(source)
+            session.flush()
+            content_hash = _request_hash(prepared.model_dump())
+            revision = SourceRevision(
+                source_id=source.id,
+                title=prepared.title,
+                body=prepared.body,
+                provenance=prepared.provenance,
+                content_hash=content_hash,
+                created_at=now,
             )
-        )
+            session.add(revision)
+            session.flush()
+            session.add(
+                TaskVersionSource(
+                    task_version_id=version.id,
+                    source_revision_id=revision.id,
+                    position=position,
+                )
+            )
+            created_revisions.append(revision)
         task.current_version_id = version.id
+        if request.source is None:
+            for session_source in ordered_sources:
+                session_source.confirmed_task_id = task.id
         locked_user.next_task_number += 1
         session.commit()
-        return ConfirmTaskResponse(
-            task=task_summary(session, task),
-            source_revision=SourceRevisionResponse(
+        revision_responses = [
+            SourceRevisionResponse(
                 id=str(revision.id),
                 title=revision.title,
                 body=revision.body,
                 provenance=revision.provenance,
-            ),
+            )
+            for revision in created_revisions
+        ]
+        return ConfirmTaskResponse(
+            task=task_summary(session, task),
+            source_revision=revision_responses[0],
+            source_revisions=revision_responses,
         )
 
     return router

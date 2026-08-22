@@ -355,6 +355,7 @@ def test_ready_url_source_content_is_editable_before_confirmation(tmp_path: Path
     assert response.status_code == 200
     source = response.json()
     assert source["status"] == "warning"
+    assert source["input_version"] == 2
     assert source["title"] == "My accepted title"
     assert source["body"] == "My accepted body."
     assert source["provenance"] is None

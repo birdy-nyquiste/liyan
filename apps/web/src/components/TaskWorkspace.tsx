@@ -21,6 +21,12 @@ export function TaskWorkspace({
 }: TaskWorkspaceProps) {
   const [creating, setCreating] = useState(false);
   const [creationDirty, setCreationDirty] = useState(false);
+  const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
+
+  const taskCreated = (task: TaskSummary) => {
+    setOpenedTaskId(task.id);
+    onTaskCreated(task);
+  };
 
   const attemptSignOut = () => {
     if (
@@ -55,14 +61,19 @@ export function TaskWorkspace({
       {creating ? (
         <TaskCreationSession
           accessToken={accessToken}
-          onCreated={onTaskCreated}
+          onCreated={taskCreated}
           onClose={() => setCreating(false)}
           onDirtyChange={setCreationDirty}
         />
       ) : null}
       <div className="task-list">
         {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} accessToken={accessToken} />
+          <TaskCard
+            key={task.id}
+            task={task}
+            accessToken={accessToken}
+            opened={task.id === openedTaskId}
+          />
         ))}
       </div>
       {tasks.length === 0 && !creating ? (

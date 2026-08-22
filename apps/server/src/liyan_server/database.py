@@ -166,6 +166,11 @@ class SourcePreparation(Base):
     accepted_result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
     )
+    confirmed_task_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

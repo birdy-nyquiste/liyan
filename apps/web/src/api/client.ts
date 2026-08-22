@@ -8,6 +8,8 @@ export type PreparedSourceResponse = components["schemas"]["PrepareSourceRespons
 export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
 export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
+export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
+export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -68,10 +70,87 @@ export async function confirmTaskCreation(
   source: SourceInput,
 ): Promise<TaskSummaryResponse> {
   const result = await authenticatedApi(accessToken).POST("/task-creation/confirm", {
-    body: { idempotency_key: idempotencyKey, source },
+    body: {
+      idempotency_key: idempotencyKey,
+      source,
+      source_ids: [],
+      accepted_warning_versions: {},
+    },
   });
   if (!result.data) throw new ApiError(result.response.status);
   return result.data.task;
+}
+
+export async function confirmTaskCreationSession(
+  accessToken: string,
+  idempotencyKey: string,
+  clientSessionId: string,
+  sourceIds: string[],
+  acceptedWarningVersions: Record<string, number>,
+): Promise<TaskSummaryResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/confirm", {
+    body: {
+      idempotency_key: idempotencyKey,
+      client_session_id: clientSessionId,
+      source_ids: sourceIds,
+      accepted_warning_versions: acceptedWarningVersions,
+    },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.task;
+}
+
+export async function getTaskCreationSession(
+  accessToken: string,
+  clientSessionId: string,
+): Promise<TaskCreationSessionResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/task-creation/sessions/{client_session_id}",
+    { params: { path: { client_session_id: clientSessionId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function createPastedSource(
+  accessToken: string,
+  clientSessionId: string,
+  clientSourceId: string,
+  source: SourceInput,
+): Promise<SessionSourceResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/pasted-sources", {
+    body: {
+      client_session_id: clientSessionId,
+      client_source_id: clientSourceId,
+      ...source,
+    },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function editPastedSource(
+  accessToken: string,
+  sourceId: string,
+  source: SourceInput,
+): Promise<SessionSourceResponse> {
+  const result = await authenticatedApi(accessToken).PATCH(
+    "/task-creation/pasted-sources/{source_id}",
+    { params: { path: { source_id: sourceId } }, body: source },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function deleteTaskCreationSource(
+  accessToken: string,
+  sourceId: string,
+): Promise<void> {
+  const result = await authenticatedApi(accessToken).DELETE(
+    "/task-creation/sources/{source_id}",
+    { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.response.ok) throw new ApiError(result.response.status);
 }
 
 export async function renameTask(
@@ -194,6 +273,25 @@ export async function getFileSource(
   const result = await authenticatedApi(accessToken).GET(
     "/task-creation/file-sources/{source_id}",
     { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function replaceFileSource(
+  accessToken: string,
+  sourceId: string,
+  file: File,
+): Promise<FileSourceResponse> {
+  const form = new FormData();
+  form.set("file", file);
+  const result = await authenticatedApi(accessToken).PUT(
+    "/task-creation/file-sources/{source_id}",
+    {
+      params: { path: { source_id: sourceId } },
+      body: { file: file.name },
+      bodySerializer: () => form,
+    },
   );
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;

@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePath
 from tempfile import SpooledTemporaryFile
@@ -20,6 +21,12 @@ from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES, SourcePrepa
 from liyan_server.object_storage import ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
+from liyan_server.task_creation_sessions import (
+    ensure_session_capacity,
+    ensure_unique_identity,
+    lock_owner,
+    normalized_session_identity,
+)
 from liyan_server.url_source_api import (
     EditSourceContentRequest,
     ExecutionResponse,
@@ -63,6 +70,15 @@ class FileSourceResponse(BaseModel):
     failure: SourceFailure | None
     active_execution: ExecutionResponse | None
     capabilities: FileSourceCapabilities
+
+
+@dataclass(frozen=True)
+class ValidatedUpload:
+    filename: str
+    content_type: str
+    content_hash: str
+    size_bytes: int
+    stream: BinaryIO
 
 
 def _safe_filename(value: str | None) -> str:
@@ -129,6 +145,58 @@ def _validated_content_type(filename: str, declared_type: str | None, stream: Bi
     return expected
 
 
+async def _read_validated_upload(file: UploadFile, *, max_bytes: int) -> ValidatedUpload:
+    filename = _safe_filename(file.filename)
+    temporary = SpooledTemporaryFile(  # noqa: SIM115 - ownership passes to the caller
+        max_size=min(max_bytes, 1024 * 1024),
+        mode="w+b",
+    )
+    digest = hashlib.sha256()
+    size_bytes = 0
+    try:
+        while chunk := await file.read(64 * 1024):
+            size_bytes += len(chunk)
+            if size_bytes > max_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail=f"The file exceeds the {max_bytes}-byte limit.",
+                )
+            digest.update(chunk)
+            temporary.write(chunk)
+        temporary.seek(0)
+        stream = cast(BinaryIO, temporary)
+        content_type = _validated_content_type(filename, file.content_type, stream)
+        return ValidatedUpload(
+            filename=filename,
+            content_type=content_type,
+            content_hash=digest.hexdigest(),
+            size_bytes=size_bytes,
+            stream=stream,
+        )
+    except Exception:
+        temporary.close()
+        raise
+    finally:
+        await file.close()
+
+
+def _store_upload(
+    storage: ObjectStorage,
+    *,
+    object_key: str,
+    upload: ValidatedUpload,
+    source_id: UUID,
+) -> None:
+    try:
+        storage.put(object_key, upload.stream, content_type=upload.content_type)
+    except Exception as error:
+        logger.exception("file_upload_failed", extra={"source_id": str(source_id)})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The file could not be stored. Try again later.",
+        ) from error
+
+
 def _new_file_execution(source: SourcePreparation, *, attempt: int) -> Execution:
     if (
         not source.object_key
@@ -188,7 +256,7 @@ def _response(source: SourcePreparation, execution: Execution | None) -> FileSou
         active_execution=execution_response(execution) if execution else None,
         capabilities=FileSourceCapabilities(
             can_retry=source.status == "failure",
-            can_replace=False,
+            can_replace=execution is None or execution.status not in ACTIVE_EXECUTION_STATUSES,
             can_cancel=execution is not None and execution.status in ACTIVE_EXECUTION_STATUSES,
         ),
     )
@@ -214,6 +282,7 @@ def file_source_router(
             SourcePreparation.id == source_id,
             SourcePreparation.owner_id == owner_id,
             SourcePreparation.kind == "file",
+            SourcePreparation.confirmed_task_id.is_(None),
         )
         if for_update:
             statement = statement.with_for_update()
@@ -263,49 +332,41 @@ def file_source_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> FileSourceResponse:
-        session_identity = client_session_id.strip()
+        session_identity = normalized_session_identity(client_session_id)
         source_identity = client_source_id.strip()
-        if not session_identity or not source_identity:
+        if not source_identity:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Client source identity is required.",
             )
-        filename = _safe_filename(file.filename)
-        temporary = SpooledTemporaryFile(  # noqa: SIM115 - explicitly closed in finally
-            max_size=min(settings.file_max_bytes, 1024 * 1024),
-            mode="w+b",
-        )
-        digest = hashlib.sha256()
-        size_bytes = 0
+        upload = await _read_validated_upload(file, max_bytes=settings.file_max_bytes)
         try:
-            while chunk := await file.read(64 * 1024):
-                size_bytes += len(chunk)
-                if size_bytes > settings.file_max_bytes:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                        detail=f"The file exceeds the {settings.file_max_bytes}-byte limit.",
-                    )
-                digest.update(chunk)
-                temporary.write(chunk)
-            temporary.seek(0)
-            stream = cast(BinaryIO, temporary)
-            content_type = _validated_content_type(filename, file.content_type, stream)
+            ensure_session_capacity(
+                session,
+                owner_id=user.id,
+                client_session_id=session_identity,
+            )
+            ensure_unique_identity(
+                session,
+                owner_id=user.id,
+                client_session_id=session_identity,
+                kind="file",
+                identity_column=SourcePreparation.content_hash,
+                identity=upload.content_hash,
+            )
             source_id = uuid4()
             object_key = (
                 f"users/{user.id}/source-preparations/{source_id}/v1/"
-                f"{digest.hexdigest()}-{filename}"
+                f"{upload.content_hash}-{upload.filename}"
             )
-            try:
-                storage.put(object_key, stream, content_type=content_type)
-            except Exception as error:
-                logger.exception("file_upload_failed", extra={"source_id": str(source_id)})
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="The file could not be stored. Try again later.",
-                ) from error
+            _store_upload(
+                storage,
+                object_key=object_key,
+                upload=upload,
+                source_id=source_id,
+            )
         finally:
-            temporary.close()
-            await file.close()
+            upload.stream.close()
 
         now = datetime.now(UTC)
         source = SourcePreparation(
@@ -314,11 +375,11 @@ def file_source_router(
             client_session_id=session_identity,
             client_source_id=source_identity,
             kind="file",
-            filename=filename,
-            content_type=content_type,
+            filename=upload.filename,
+            content_type=upload.content_type,
             object_key=object_key,
-            content_hash=digest.hexdigest(),
-            size_bytes=size_bytes,
+            content_hash=upload.content_hash,
+            size_bytes=upload.size_bytes,
             input_version=1,
             status="processing",
             warnings=[],
@@ -362,6 +423,82 @@ def file_source_router(
             if source.active_execution_id
             else None
         )
+        return _response(source, execution)
+
+    @router.put(
+        "/task-creation/file-sources/{source_id}",
+        operation_id="replace_file_source",
+        response_model=FileSourceResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["task creation"],
+    )
+    async def replace_file_source(
+        source_id: UUID,
+        file: Annotated[UploadFile, File()],
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> FileSourceResponse:
+        lock_owner(session, user.id)
+        source = owned_source(session, source_id, user.id, for_update=True)
+        current = (
+            session.get(Execution, source.active_execution_id)
+            if source.active_execution_id
+            else None
+        )
+        if current is not None and current.status in ACTIVE_EXECUTION_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cancel active parsing before replacing this source.",
+            )
+        upload = await _read_validated_upload(file, max_bytes=settings.file_max_bytes)
+        try:
+            ensure_unique_identity(
+                session,
+                owner_id=user.id,
+                client_session_id=source.client_session_id,
+                kind="file",
+                identity_column=SourcePreparation.content_hash,
+                identity=upload.content_hash,
+                excluding_source_id=source.id,
+            )
+            next_version = source.input_version + 1
+            object_key = (
+                f"users/{user.id}/source-preparations/{source.id}/v{next_version}/"
+                f"{upload.content_hash}-{upload.filename}"
+            )
+            _store_upload(
+                storage,
+                object_key=object_key,
+                upload=upload,
+                source_id=source.id,
+            )
+        finally:
+            upload.stream.close()
+
+        now = datetime.now(UTC)
+        source.filename = upload.filename
+        source.content_type = upload.content_type
+        source.object_key = object_key
+        source.content_hash = upload.content_hash
+        source.size_bytes = upload.size_bytes
+        source.input_version = next_version
+        source.status = "processing"
+        source.title = None
+        source.body = None
+        source.provenance = None
+        source.warnings = []
+        source.failure_code = None
+        source.failure_message = None
+        source.accepted_result_id = None
+        source.updated_at = now
+        execution = _new_file_execution(source, attempt=1)
+        session.add(execution)
+        session.flush()
+        source.active_execution_id = execution.id
+        session.commit()
+        dispatch(execution.id)
+        session.refresh(source)
+        session.refresh(execution)
         return _response(source, execution)
 
     @router.post(
@@ -427,6 +564,7 @@ def file_source_router(
         source.title = normalized.title
         source.body = normalized.body
         source.provenance = normalized.provenance
+        source.input_version += 1
         source.warnings = source_warnings(
             body=normalized.body,
             provenance=normalized.provenance,

@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,303 +16,246 @@ const formalTask = {
   current_version_number: 1,
 };
 
-describe("task creation session", () => {
-  afterEach(() => vi.unstubAllGlobals());
+type TestSource = {
+  id: string;
+  client_source_id: string;
+  kind: "pasted" | "url" | "file";
+  input_version: number;
+  status: "ready" | "warning";
+  title: string;
+  body: string;
+  provenance: string | null;
+  warnings: { code: string; message: string }[];
+  failure: null;
+  active_execution: null;
+  capabilities: {
+    can_retry: boolean;
+    can_replace: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+    can_cancel: boolean;
+  };
+};
 
-  it("previews normalized content and confirms a 立言任务", async () => {
+const capabilities = {
+  can_retry: false,
+  can_replace: true,
+  can_edit: true,
+  can_delete: true,
+  can_cancel: false,
+};
+
+function sessionResponse(sources: TestSource[]) {
+  return {
+    client_session_id: "browser-session",
+    source_count: sources.length,
+    max_sources: 3,
+    can_add: sources.length < 3,
+    can_confirm: sources.length > 0,
+    confirmation_disabled_reason: sources.length ? null : "Add at least one source.",
+    sources,
+  };
+}
+
+function renderWorkspace(onTaskCreated = vi.fn()) {
+  function StatefulWorkspace() {
+    const [tasks, setTasks] = useState<typeof formalTask[]>([]);
+    return (
+      <TaskWorkspace
+        identity={{ id: "user-1", email: "writer@example.com" }}
+        accessToken="access-token"
+        tasks={tasks}
+        onTaskCreated={(task) => {
+          setTasks((current) => [task, ...current]);
+          onTaskCreated(task);
+        }}
+        onSignOut={vi.fn()}
+      />
+    );
+  }
+  render(<StatefulWorkspace />);
+  return onTaskCreated;
+}
+
+describe("task creation session", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.sessionStorage.clear();
+  });
+
+  it("retains three mixed sources and confirms their accepted snapshot in order", async () => {
+    const sources: TestSource[] = [];
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
-      if (request.url.endsWith("/task-creation/prepare")) {
-        return Response.json({
-          source: {
-            title: "Useful source",
-            body: "First line\n\nSecond line.",
-            provenance: null,
-          },
-          warnings: [
-            {
-              code: "missing_provenance",
-              message: "Provenance is missing; you can still create the task.",
-            },
-          ],
-          can_confirm: true,
-        });
+      if (request.method === "GET" && request.url.includes("/task-creation/sessions/")) {
+        return Response.json(sessionResponse(sources));
       }
-      if (request.url.endsWith("/task-creation/confirm")) {
+      if (request.method === "POST" && request.url.endsWith("/task-creation/pasted-sources")) {
+        const source: TestSource = {
+          id: "pasted-1",
+          client_source_id: "client-pasted",
+          kind: "pasted",
+          input_version: 1,
+          status: "warning",
+          title: "Pasted source",
+          body: "Pasted body.",
+          provenance: null,
+          warnings: [{ code: "missing_provenance", message: "Missing provenance." }],
+          failure: null,
+          active_execution: null,
+          capabilities,
+        };
+        sources.push(source);
+        return Response.json(source, { status: 201 });
+      }
+      if (request.method === "POST" && request.url.endsWith("/task-creation/url-sources")) {
+        const source: TestSource = {
+          id: "url-1",
+          client_source_id: "client-url",
+          kind: "url",
+          input_version: 1,
+          status: "ready",
+          title: "Fetched article",
+          body: "Fetched body.",
+          provenance: "https://example.com/article",
+          warnings: [],
+          failure: null,
+          active_execution: null,
+          capabilities,
+        };
+        sources.push(source);
+        return Response.json(source, { status: 201 });
+      }
+      if (request.method === "POST" && request.url.endsWith("/task-creation/file-sources")) {
+        const source: TestSource = {
+          id: "file-1",
+          client_source_id: "client-file",
+          kind: "file",
+          input_version: 1,
+          status: "ready",
+          title: "brief",
+          body: "Parsed file body.",
+          provenance: "brief.md",
+          warnings: [],
+          failure: null,
+          active_execution: null,
+          capabilities,
+        };
+        sources.push(source);
+        return Response.json(source, { status: 201 });
+      }
+      if (request.method === "PATCH" && request.url.endsWith("/task-creation/pasted-sources/pasted-1")) {
+        const updated = JSON.parse(await request.clone().text()) as {
+          title: string;
+          body: string;
+          provenance: string | null;
+        };
+        Object.assign(sources[0]!, updated, { input_version: 2 });
+        return Response.json(sources[0]);
+      }
+      if (request.method === "POST" && request.url.endsWith("/task-creation/confirm")) {
         return Response.json({
-          task: formalTask,
-          source_revision: {
-            id: "revision-1",
-            title: "Useful source",
-            body: "First line\n\nSecond line.",
-            provenance: null,
-          },
+          task: { ...formalTask, additional_source_count: 2 },
+          source_revision: { id: "revision-1", title: "Pasted source", body: "Pasted body.", provenance: null },
+          source_revisions: [],
         });
       }
       return new Response(null, { status: 404 });
     });
     vi.stubGlobal("fetch", fetch);
-    const onTaskCreated = vi.fn();
+    const onTaskCreated = renderWorkspace();
     const user = userEvent.setup();
 
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[]}
-        onTaskCreated={onTaskCreated}
-        onSignOut={vi.fn()}
-      />,
-    );
     await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.type(screen.getByLabelText("来源标题"), "  Useful   source  ");
-    await user.type(screen.getByLabelText("来源正文"), " First line\n\nSecond line. ");
-    await user.click(screen.getByRole("button", { name: "预览来源" }));
+    await screen.findByText("请先添加来源。");
+    await user.type(screen.getByLabelText("来源标题"), "Pasted source");
+    await user.type(screen.getByLabelText("来源正文"), "Pasted body.");
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
 
-    expect(await screen.findByRole("heading", { name: "确认来源" })).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) =>
-        element?.tagName === "PRE" && element.textContent === "First line\n\nSecond line.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("未填写出处，仍可继续创建。")).toBeInTheDocument();
+    expect(await screen.findByText("粘贴文本 · Pasted source")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认并创建任务" })).toBeDisabled();
 
+    await user.click(screen.getByRole("button", { name: "公共文章链接" }));
+    await user.type(screen.getByLabelText("来源网址"), "https://example.com/article");
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
+    expect(await screen.findByText("公共文章链接 · Fetched article")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "上传文件" }));
+    await user.upload(
+      screen.getByLabelText("来源文件"),
+      new File(["Parsed file body."], "brief.md", { type: "text/markdown" }),
+    );
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
+    expect(await screen.findByText("上传文件 · brief")).toBeInTheDocument();
+    expect(screen.getByText("已达到三个来源上限；删除一个来源后可继续添加。")).toBeInTheDocument();
+
+    const warningCheckbox = screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" });
+    await user.click(warningCheckbox);
+    const pastedCard = screen.getByText("粘贴文本 · Pasted source").closest("article");
+    expect(pastedCard).not.toBeNull();
+    const pastedTitle = within(pastedCard!).getByDisplayValue("Pasted source");
+    await user.clear(pastedTitle);
+    await user.type(pastedTitle, "Edited pasted source");
+    expect(screen.getByRole("button", { name: "确认并创建任务" })).toBeDisabled();
+    expect(screen.getByText("请先保存所有来源编辑。")).toBeInTheDocument();
+    await user.click(within(pastedCard!).getByRole("button", { name: "保存此来源" }));
+    expect(await screen.findByText("粘贴文本 · Edited pasted source")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" })).not.toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" }));
     await user.click(screen.getByRole("button", { name: "确认并创建任务" }));
 
-    expect(onTaskCreated).toHaveBeenCalledWith(formalTask);
-    const requests = fetch.mock.calls.map(([request]) => request as Request);
-    expect(requests).toHaveLength(2);
-    expect(requests[0]?.headers.get("Authorization")).toBe("Bearer access-token");
-    const confirmation = JSON.parse(await requests[1]!.clone().text()) as {
-      idempotency_key: string;
-      source: { title: string };
+    expect(onTaskCreated).toHaveBeenCalledWith({ ...formalTask, additional_source_count: 2 });
+    expect(screen.getByRole("article", { name: "已打开任务 First source" })).toHaveFocus();
+    const confirmationRequest = fetch.mock.calls
+      .map(([request]) => request as Request)
+      .find((request) => request.url.endsWith("/task-creation/confirm"));
+    expect(confirmationRequest?.headers.get("Authorization")).toBe("Bearer access-token");
+    const confirmation = JSON.parse(await confirmationRequest!.clone().text()) as {
+      source_ids: string[];
+      accepted_warning_versions: Record<string, number>;
     };
-    expect(confirmation.idempotency_key).toBeTruthy();
-    expect(confirmation.source.title).toBe("Useful source");
+    expect(confirmation.source_ids).toEqual(["pasted-1", "url-1", "file-1"]);
+    expect(confirmation.accepted_warning_versions).toEqual({ "pasted-1": 2 });
   });
 
-  it("keeps prepared page state after confirmation fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (request: Request) => {
-        if (request.url.endsWith("/task-creation/prepare")) {
-          return Response.json({
-            source: { title: "Source", body: "Body", provenance: null },
-            warnings: [],
-            can_confirm: true,
-          });
-        }
-        return Response.json({ detail: "Temporary failure" }, { status: 503 });
-      }),
-    );
+  it("keeps every retained source after confirmation fails", async () => {
+    const retained: TestSource = {
+      id: "pasted-1",
+      client_source_id: "client-pasted",
+      kind: "pasted",
+      input_version: 1,
+      status: "ready",
+      title: "Retained source",
+      body: "Retained body.",
+      provenance: "Notes",
+      warnings: [],
+      failure: null,
+      active_execution: null,
+      capabilities,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      if (request.method === "GET") return Response.json(sessionResponse([retained]));
+      return Response.json({ detail: "Temporary failure" }, { status: 503 });
+    }));
     const user = userEvent.setup();
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[]}
-        onTaskCreated={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
+    renderWorkspace();
     await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.type(screen.getByLabelText("来源标题"), "Source");
-    await user.type(screen.getByLabelText("来源正文"), "Body");
-    await user.click(screen.getByRole("button", { name: "预览来源" }));
     await user.click(await screen.findByRole("button", { name: "确认并创建任务" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，内容仍保留在此页面。请重试。");
-    expect(screen.getByRole("heading", { name: "确认来源" })).toBeInTheDocument();
-    expect(screen.getByText("Body", { selector: "pre" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，来源仍保留在此会话中。请重试。");
+    expect(screen.getByText("粘贴文本 · Retained source")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Retained body.")).toBeInTheDocument();
   });
 
-  it("warns before leaving a dirty browser-local creation session", async () => {
+  it("warns before leaving a dirty creation session", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([]))));
     const user = userEvent.setup();
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[]}
-        onTaskCreated={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
+    renderWorkspace();
     await user.click(screen.getByRole("button", { name: "新建立言任务" }));
     await user.type(screen.getByLabelText("来源正文"), "Unsaved text");
 
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
-
     expect(event.defaultPrevented).toBe(true);
-  });
-
-  it("shows per-来源 URL processing and editable extracted content", async () => {
-    const execution = {
-      id: "execution-1",
-      operation: "fetch_url",
-      status: "queued",
-      attempt: 1,
-      input_version: 1,
-      trace_id: "trace-1",
-      created_at: "2026-08-22T18:00:00Z",
-      started_at: null,
-      finished_at: null,
-      cancellation_requested_at: null,
-      result_id: null,
-      error: null,
-    };
-    const processing = {
-      id: "url-source-1",
-      client_session_id: "session-1",
-      client_source_id: "source-1",
-      input_url: "https://example.com/article",
-      normalized_url: "https://example.com/article",
-      input_version: 1,
-      status: "processing",
-      title: null,
-      body: null,
-      provenance: null,
-      warnings: [],
-      failure: null,
-      active_execution: execution,
-      capabilities: { can_retry: false, can_replace: true, can_cancel: true },
-    };
-    const ready = {
-      ...processing,
-      status: "ready",
-      title: "Extracted article",
-      body: "Full extracted body.",
-      provenance: "https://example.com/article",
-      active_execution: {
-        ...execution,
-        status: "succeeded",
-        result_id: "result-1",
-        started_at: "2026-08-22T18:00:01Z",
-        finished_at: "2026-08-22T18:00:02Z",
-      },
-      capabilities: { can_retry: false, can_replace: true, can_cancel: false },
-    };
-    const fetch = vi.fn().mockImplementation(async (request: Request) => {
-      if (request.method === "POST" && request.url.endsWith("/task-creation/url-sources")) {
-        return Response.json(processing, { status: 201 });
-      }
-      if (request.method === "GET" && request.url.endsWith("/url-source-1")) {
-        return Response.json(ready);
-      }
-      return new Response(null, { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetch);
-    const user = userEvent.setup();
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[]}
-        onTaskCreated={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.click(screen.getByRole("button", { name: "公共文章链接" }));
-    await user.type(screen.getByLabelText("来源网址"), "https://example.com/article");
-    await user.click(screen.getByRole("button", { name: "开始提取" }));
-
-    expect(await screen.findByText("提取完成")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Extracted article")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Full extracted body.")).toBeInTheDocument();
-    expect(screen.getByText("尝试 1 · 已完成")).toBeInTheDocument();
-    const requests = fetch.mock.calls.map(([request]) => request as Request);
-    expect(requests).toHaveLength(2);
-    expect(requests.every((request) => request.headers.get("Authorization") === "Bearer access-token"))
-      .toBe(true);
-  });
-
-  it("uploads a document and shows editable deterministic parse output", async () => {
-    const execution = {
-      id: "execution-file-1",
-      operation: "parse_file",
-      status: "queued",
-      attempt: 1,
-      input_version: 1,
-      trace_id: "trace-file-1",
-      created_at: "2026-08-22T18:00:00Z",
-      started_at: null,
-      finished_at: null,
-      cancellation_requested_at: null,
-      result_id: null,
-      error: null,
-    };
-    const processing = {
-      id: "file-source-1",
-      client_session_id: "session-1",
-      client_source_id: "source-1",
-      filename: "brief.md",
-      content_type: "text/markdown",
-      content_hash: "abc123",
-      size_bytes: 24,
-      input_version: 1,
-      status: "processing",
-      title: null,
-      body: null,
-      provenance: null,
-      warnings: [],
-      failure: null,
-      active_execution: execution,
-      capabilities: { can_retry: false, can_replace: false, can_cancel: true },
-    };
-    const ready = {
-      ...processing,
-      status: "ready",
-      title: "brief",
-      body: "# Brief\n\nParsed content.",
-      provenance: "brief.md",
-      active_execution: {
-        ...execution,
-        status: "succeeded",
-        result_id: "result-file-1",
-        started_at: "2026-08-22T18:00:01Z",
-        finished_at: "2026-08-22T18:00:02Z",
-      },
-      capabilities: { can_retry: false, can_replace: true, can_cancel: false },
-    };
-    const fetch = vi.fn().mockImplementation(async (request: Request) => {
-      if (request.method === "POST" && request.url.endsWith("/task-creation/file-sources")) {
-        return Response.json(processing, { status: 201 });
-      }
-      if (request.method === "GET" && request.url.endsWith("/file-source-1")) {
-        return Response.json(ready);
-      }
-      return new Response(null, { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetch);
-    const user = userEvent.setup();
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[]}
-        onTaskCreated={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.click(screen.getByRole("button", { name: "上传文件" }));
-    await user.upload(
-      screen.getByLabelText("来源文件"),
-      new File(["# Brief\n\nParsed content."], "brief.md", { type: "text/markdown" }),
-    );
-    await user.click(screen.getByRole("button", { name: "开始解析" }));
-
-    expect(await screen.findByText("解析完成")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("brief")).toBeInTheDocument();
-    expect(document.getElementById("file-source-body")).toHaveValue(
-      "# Brief\n\nParsed content.",
-    );
-    expect(screen.getByText("brief.md · 24 字节")).toBeInTheDocument();
-    const uploadRequest = fetch.mock.calls[0]?.[0] as Request;
-    expect(uploadRequest.headers.get("Authorization")).toBe("Bearer access-token");
-    expect(uploadRequest.headers.get("Content-Type")).toMatch(/^multipart\/form-data; boundary=/);
   });
 });
 
@@ -331,13 +275,9 @@ describe("立言任务 list", () => {
       />,
     );
 
-    expect(screen.getByText("#1")).toBeInTheDocument();
-    expect(screen.getByText("First source", { selector: ".task-card__source" })).toBeInTheDocument();
-    expect(
-      screen.getByText((_, element) =>
-        element?.tagName === "P" && element.textContent?.startsWith("另有 0 个来源") === true,
-      ),
-    ).toBeInTheDocument();
+    const taskCard = screen.getByRole("article");
+    expect(within(taskCard).getByText("#1")).toBeInTheDocument();
+    expect(within(taskCard).getByText("First source", { selector: ".task-card__source" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重命名 First source" }));
     const input = screen.getByLabelText("任务名称");
     await user.clear(input);

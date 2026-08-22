@@ -192,10 +192,46 @@ h1 {
 }
 
 .workspace__actions,
-.button-row {
+.button-row,
+.source-kind-tabs,
+.source-operation__status {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.source-kind-tabs {
+  margin: 20px 0;
+}
+
+.source-operation {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #d7ccb9;
+  border-radius: 12px;
+  background: #f8f4eb;
+}
+
+.source-operation__status {
+  justify-content: space-between;
+}
+
+.source-operation__status span {
+  color: #6e685b;
+  font-size: 0.86rem;
+}
+
+.source-operation--ready,
+.source-operation--warning {
+  border-color: #aac4ae;
+  background: #f1f7f1;
+}
+
+.source-operation--failure {
+  border-color: #d5aaa4;
+  background: #fbf1ef;
 }
 
 .creation-session {

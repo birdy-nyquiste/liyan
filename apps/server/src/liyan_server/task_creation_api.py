@@ -19,6 +19,7 @@ from liyan_server.database import (
     User,
 )
 from liyan_server.settings import Settings
+from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_api import TaskSummary, task_summary
 
 
@@ -62,22 +63,17 @@ class ConfirmTaskResponse(BaseModel):
     source_revision: SourceRevisionResponse
 
 
-def _normalize_single_line(value: str) -> str:
-    return " ".join(value.split())
-
-
 def normalize_source(source: SourceInput) -> PreparedSource:
-    title = _normalize_single_line(source.title)
-    body = source.body.replace("\r\n", "\n").replace("\r", "\n").strip()
-    provenance = _normalize_single_line(source.provenance) if source.provenance else ""
-    errors: list[dict[str, str]] = []
-    if not title:
-        errors.append({"field": "title", "message": "A source title is required."})
-    if not body:
-        errors.append({"field": "body", "message": "A source body is required."})
-    if errors:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=errors)
-    return PreparedSource(title=title, body=body, provenance=provenance or None)
+    normalized = normalize_source_content(
+        title=source.title,
+        body=source.body,
+        provenance=source.provenance,
+    )
+    return PreparedSource(
+        title=normalized.title,
+        body=normalized.body,
+        provenance=normalized.provenance,
+    )
 
 
 def _request_hash(source: PreparedSource) -> str:
@@ -130,21 +126,14 @@ def task_creation_router(
         _: Annotated[User, Depends(current_user)],
     ) -> PrepareSourceResponse:
         prepared = normalize_source(source)
-        warnings: list[PreparationWarning] = []
-        if len(prepared.body) < settings.short_source_characters:
-            warnings.append(
-                PreparationWarning(
-                    code="short_body",
-                    message="The source body is short; confirm that it is complete.",
-                )
+        warnings = [
+            PreparationWarning.model_validate(warning)
+            for warning in source_warnings(
+                body=prepared.body,
+                provenance=prepared.provenance,
+                short_source_characters=settings.short_source_characters,
             )
-        if prepared.provenance is None:
-            warnings.append(
-                PreparationWarning(
-                    code="missing_provenance",
-                    message="Provenance is missing; you can still create the task.",
-                )
-            )
+        ]
         return PrepareSourceResponse(source=prepared, warnings=warnings)
 
     @router.post(

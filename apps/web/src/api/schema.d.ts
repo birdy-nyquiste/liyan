@@ -123,6 +123,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/task-creation/url-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Url Source */
+        post: operations["create_url_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/url-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Url Source */
+        get: operations["get_url_source"];
+        /** Replace Url Source */
+        put: operations["replace_url_source"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/url-sources/{source_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Url Source */
+        post: operations["retry_url_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/url-sources/{source_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Url Source Content */
+        patch: operations["edit_url_source_content"];
+        trace?: never;
+    };
+    "/executions/{execution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Execution */
+        get: operations["get_execution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/executions/{execution_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Execution */
+        post: operations["cancel_execution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -138,6 +241,15 @@ export interface components {
             task: components["schemas"]["TaskSummary"];
             source_revision: components["schemas"]["SourceRevisionResponse"];
         };
+        /** CreateUrlSourceRequest */
+        CreateUrlSourceRequest: {
+            /** Client Session Id */
+            client_session_id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /** Url */
+            url: string;
+        };
         /** CurrentUserResponse */
         CurrentUserResponse: {
             /** Id */
@@ -145,6 +257,55 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** EditUrlSourceContentRequest */
+        EditUrlSourceContentRequest: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance?: string | null;
+        };
+        /** ExecutionError */
+        ExecutionError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** ExecutionResponse */
+        ExecutionResponse: {
+            /** Id */
+            id: string;
+            /**
+             * Operation
+             * @constant
+             */
+            operation: "fetch_url";
+            status: components["schemas"]["ExecutionStatus"];
+            /** Attempt */
+            attempt: number;
+            /** Input Version */
+            input_version: number;
+            /** Trace Id */
+            trace_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Cancellation Requested At */
+            cancellation_requested_at: string | null;
+            /** Result Id */
+            result_id: string | null;
+            error: components["schemas"]["ExecutionError"] | null;
+        };
+        /** @enum {string} */
+        ExecutionStatus: "queued" | "running" | "cancel_requested" | "cancelled" | "failed" | "stale" | "succeeded";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -211,6 +372,18 @@ export interface components {
             /** Display Name */
             display_name: string;
         };
+        /** ReplaceUrlSourceRequest */
+        ReplaceUrlSourceRequest: {
+            /** Url */
+            url: string;
+        };
+        /** SourceFailure */
+        SourceFailure: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
         /** SourceInput */
         SourceInput: {
             /** Title */
@@ -220,6 +393,8 @@ export interface components {
             /** Provenance */
             provenance?: string | null;
         };
+        /** @enum {string} */
+        SourcePreparationStatus: "processing" | "ready" | "warning" | "failure";
         /** SourceRevisionResponse */
         SourceRevisionResponse: {
             /** Id */
@@ -230,6 +405,13 @@ export interface components {
             body: string;
             /** Provenance */
             provenance: string | null;
+        };
+        /** SourceWarning */
+        SourceWarning: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /** TaskListResponse */
         TaskListResponse: {
@@ -257,6 +439,42 @@ export interface components {
             current_version_id: string;
             /** Current Version Number */
             current_version_number: number;
+        };
+        /** UrlSourceCapabilities */
+        UrlSourceCapabilities: {
+            /** Can Retry */
+            can_retry: boolean;
+            /** Can Replace */
+            can_replace: boolean;
+            /** Can Cancel */
+            can_cancel: boolean;
+        };
+        /** UrlSourceResponse */
+        UrlSourceResponse: {
+            /** Id */
+            id: string;
+            /** Client Session Id */
+            client_session_id: string;
+            /** Client Source Id */
+            client_source_id: string;
+            /** Input Url */
+            input_url: string;
+            /** Normalized Url */
+            normalized_url: string;
+            /** Input Version */
+            input_version: number;
+            status: components["schemas"]["SourcePreparationStatus"];
+            /** Title */
+            title: string | null;
+            /** Body */
+            body: string | null;
+            /** Provenance */
+            provenance: string | null;
+            /** Warnings */
+            warnings: components["schemas"]["SourceWarning"][];
+            failure: components["schemas"]["SourceFailure"] | null;
+            active_execution: components["schemas"]["ExecutionResponse"] | null;
+            capabilities: components["schemas"]["UrlSourceCapabilities"];
         };
         /** ValidationError */
         ValidationError: {
@@ -457,6 +675,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfirmTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_url_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUrlSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_url_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_url_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceUrlSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_url_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_url_source_content: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditUrlSourceContentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_execution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionResponse"];
                 };
             };
             /** @description Validation Error */

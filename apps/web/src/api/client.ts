@@ -6,6 +6,7 @@ import type { components } from "./schema";
 export type SourceInput = components["schemas"]["SourceInput"];
 export type PreparedSourceResponse = components["schemas"]["PrepareSourceResponse"];
 export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
+export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -83,4 +84,82 @@ export async function renameTask(
   });
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
+}
+
+export async function createUrlSource(
+  accessToken: string,
+  clientSessionId: string,
+  clientSourceId: string,
+  url: string,
+): Promise<UrlSourceResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/url-sources", {
+    body: {
+      client_session_id: clientSessionId,
+      client_source_id: clientSourceId,
+      url,
+    },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getUrlSource(
+  accessToken: string,
+  sourceId: string,
+): Promise<UrlSourceResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/task-creation/url-sources/{source_id}",
+    { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function retryUrlSource(
+  accessToken: string,
+  sourceId: string,
+): Promise<UrlSourceResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/task-creation/url-sources/{source_id}/retry",
+    { params: { path: { source_id: sourceId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function replaceUrlSource(
+  accessToken: string,
+  sourceId: string,
+  url: string,
+): Promise<UrlSourceResponse> {
+  const result = await authenticatedApi(accessToken).PUT(
+    "/task-creation/url-sources/{source_id}",
+    { params: { path: { source_id: sourceId } }, body: { url } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function editUrlSourceContent(
+  accessToken: string,
+  sourceId: string,
+  source: SourceInput,
+): Promise<UrlSourceResponse> {
+  const result = await authenticatedApi(accessToken).PATCH(
+    "/task-creation/url-sources/{source_id}/content",
+    { params: { path: { source_id: sourceId } }, body: source },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function cancelExecution(
+  accessToken: string,
+  executionId: string,
+): Promise<void> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/executions/{execution_id}/cancel",
+    { params: { path: { execution_id: executionId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
 }

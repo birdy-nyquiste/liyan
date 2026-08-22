@@ -3,9 +3,11 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Engine,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -16,6 +18,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+from liyan_server.execution_states import ExecutionStatus, SourcePreparationStatus
 
 
 class Base(DeclarativeBase):
@@ -116,6 +120,124 @@ class TaskVersionSource(Base):
         primary_key=True,
     )
     position: Mapped[int] = mapped_column(Integer)
+
+
+class SourcePreparation(Base):
+    __tablename__ = "source_preparations"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "client_session_id",
+            "client_source_id",
+            name="uq_source_preparations_owner_client_identity",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    client_session_id: Mapped[str] = mapped_column(String(255))
+    client_source_id: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(32))
+    input_url: Mapped[str] = mapped_column(Text)
+    normalized_url: Mapped[str] = mapped_column(Text)
+    input_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[SourcePreparationStatus] = mapped_column(String(32))
+    title: Mapped[str | None] = mapped_column(String(255))
+    body: Mapped[str | None] = mapped_column(Text)
+    provenance: Mapped[str | None] = mapped_column(Text)
+    warnings: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    failure_message: Mapped[str | None] = mapped_column(Text)
+    active_execution_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey(
+            "executions.id",
+            name="fk_source_preparations_active_execution_id",
+            use_alter=True,
+        ),
+    )
+    accepted_result_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey(
+            "url_fetch_results.id",
+            name="fk_source_preparations_accepted_result_id",
+            use_alter=True,
+        ),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Execution(Base):
+    __tablename__ = "executions"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_id",
+            "input_version",
+            "attempt",
+            name="uq_executions_target_input_attempt",
+        ),
+        Index("ix_executions_owner_id", "owner_id"),
+        Index("ix_executions_target_id", "target_id"),
+        Index(
+            "uq_executions_one_active_per_target",
+            "target_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running', 'cancel_requested')"),
+            sqlite_where=text("status IN ('queued', 'running', 'cancel_requested')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    operation: Mapped[str] = mapped_column(String(64))
+    target_type: Mapped[str] = mapped_column(String(64))
+    target_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("source_preparations.id", ondelete="CASCADE"),
+    )
+    input_version: Mapped[int] = mapped_column(Integer)
+    input_identity: Mapped[str] = mapped_column(String(64))
+    input_snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
+    attempt: Mapped[int] = mapped_column(Integer)
+    status: Mapped[ExecutionStatus] = mapped_column(String(32))
+    trace_id: Mapped[UUID] = mapped_column(Uuid, default=uuid4)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    internal_error: Mapped[str | None] = mapped_column(Text)
+    cancellation_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("url_fetch_results.id", name="fk_executions_result_id", use_alter=True),
+    )
+
+
+class UrlFetchResult(Base):
+    __tablename__ = "url_fetch_results"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    execution_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    input_identity: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    provenance: Mapped[str] = mapped_column(Text)
+    page_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class Database:

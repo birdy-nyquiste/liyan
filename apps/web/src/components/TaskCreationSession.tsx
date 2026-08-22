@@ -6,6 +6,7 @@ import {
   type PreparedSourceResponse,
 } from "../api/client";
 import type { TaskSummary } from "../auth/state";
+import { UrlSourcePanel } from "./UrlSourcePanel";
 
 type DraftSource = { title: string; body: string; provenance: string };
 const emptyDraft: DraftSource = { title: "", body: "", provenance: "" };
@@ -24,9 +25,15 @@ export function TaskCreationSession({
   const [draft, setDraft] = useState<DraftSource>(emptyDraft);
   const [prepared, setPrepared] = useState<PreparedSourceResponse | null>(null);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [clientSessionId] = useState(() => crypto.randomUUID());
+  const [mode, setMode] = useState<"paste" | "url">("paste");
+  const [urlDirty, setUrlDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dirty = prepared !== null || Object.values(draft).some((value) => value.length > 0);
+  const dirty =
+    prepared !== null ||
+    urlDirty ||
+    Object.values(draft).some((value) => value.length > 0);
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -78,6 +85,28 @@ export function TaskCreationSession({
     }
   }
 
+  async function prepareUrlSource(source: {
+    title: string;
+    body: string;
+    provenance?: string | null;
+  }) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await prepareTaskSource(accessToken, source);
+      setDraft({
+        title: result.source.title,
+        body: result.source.body,
+        provenance: result.source.provenance ?? "",
+      });
+      setPrepared(result);
+    } catch {
+      setError("无法准备此来源，请检查提取内容后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const close = () => {
     if (!dirty || window.confirm("未完成的创建内容不会保存，确定离开吗？")) onClose();
   };
@@ -87,12 +116,30 @@ export function TaskCreationSession({
       <div className="creation-session__heading">
         <div>
           <p className="section-kicker">仅保留在当前浏览器页面</p>
-          <h3>{prepared ? "确认来源" : "粘贴一个来源"}</h3>
+          <h3>{prepared ? "确认来源" : mode === "url" ? "提取公共文章" : "粘贴一个来源"}</h3>
         </div>
         <button className="button button--quiet" type="button" onClick={close}>
           关闭
         </button>
       </div>
+      {!prepared ? (
+        <div className="source-kind-tabs" aria-label="来源类型">
+          <button
+            className={`button ${mode === "paste" ? "" : "button--quiet"}`}
+            type="button"
+            onClick={() => setMode("paste")}
+          >
+            粘贴文本
+          </button>
+          <button
+            className={`button ${mode === "url" ? "" : "button--quiet"}`}
+            type="button"
+            onClick={() => setMode("url")}
+          >
+            公共文章链接
+          </button>
+        </div>
+      ) : null}
       {prepared ? (
         <div className="source-preview">
           <h4>{prepared.source.title}</h4>
@@ -121,37 +168,48 @@ export function TaskCreationSession({
             </button>
           </div>
         </div>
-      ) : (
-        <form className="creation-form" onSubmit={(event) => void preview(event)}>
-          <label htmlFor="source-title">来源标题</label>
-          <input
-            id="source-title"
-            value={draft.title}
-            onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-            required
-          />
-          <label htmlFor="source-body">来源正文</label>
-          <textarea
-            id="source-body"
-            rows={12}
-            value={draft.body}
-            onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-            required
-          />
-          <label htmlFor="source-provenance">出处（可选）</label>
-          <input
-            id="source-provenance"
-            value={draft.provenance}
-            onChange={(event) => setDraft({ ...draft, provenance: event.target.value })}
-          />
-          {error ? (
-            <p role="alert" className="form-error">{error}</p>
-          ) : null}
-          <button className="button" type="submit" disabled={busy}>
-            {busy ? "正在整理…" : "预览来源"}
-          </button>
-        </form>
-      )}
+      ) : null}
+      <div hidden={prepared !== null || mode !== "url"}>
+        <UrlSourcePanel
+          accessToken={accessToken}
+          clientSessionId={clientSessionId}
+          onDirtyChange={setUrlDirty}
+          onPrepared={(source) => void prepareUrlSource(source)}
+        />
+      </div>
+      <form
+        className="creation-form"
+        hidden={prepared !== null || mode !== "paste"}
+        onSubmit={(event) => void preview(event)}
+      >
+        <label htmlFor="source-title">来源标题</label>
+        <input
+          id="source-title"
+          value={draft.title}
+          onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+          required
+        />
+        <label htmlFor="source-body">来源正文</label>
+        <textarea
+          id="source-body"
+          rows={12}
+          value={draft.body}
+          onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+          required
+        />
+        <label htmlFor="source-provenance">出处（可选）</label>
+        <input
+          id="source-provenance"
+          value={draft.provenance}
+          onChange={(event) => setDraft({ ...draft, provenance: event.target.value })}
+        />
+        {error ? (
+          <p role="alert" className="form-error">{error}</p>
+        ) : null}
+        <button className="button" type="submit" disabled={busy}>
+          {busy ? "正在整理…" : "预览来源"}
+        </button>
+      </form>
     </section>
   );
 }

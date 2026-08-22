@@ -121,7 +121,7 @@ describe("task creation session", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，内容仍保留在此页面。请重试。");
     expect(screen.getByRole("heading", { name: "确认来源" })).toBeInTheDocument();
-    expect(screen.getByText("Body")).toBeInTheDocument();
+    expect(screen.getByText("Body", { selector: "pre" })).toBeInTheDocument();
   });
 
   it("warns before leaving a dirty browser-local creation session", async () => {
@@ -142,6 +142,88 @@ describe("task creation session", () => {
     window.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("shows per-来源 URL processing and editable extracted content", async () => {
+    const execution = {
+      id: "execution-1",
+      operation: "fetch_url",
+      status: "queued",
+      attempt: 1,
+      input_version: 1,
+      trace_id: "trace-1",
+      created_at: "2026-08-22T18:00:00Z",
+      started_at: null,
+      finished_at: null,
+      cancellation_requested_at: null,
+      result_id: null,
+      error: null,
+    };
+    const processing = {
+      id: "url-source-1",
+      client_session_id: "session-1",
+      client_source_id: "source-1",
+      input_url: "https://example.com/article",
+      normalized_url: "https://example.com/article",
+      input_version: 1,
+      status: "processing",
+      title: null,
+      body: null,
+      provenance: null,
+      warnings: [],
+      failure: null,
+      active_execution: execution,
+      capabilities: { can_retry: false, can_replace: true, can_cancel: true },
+    };
+    const ready = {
+      ...processing,
+      status: "ready",
+      title: "Extracted article",
+      body: "Full extracted body.",
+      provenance: "https://example.com/article",
+      active_execution: {
+        ...execution,
+        status: "succeeded",
+        result_id: "result-1",
+        started_at: "2026-08-22T18:00:01Z",
+        finished_at: "2026-08-22T18:00:02Z",
+      },
+      capabilities: { can_retry: false, can_replace: true, can_cancel: false },
+    };
+    const fetch = vi.fn().mockImplementation(async (request: Request) => {
+      if (request.method === "POST" && request.url.endsWith("/task-creation/url-sources")) {
+        return Response.json(processing, { status: 201 });
+      }
+      if (request.method === "GET" && request.url.endsWith("/url-source-1")) {
+        return Response.json(ready);
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    render(
+      <TaskWorkspace
+        identity={{ id: "user-1", email: "writer@example.com" }}
+        accessToken="access-token"
+        tasks={[]}
+        onTaskCreated={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
+    await user.click(screen.getByRole("button", { name: "公共文章链接" }));
+    await user.type(screen.getByLabelText("来源网址"), "https://example.com/article");
+    await user.click(screen.getByRole("button", { name: "开始提取" }));
+
+    expect(await screen.findByText("提取完成")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Extracted article")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Full extracted body.")).toBeInTheDocument();
+    expect(screen.getByText("尝试 1 · 已完成")).toBeInTheDocument();
+    const requests = fetch.mock.calls.map(([request]) => request as Request);
+    expect(requests).toHaveLength(2);
+    expect(requests.every((request) => request.headers.get("Authorization") === "Bearer access-token"))
+      .toBe(true);
   });
 });
 

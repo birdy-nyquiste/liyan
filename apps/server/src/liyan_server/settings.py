@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     supabase_audience: str = "authenticated"
     supabase_jwks_url: str = ""
     short_source_characters: int = 500
+    broker_url: str = "redis://localhost:6379/0"
+    crawl4ai_base_directory: str = "/tmp/liyan-crawl4ai"
+    url_fetch_timeout_seconds: int = 60
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

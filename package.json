@@ -1,0 +1,20 @@
+{
+  "name": "liyan",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "api:export": ".venv/bin/python scripts/export_openapi.py",
+    "api:generate": "npm run api:export && npm run generate:api --workspace @liyan/web",
+    "api:check": "npm run api:generate && git diff --exit-code -- openapi.json apps/web/src/api/schema.d.ts",
+    "dev:web": "npm run dev --workspace @liyan/web",
+    "lint:web": "npm run lint --workspace @liyan/web",
+    "test:web": "npm run test --workspace @liyan/web",
+    "typecheck:web": "npm run typecheck --workspace @liyan/web"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

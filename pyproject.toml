@@ -1,0 +1,51 @@
+[project]
+name = "liyan-server"
+version = "0.1.0"
+description = "The modular-monolith server for 立言阁."
+requires-python = ">=3.13"
+dependencies = [
+  "alembic>=1.16,<2",
+  "fastapi>=0.116,<1",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.10,<3",
+  "sqlalchemy>=2.0,<3",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "ruff>=0.12,<1",
+]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["apps/server/src"]
+testpaths = ["apps/server/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["liyan_server"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["apps/server/src", "apps/server/tests", "scripts"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apps/server/src/liyan_server"]

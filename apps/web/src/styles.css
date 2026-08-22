@@ -1,0 +1,132 @@
+:root {
+  color: #29261f;
+  background: #f3efe6;
+  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 15%, rgb(255 255 255 / 70%), transparent 32rem),
+    #f3efe6;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  width: min(1040px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 80px 0;
+}
+
+.masthead {
+  max-width: 680px;
+}
+
+.eyebrow,
+.section-kicker {
+  margin: 0 0 14px;
+  color: #856b37;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 12px;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: clamp(3rem, 8vw, 5.5rem);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+
+.subtitle {
+  color: #6e685b;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+}
+
+.workspace {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  margin-top: 72px;
+  padding: 36px;
+  border: 1px solid rgb(66 57 39 / 14%);
+  border-radius: 20px;
+  background: rgb(255 253 247 / 78%);
+  box-shadow: 0 24px 70px rgb(69 58 36 / 9%);
+}
+
+.workspace h2 {
+  margin-bottom: 8px;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.workspace p:last-child {
+  margin-bottom: 0;
+  color: #6e685b;
+}
+
+.status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 156px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: #eee9dd;
+  color: #655e51;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.status__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.status--available {
+  background: #e3eee5;
+  color: #2e6c42;
+}
+
+.status--unavailable {
+  background: #f3e2df;
+  color: #95473d;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(100% - 28px, 1040px);
+    padding: 48px 0;
+  }
+
+  .workspace {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-top: 48px;
+    padding: 26px;
+  }
+}

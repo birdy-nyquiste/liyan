@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: liyan_test
+          POSTGRES_USER: liyan
+          POSTGRES_PASSWORD: liyan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U liyan -d liyan_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      LIYAN_DATABASE_URL: postgresql+psycopg://liyan:liyan@localhost:5432/liyan_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked
+          npm ci
+
+      - name: Check backend
+        run: |
+          uv run ruff check apps/server scripts
+          uv run mypy
+          uv run pytest
+
+      - name: Check empty-database migrations
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+
+      - name: Check frontend
+        run: |
+          npm run lint:web
+          npm run typecheck:web
+          npm run test:web
+          npm run build --workspace @liyan/web
+
+      - name: Check generated OpenAPI contract
+        run: npm run api:check

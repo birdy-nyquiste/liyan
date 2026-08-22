@@ -8,15 +8,15 @@ from liyan_server.auth import HttpJwksLoader, JwksJwtVerifier, JwtVerifier
 from liyan_server.authentication import Authenticator, current_user_dependency
 from liyan_server.database import Database
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher, ExecutionDispatcher
-from liyan_server.file_source_api import file_source_router
 from liyan_server.health import health_router
 from liyan_server.identity_api import identity_router
 from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.task_api import task_router
-from liyan_server.task_creation_api import task_creation_router
-from liyan_server.task_creation_session_api import task_creation_session_router
-from liyan_server.url_source_api import url_source_router
+from liyan_server.task_creation.confirmation import task_creation_router
+from liyan_server.task_creation.file_api import file_source_router
+from liyan_server.task_creation.session_api import task_creation_session_router
+from liyan_server.task_creation.url_api import url_source_router
 
 
 def create_app(

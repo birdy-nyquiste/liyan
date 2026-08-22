@@ -21,18 +21,18 @@ from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES, SourcePrepa
 from liyan_server.object_storage import ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
-from liyan_server.task_creation_sessions import (
-    ensure_session_capacity,
-    ensure_unique_identity,
-    lock_owner,
-    normalized_session_identity,
-)
-from liyan_server.url_source_api import (
+from liyan_server.task_creation.contracts import (
     EditSourceContentRequest,
     ExecutionResponse,
     SourceFailure,
     SourceWarning,
     execution_response,
+)
+from liyan_server.task_creation.sessions import (
+    ensure_session_capacity,
+    ensure_unique_identity,
+    lock_owner,
+    normalized_session_identity,
 )
 
 logger = logging.getLogger(__name__)

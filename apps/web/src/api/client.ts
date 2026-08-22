@@ -4,7 +4,6 @@ import type { paths } from "./schema";
 import type { components } from "./schema";
 
 export type SourceInput = components["schemas"]["SourceInput"];
-export type PreparedSourceResponse = components["schemas"]["PrepareSourceResponse"];
 export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
 export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
@@ -51,34 +50,6 @@ function authenticatedApi(accessToken: string) {
     baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-}
-
-export async function prepareTaskSource(
-  accessToken: string,
-  source: SourceInput,
-): Promise<PreparedSourceResponse> {
-  const result = await authenticatedApi(accessToken).POST("/task-creation/prepare", {
-    body: source,
-  });
-  if (!result.data) throw new ApiError(result.response.status);
-  return result.data;
-}
-
-export async function confirmTaskCreation(
-  accessToken: string,
-  idempotencyKey: string,
-  source: SourceInput,
-): Promise<TaskSummaryResponse> {
-  const result = await authenticatedApi(accessToken).POST("/task-creation/confirm", {
-    body: {
-      idempotency_key: idempotencyKey,
-      source,
-      source_ids: [],
-      accepted_warning_versions: {},
-    },
-  });
-  if (!result.data) throw new ApiError(result.response.status);
-  return result.data.task;
 }
 
 export async function confirmTaskCreationSession(

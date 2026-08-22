@@ -32,7 +32,10 @@ textarea {
 }
 
 .masthead {
-  max-width: 680px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
 }
 
 .eyebrow,
@@ -64,9 +67,9 @@ h1 {
 }
 
 .workspace {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  align-items: start;
   gap: 40px;
   margin-top: 72px;
   padding: 36px;
@@ -81,7 +84,7 @@ h1 {
   font-size: clamp(1.35rem, 3vw, 2rem);
 }
 
-.workspace p:last-child {
+.workspace > div > p:last-child {
   margin-bottom: 0;
   color: #6e685b;
 }
@@ -117,6 +120,91 @@ h1 {
   color: #95473d;
 }
 
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-form label {
+  color: #595346;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 13px;
+  border: 1px solid #cfc5b3;
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #29261f;
+}
+
+.auth-form input:focus-visible,
+.button:focus-visible {
+  outline: 3px solid rgb(133 107 55 / 30%);
+  outline-offset: 2px;
+}
+
+.button {
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #29261f;
+  color: #fffdf8;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.button--quiet {
+  margin: 0;
+  background: transparent;
+  color: #655e51;
+}
+
+.form-hint,
+.form-error {
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.form-error {
+  color: #95473d;
+}
+
+.workspace--tasks {
+  display: block;
+}
+
+.workspace__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.empty-state {
+  margin-top: 28px;
+  padding: 34px;
+  border: 1px dashed #cfc5b3;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.empty-state__title {
+  margin-bottom: 6px;
+  color: #29261f !important;
+  font-weight: 750;
+}
+
 @media (max-width: 640px) {
   .shell {
     width: min(100% - 28px, 1040px);
@@ -124,9 +212,13 @@ h1 {
   }
 
   .workspace {
+    margin-top: 48px;
+    grid-template-columns: 1fr;
+    padding: 26px;
+  }
+
+  .masthead {
     align-items: flex-start;
     flex-direction: column;
-    margin-top: 48px;
-    padding: 26px;
   }
 }

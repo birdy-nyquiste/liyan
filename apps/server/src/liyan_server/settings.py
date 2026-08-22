@@ -13,7 +13,23 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://liyan:liyan@localhost:5432/liyan"
     cors_origins: str = "http://localhost:5173"
+    allowed_emails: str = ""
+    supabase_issuer: str = "http://localhost:54321/auth/v1"
+    supabase_audience: str = "authenticated"
+    supabase_jwks_url: str = ""
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:
         return tuple(origin.strip() for origin in self.cors_origins.split(",") if origin.strip())
+
+    @cached_property
+    def normalized_allowed_emails(self) -> frozenset[str]:
+        return frozenset(
+            email.strip().casefold() for email in self.allowed_emails.split(",") if email.strip()
+        )
+
+    @cached_property
+    def resolved_supabase_jwks_url(self) -> str:
+        if self.supabase_jwks_url:
+            return self.supabase_jwks_url
+        return f"{self.supabase_issuer.rstrip('/')}/.well-known/jwks.json"

@@ -3,10 +3,8 @@ from typing import Literal
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
 
-from liyan_server.settings import Settings
+from liyan_server.database import Database
 
 
 class LivenessResponse(BaseModel):
@@ -22,21 +20,7 @@ class ReadinessResponse(BaseModel):
     checks: ReadinessChecks
 
 
-def database_is_available(database_url: str) -> bool:
-    engine = None
-    try:
-        engine = create_engine(database_url, pool_pre_ping=True)
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        return True
-    except SQLAlchemyError:
-        return False
-    finally:
-        if engine is not None:
-            engine.dispose()
-
-
-def health_router(settings: Settings) -> APIRouter:
+def health_router(database: Database) -> APIRouter:
     router = APIRouter(prefix="/health", tags=["health"])
 
     @router.get("/live", operation_id="get_liveness", response_model=LivenessResponse)
@@ -50,7 +34,7 @@ def health_router(settings: Settings) -> APIRouter:
         responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadinessResponse}},
     )
     def get_readiness() -> ReadinessResponse | JSONResponse:
-        if database_is_available(settings.database_url):
+        if database.is_available():
             return ReadinessResponse(
                 status="ready",
                 checks=ReadinessChecks(database="available"),

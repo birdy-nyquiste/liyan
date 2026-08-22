@@ -1,8 +1,9 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import MetaData, engine_from_config, pool
+from sqlalchemy import engine_from_config, pool
 
+from liyan_server.database import Base
 from liyan_server.settings import Settings
 
 config = context.config
@@ -10,7 +11,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 config.set_main_option("sqlalchemy.url", Settings().database_url.replace("%", "%%"))
-target_metadata = MetaData()
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

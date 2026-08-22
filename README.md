@@ -14,6 +14,8 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    cp .env.example .env
    ```
 
+   Configure `.env` with a Supabase project that uses asymmetric JWT signing keys and an Email OTP template containing `{{ .Token }}`. Set `LIYAN_ALLOWED_EMAILS` only on the server; it is deliberately not a `VITE_` value and is never sent to the browser. The Supabase publishable key is safe for browser use.
+
 2. Start PostgreSQL and apply all migrations:
 
    ```sh
@@ -33,7 +35,7 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    npm run dev:web
    ```
 
-Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
+Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then arrives at their empty `立言任务` list. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
 
 ## Verify changes
 

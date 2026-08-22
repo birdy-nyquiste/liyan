@@ -1,0 +1,3 @@
+# Keep article Working Copies in the browser
+
+The MVP treats the mutable article Working Copy as browser-local editing state and does not persist it as a server domain object or recoverable edit session. The server retains immutable article Revisions and AgentRun input/output snapshots for traceability, and a save submits canonical Markdown with the base Revision identity so concurrent changes can be rejected without expanding the server-side draft lifecycle. When a completed AgentRun outlives its page session, the workbench may retrieve that immutable output and load it as a new browser-local unsaved draft.

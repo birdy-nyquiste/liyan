@@ -258,7 +258,6 @@ export function LiyanPanel({
 
   return (
     <section className="zhiyan-panel liyan-panel" aria-labelledby={`liyan-${taskId}`}>
-      <p className="section-kicker">立言</p>
       <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>立言文章</h3>
 
       <p className="liyan-instruction-label">立言指令（可选）</p>

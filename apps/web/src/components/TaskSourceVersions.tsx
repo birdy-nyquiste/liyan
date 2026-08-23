@@ -77,22 +77,37 @@ export function TaskSourceVersions({
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
   const [saveIdempotencyKey, setSaveIdempotencyKey] = useState<string | null>(null);
   const editingChangeRef = useRef(onEditingChange);
+  // Callers pass fresh closures on every render. Holding them in refs keeps `load`
+  // stable, so mounting reads the version list once instead of on every render.
+  const selectedChangeRef = useRef(onVersionSelected);
+  const currentChangeRef = useRef(onCurrentVersionChanged);
+  const notifiedSelectionRef = useRef<string | null>(null);
 
   useEffect(() => {
     editingChangeRef.current = onEditingChange;
-  }, [onEditingChange]);
+    selectedChangeRef.current = onVersionSelected;
+    currentChangeRef.current = onCurrentVersionChanged;
+  }, [onEditingChange, onVersionSelected, onCurrentVersionChanged]);
+
+  // Announce a selection only when it actually changes; re-announcing the same
+  // version makes callers discard state they derived from it.
+  const announceSelection = useCallback((versionId: string) => {
+    if (notifiedSelectionRef.current === versionId) return;
+    notifiedSelectionRef.current = versionId;
+    selectedChangeRef.current(versionId);
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const history = await listTaskVersions(accessToken, taskId);
       setVersions(history.items);
       setSelectedId((current) => current ?? history.items[0]?.id ?? null);
-      if (history.items[0]) onVersionSelected(history.items[0].id);
+      if (history.items[0]) announceSelection(history.items[0].id);
       setError(null);
     } catch {
       setError(LOAD_FAILED);
     }
-  }, [accessToken, onVersionSelected, taskId]);
+  }, [accessToken, announceSelection, taskId]);
 
   useEffect(() => {
     void load();
@@ -256,8 +271,8 @@ export function TaskSourceVersions({
       setEditSessionId(null);
       setSaveIdempotencyKey(null);
       setDrafts([]);
-      onVersionSelected(saved.id);
-      onCurrentVersionChanged(saved);
+      announceSelection(saved.id);
+      currentChangeRef.current(saved);
       setError(null);
     } catch {
       setError(SAVE_FAILED);
@@ -322,8 +337,8 @@ export function TaskSourceVersions({
       );
       await load();
       setSelectedId(restored.id);
-      onVersionSelected(restored.id);
-      onCurrentVersionChanged(restored);
+      announceSelection(restored.id);
+      currentChangeRef.current(restored);
       setError(null);
     } catch {
       setError(RESTORE_FAILED);
@@ -352,7 +367,7 @@ export function TaskSourceVersions({
             disabled={editSessionId !== null}
             onChange={(event) => {
               setSelectedId(event.target.value);
-              onVersionSelected(event.target.value);
+              announceSelection(event.target.value);
             }}
           >
             {versions.map((version) => (

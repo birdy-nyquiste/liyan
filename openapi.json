@@ -2360,6 +2360,86 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "InstructionCapsule": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "capsule",
+            "title": "Type",
+            "default": "capsule"
+          },
+          "task_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Version Id"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_version_id",
+          "report_id",
+          "item_id"
+        ],
+        "title": "InstructionCapsule"
+      },
+      "InstructionDocument": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/InstructionPart"
+            },
+            "type": "array",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "title": "InstructionDocument"
+      },
+      "InstructionPart": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/InstructionText"
+          },
+          {
+            "$ref": "#/components/schemas/InstructionCapsule"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "capsule": "#/components/schemas/InstructionCapsule",
+            "text": "#/components/schemas/InstructionText"
+          }
+        }
+      },
+      "InstructionText": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text",
+            "title": "Type",
+            "default": "text"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "InstructionText"
+      },
       "IntentItem": {
         "properties": {
           "id": {
@@ -2506,8 +2586,7 @@
             "title": "Body Markdown"
           },
           "instruction": {
-            "type": "string",
-            "title": "Instruction"
+            "$ref": "#/components/schemas/InstructionDocument"
           },
           "prompt_version": {
             "type": "string",
@@ -2605,8 +2684,7 @@
       "LiyanRunRequestResponse": {
         "properties": {
           "instruction": {
-            "type": "string",
-            "title": "Instruction"
+            "$ref": "#/components/schemas/InstructionDocument"
           },
           "working_copy": {
             "anyOf": [
@@ -3358,9 +3436,7 @@
             "title": "Idempotency Key"
           },
           "instruction": {
-            "type": "string",
-            "title": "Instruction",
-            "default": ""
+            "$ref": "#/components/schemas/InstructionDocument"
           },
           "working_copy": {
             "anyOf": [

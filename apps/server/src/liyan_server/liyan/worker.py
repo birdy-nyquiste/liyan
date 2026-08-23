@@ -208,7 +208,7 @@ def _finish_succeeded(
             provider_response_id=provider_result.response_id,
             title=article.title,
             body_markdown=article.body_markdown,
-            instruction=snapshot.instruction,
+            instruction=snapshot.instruction.plain_text(),
             created_at=now,
         )
         session.add(run_result)

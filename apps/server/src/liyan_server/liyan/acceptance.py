@@ -10,7 +10,9 @@ UNUSABLE_MESSAGE = "立言服务返回了无法使用的文章，请重试。"
 _RAW_HTML = re.compile(r"<!--[\s\S]*?-->|</?[A-Za-z][^>]*>|<![A-Z][^>]*>|<\?[^>]*>", re.I)
 _TABLE_DIVIDER = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", re.M)
 _INTERNAL_REFERENCE = re.compile(
-    r"(?:来源\s*[A-ZＡ-Ｚ]|知言报告|REF-\d+|(?<![A-Za-z])[FVLI]-\d+)", re.I
+    r"(?:来源\s*[A-ZＡ-Ｚ]|知言报告|REF-?\d+|CAPSULE\s*[:#-]?\s*\d+|胶囊\s*\d+|"
+    r"(?<![A-Za-z])[EFVLI]-\d+)",
+    re.I,
 )
 _GENERATION_NARRATION = re.compile(r"(?:根据提供的?材料|作为\s*AI|立言指令|系统\s*Prompt)", re.I)
 _UNSAFE_LINK = re.compile(r"(?<!!)\[[^\]]+\]\((?!https?://)[^)]+\)", re.I)

@@ -9,6 +9,7 @@ import {
   type TaskVersionZhiyanResponse,
 } from "../api/client";
 import { LiyanGate } from "./LiyanGate";
+import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { ZhiyanPanel } from "./ZhiyanPanel";
 
@@ -34,6 +35,7 @@ export function TaskZhiyanArea({
   pollIntervalMs = POLL_INTERVAL_MS,
   showLiyanGate = true,
   onLiyanAvailabilityChange,
+  onCapsuleSelect,
 }: {
   accessToken: string;
   taskId: string;
@@ -41,6 +43,7 @@ export function TaskZhiyanArea({
   pollIntervalMs?: number;
   showLiyanGate?: boolean;
   onLiyanAvailabilityChange?(available: boolean): void;
+  onCapsuleSelect?(choice: CapsuleChoice): void;
 }) {
   const [overview, setOverview] = useState<TaskVersionZhiyanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,12 +71,14 @@ export function TaskZhiyanArea({
   }, [load]);
 
   const active = overview?.sources.some((source) => source.status === "running") ?? false;
-  const open = overview?.liyan.can_generate ?? false;
-  const zhiyanHeading = useFocusWhen<HTMLHeadingElement>(overview !== null && !open);
+  const liyanAvailable = overview?.liyan.can_generate ?? false;
+  const zhiyanHeading = useFocusWhen<HTMLHeadingElement>(
+    overview !== null && !liyanAvailable,
+  );
 
   useEffect(() => {
-    onLiyanAvailabilityChange?.(open);
-  }, [onLiyanAvailabilityChange, open]);
+    onLiyanAvailabilityChange?.(liyanAvailable);
+  }, [onLiyanAvailabilityChange, liyanAvailable]);
 
   // Poll only while a run is unfinished, and stop at its terminal state.
   useEffect(() => {
@@ -140,6 +145,8 @@ export function TaskZhiyanArea({
           onStart={start}
           onCancel={cancel}
           onRetryAllowed={() => void load()}
+          taskVersionId={overview.task_version_id}
+          onCapsuleSelect={onCapsuleSelect}
         />
       ))}
       {showLiyanGate ? (

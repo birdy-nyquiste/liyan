@@ -1,4 +1,5 @@
 import type { ZhiyanStateResponse } from "../api/client";
+import type { CapsuleChoice } from "./InstructionEditor";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ZhiyanReportView } from "./ZhiyanReportView";
 
@@ -16,12 +17,16 @@ export function ZhiyanPanel({
   onStart,
   onCancel,
   onRetryAllowed,
+  taskVersionId,
+  onCapsuleSelect,
 }: {
   state: ZhiyanStateResponse;
   busy?: boolean;
   onStart(sourceRevisionId: string): void;
   onCancel(executionId: string): void;
   onRetryAllowed(): void;
+  taskVersionId?: string;
+  onCapsuleSelect?: (choice: CapsuleChoice) => void;
 }) {
   const { source_revision_id: revisionId, source_title: title, capabilities } = state;
   const countdown = useRetryCountdown(capabilities.retry.allowed_at, onRetryAllowed);
@@ -93,6 +98,9 @@ export function ZhiyanPanel({
             document={state.report.document}
             sourceTitle={title}
             idPrefix={`zhiyan-${revisionId}`}
+            taskVersionId={taskVersionId}
+            reportId={state.report.id}
+            onCapsuleSelect={onCapsuleSelect}
           />
         </>
       ) : null}

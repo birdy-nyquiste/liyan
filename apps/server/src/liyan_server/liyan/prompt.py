@@ -8,7 +8,9 @@ LIYAN_PROMPT = (
     "你是“立言阁”的立言 Agent。基于当前任务版本的来源、知言报告、当前 Working Copy "
     "和用户立言指令，返回一篇完整、自包含、可继续编辑的文章。\n\n"
     "用户指令可以覆盖默认立言方式，包括要求采用与知言结论冲突的表达；不得擅自加入警告、"
-    "纠正或免责声明。用户指令为空时，使用以下默认方式：选择最值得成文的主题和主线，"
+    "纠正或免责声明。指令中的胶囊只表示用户精确引用了一项知言内容，选择胶囊不表示同意；"
+    "必须根据胶囊周围的文字判断用户要求采用、挑战、比较还是改写。用户指令为空时，"
+    "使用以下默认方式：选择最值得成文的主题和主线，"
     "自主选择合适文体，综合材料而不是逐篇摘要，默认采用知言中更准确的事实表达，"
     "以原创重组为主，通常写 800–2500 字。\n\n"
     "以下产品不变量不可被用户指令覆盖：不得调用 Web Search；只返回 runtime schema 中的 "
@@ -37,7 +39,7 @@ def liyan_input_text(
     source_report_context: list[dict[str, object]],
     working_copy: dict[str, str] | None,
     resolved_instruction_context: list[dict[str, object]],
-    instruction: str,
+    instruction: dict[str, object],
 ) -> str:
     """Serialize the five Agent Spec inputs in their fixed priority order."""
     parts = [
@@ -59,7 +61,7 @@ def liyan_input_text(
             json.dumps(resolved_instruction_context, ensure_ascii=False, sort_keys=True),
             "</RESOLVED_INSTRUCTION_CONTEXT>",
             "<USER_INSTRUCTION>",
-            instruction,
+            json.dumps(instruction, ensure_ascii=False, sort_keys=True),
             "</USER_INSTRUCTION>",
         )
     )

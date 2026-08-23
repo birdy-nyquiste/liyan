@@ -18,6 +18,8 @@ export type SourceEditSessionResponse = components["schemas"]["SourceEditSession
 export type SaveSourceEditRequest = components["schemas"]["SaveSourceEditRequest"];
 export type LiyanStateResponse = components["schemas"]["LiyanStateResponse"];
 export type StartLiyanRunRequest = components["schemas"]["StartLiyanRunRequest"];
+export type InstructionDocument = components["schemas"]["InstructionDocument"];
+export type InstructionCapsule = components["schemas"]["InstructionCapsule"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {

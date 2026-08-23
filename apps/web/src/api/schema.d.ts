@@ -774,6 +774,42 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** InstructionCapsule */
+        InstructionCapsule: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "capsule";
+            /**
+             * Task Version Id
+             * Format: uuid
+             */
+            task_version_id: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Item Id */
+            item_id: string;
+        };
+        /** InstructionDocument */
+        InstructionDocument: {
+            /** Content */
+            content?: components["schemas"]["InstructionPart"][];
+        };
+        InstructionPart: components["schemas"]["InstructionText"] | components["schemas"]["InstructionCapsule"];
+        /** InstructionText */
+        InstructionText: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "text";
+            /** Text */
+            text: string;
+        };
         /** IntentItem */
         IntentItem: {
             id: components["schemas"]["Narrative"];
@@ -824,8 +860,7 @@ export interface components {
             title: string;
             /** Body Markdown */
             body_markdown: string;
-            /** Instruction */
-            instruction: string;
+            instruction: components["schemas"]["InstructionDocument"];
             /** Prompt Version */
             prompt_version: string;
             /** Model */
@@ -857,8 +892,7 @@ export interface components {
         };
         /** LiyanRunRequestResponse */
         LiyanRunRequestResponse: {
-            /** Instruction */
-            instruction: string;
+            instruction: components["schemas"]["InstructionDocument"];
             working_copy: components["schemas"]["WorkingCopyInput"] | null;
         };
         /** LiyanStateResponse */
@@ -1086,11 +1120,7 @@ export interface components {
         StartLiyanRunRequest: {
             /** Idempotency Key */
             idempotency_key: string;
-            /**
-             * Instruction
-             * @default
-             */
-            instruction: string;
+            instruction?: components["schemas"]["InstructionDocument"];
             working_copy?: components["schemas"]["WorkingCopyInput"] | null;
         };
         /** TaskCreationSessionResponse */

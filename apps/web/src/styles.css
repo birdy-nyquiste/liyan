@@ -419,7 +419,7 @@ h1 {
   margin: 0;
 }
 
-.liyan-panel > label,
+.liyan-instruction-label,
 .liyan-working-copy > label {
   display: block;
   margin: 18px 0 7px;
@@ -428,7 +428,6 @@ h1 {
   font-weight: 700;
 }
 
-.liyan-panel > textarea,
 .liyan-working-copy > input {
   width: 100%;
   padding: 11px 13px;
@@ -438,9 +437,40 @@ h1 {
   color: #29261f;
 }
 
-.liyan-panel > textarea {
+.liyan-instruction-editor__content {
   min-height: 88px;
-  resize: vertical;
+  padding: 11px 13px;
+  border: 1px solid #cfc5b3;
+  border-radius: 10px;
+  background: #fff;
+  color: #29261f;
+  line-height: 1.6;
+  outline: none;
+}
+
+.liyan-instruction-editor__content p {
+  margin: 0;
+}
+
+.liyan-instruction-editor__content p + p {
+  margin-top: 0.6em;
+}
+
+.liyan-capsule {
+  display: inline-block;
+  margin: 0 3px;
+  padding: 1px 8px;
+  border: 1px solid #b9a77f;
+  border-radius: 999px;
+  background: #f2ecdb;
+  color: #65501f;
+  font-size: 0.86em;
+  font-weight: 700;
+  vertical-align: baseline;
+}
+
+.liyan-capsule.ProseMirror-selectednode {
+  box-shadow: 0 0 0 3px rgb(133 107 55 / 22%);
 }
 
 .liyan-working-copy {
@@ -482,7 +512,7 @@ h1 {
 
 .liyan-editor__content:focus-visible,
 .liyan-working-copy > input:focus-visible,
-.liyan-panel > textarea:focus-visible {
+.liyan-instruction-editor__content:focus-visible {
   border-color: #856b37;
   box-shadow: 0 0 0 3px rgb(133 107 55 / 18%);
 }
@@ -536,6 +566,24 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.zhiyan-capsule-button {
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid #cfc5b3;
+  border-radius: 999px;
+  background: #fffefb;
+  color: #655e51;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.zhiyan-capsule-button:hover,
+.zhiyan-capsule-button:focus-visible {
+  border-color: #856b37;
+  color: #4d3e1f;
 }
 
 .zhiyan-item__claim {

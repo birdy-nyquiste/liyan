@@ -4,6 +4,7 @@ import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { TaskZhiyanArea } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
+import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
 import { TaskSourceVersions } from "./TaskSourceVersions";
 
 export function TaskCard({
@@ -27,6 +28,7 @@ export function TaskCard({
   const [error, setError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const [liyanReady, setLiyanReady] = useState(false);
+  const [capsuleSelection, setCapsuleSelection] = useState<CapsuleSelection | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -43,6 +45,10 @@ export function TaskCard({
       setError("重命名失败，请重试。");
     }
   }
+
+  const selectCapsule = (choice: CapsuleChoice) => {
+    setCapsuleSelection((current) => ({ ...choice, nonce: (current?.nonce ?? 0) + 1 }));
+  };
 
   return (
     <article
@@ -104,9 +110,11 @@ export function TaskCard({
             onVersionSelected={(versionId) => {
               setSelectedVersionId(versionId);
               setLiyanReady(false);
+              setCapsuleSelection(null);
             }}
             onCurrentVersionChanged={(version) => {
               setSelectedVersionId(version.id);
+              setCapsuleSelection(null);
               setTask((current) => ({
                 ...current,
                 current_version_id: version.id,
@@ -123,9 +131,18 @@ export function TaskCard({
             versionId={selectedVersionId}
             showLiyanGate={!liyanReady}
             onLiyanAvailabilityChange={setLiyanReady}
+            onCapsuleSelect={
+              selectedVersionId === task.current_version_id ? selectCapsule : undefined
+            }
           />
           {selectedVersionId === task.current_version_id && liyanReady ? (
-            <LiyanPanel userId={userId} accessToken={accessToken} taskId={task.id} />
+            <LiyanPanel
+              key={selectedVersionId}
+              userId={userId}
+              accessToken={accessToken}
+              taskId={task.id}
+              capsuleSelection={capsuleSelection}
+            />
           ) : null}
         </div>
       ) : null}

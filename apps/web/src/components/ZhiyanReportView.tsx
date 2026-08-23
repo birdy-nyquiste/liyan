@@ -1,4 +1,5 @@
 import type { components } from "../api/schema";
+import type { CapsuleChoice } from "./InstructionEditor";
 
 export type ZhiyanReportDocument = components["schemas"]["ZhiyanReportDocument"];
 type FactItem = components["schemas"]["FactItem"];
@@ -63,15 +64,55 @@ function Refs({ label, refs }: { label: string; refs: string[] }) {
   );
 }
 
+function CapsuleButton({
+  itemId,
+  sourceTitle,
+  taskVersionId,
+  reportId,
+  onSelect,
+}: {
+  itemId: string;
+  sourceTitle: string;
+  taskVersionId?: string;
+  reportId?: string;
+  onSelect?: (choice: CapsuleChoice) => void;
+}) {
+  if (!taskVersionId || !reportId || !onSelect) return null;
+  return (
+    <button
+      className="zhiyan-capsule-button"
+      type="button"
+      aria-label={`插入 ${itemId} 到立言指令`}
+      onClick={() => onSelect({
+        label: `${sourceTitle} · ${itemId}`,
+        reference: {
+          type: "capsule",
+          task_version_id: taskVersionId,
+          report_id: reportId,
+          item_id: itemId,
+        },
+      })}
+    >
+      加入指令
+    </button>
+  );
+}
+
 export function ZhiyanReportView({
   document: report,
   sourceTitle,
   idPrefix,
+  taskVersionId,
+  reportId,
+  onCapsuleSelect,
 }: {
   document: ZhiyanReportDocument;
   sourceTitle: string;
   /** Keeps section ids unique when a task renders several reports at once. */
   idPrefix: string;
+  taskVersionId?: string;
+  reportId?: string;
+  onCapsuleSelect?: (choice: CapsuleChoice) => void;
 }) {
   return (
     <article className="zhiyan-report" aria-label={`知言报告 ${sourceTitle}`}>
@@ -119,6 +160,13 @@ export function ZhiyanReportView({
                 <span className={`zhiyan-verdict ${VERDICT_TONES[fact.verdict]}`}>
                   {fact.verdict}
                 </span>
+                <CapsuleButton
+                  itemId={fact.id}
+                  sourceTitle={sourceTitle}
+                  taskVersionId={taskVersionId}
+                  reportId={reportId}
+                  onSelect={onCapsuleSelect}
+                />
               </p>
               <Quote text={fact.quote} />
               <p className="zhiyan-item__claim">{fact.claim}</p>
@@ -140,6 +188,13 @@ export function ZhiyanReportView({
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{viewpoint.id}</span>
                 <span className="zhiyan-holder">{viewpoint.owner}</span>
+                <CapsuleButton
+                  itemId={viewpoint.id}
+                  sourceTitle={sourceTitle}
+                  taskVersionId={taskVersionId}
+                  reportId={reportId}
+                  onSelect={onCapsuleSelect}
+                />
               </p>
               <Quote text={viewpoint.quote} />
               <p className="zhiyan-item__claim">{viewpoint.viewpoint}</p>
@@ -157,6 +212,13 @@ export function ZhiyanReportView({
             <li key={item.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{item.id}</span>
+                <CapsuleButton
+                  itemId={item.id}
+                  sourceTitle={sourceTitle}
+                  taskVersionId={taskVersionId}
+                  reportId={reportId}
+                  onSelect={onCapsuleSelect}
+                />
               </p>
               <Quote text={item.quote} />
               <p className="zhiyan-item__claim">{item.judgment}</p>
@@ -187,6 +249,13 @@ export function ZhiyanReportView({
             <li key={item.id} className="zhiyan-item">
               <p className="zhiyan-item__head">
                 <span className="zhiyan-ref">{item.id}</span>
+                <CapsuleButton
+                  itemId={item.id}
+                  sourceTitle={sourceTitle}
+                  taskVersionId={taskVersionId}
+                  reportId={reportId}
+                  onSelect={onCapsuleSelect}
+                />
               </p>
               <Quote text={item.quote} />
               <p className="zhiyan-item__claim">{item.possible_intent}</p>

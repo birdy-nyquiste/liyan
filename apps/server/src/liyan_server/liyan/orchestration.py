@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from liyan_server.database import Database, Execution, LiyanArticle, aware_utc
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import RunOrigin
+from liyan_server.liyan.instruction import InstructionDocument
 from liyan_server.liyan.recovery import RetryState, retry_state
 from liyan_server.liyan.runs import LIYAN_OPERATION, new_liyan_execution
 
@@ -61,7 +62,7 @@ def queue_run(
     owner_id: UUID,
     model: str,
     input_text: str,
-    instruction: str,
+    instruction: InstructionDocument,
     working_copy: dict[str, str] | None,
     input_version: int,
     attempt: int,

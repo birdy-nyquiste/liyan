@@ -1,11 +1,12 @@
 import hashlib
 import json
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +25,10 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
+from liyan_server.liyan.instruction import (
+    InstructionDocument,
+    InstructionText,
+)
 from liyan_server.liyan.orchestration import dispatch_or_fail, load_runs, queue_run
 from liyan_server.liyan.prompt import liyan_input_text
 from liyan_server.liyan.recovery import RetryState
@@ -44,6 +49,8 @@ RATE_LIMITED_MESSAGE = "重试次数已用完，请稍后再试。"
 BUSY_MESSAGE = "服务繁忙，请重试。"
 IDEMPOTENCY_MISMATCH = "相同幂等键不能用于不同的立言请求。"
 RETRY_INPUT_MISMATCH = "失败重试必须使用原来的 Working Copy 和立言指令。"
+INVALID_CAPSULE = "立言指令包含无效或过期的知言引用。"
+DUPLICATE_CAPSULE = "立言指令包含重复的知言引用。"
 
 
 class WorkingCopyInput(BaseModel):
@@ -53,8 +60,13 @@ class WorkingCopyInput(BaseModel):
 
 class StartLiyanRunRequest(BaseModel):
     idempotency_key: str
-    instruction: str = ""
+    instruction: InstructionDocument = Field(default_factory=InstructionDocument)
     working_copy: WorkingCopyInput | None = None
+
+    @field_validator("instruction", mode="before")
+    @classmethod
+    def accept_plain_instruction(cls, value: object) -> object:
+        return InstructionDocument.from_text(value) if isinstance(value, str) else value
 
 
 class LiyanRetryState(BaseModel):
@@ -84,14 +96,14 @@ class LiyanResultResponse(BaseModel):
     task_version_id: str
     title: str
     body_markdown: str
-    instruction: str
+    instruction: InstructionDocument
     prompt_version: str
     model: str
     created_at: datetime
 
 
 class LiyanRunRequestResponse(BaseModel):
-    instruction: str
+    instruction: InstructionDocument
     working_copy: WorkingCopyInput | None
 
 
@@ -164,6 +176,49 @@ def liyan_router(
             )
         return context
 
+    def resolve_instruction(
+        session: Session,
+        version: TaskVersion,
+        instruction: InstructionDocument,
+    ) -> tuple[list[dict[str, object]], dict[str, object]]:
+        current_revision_ids = {
+            revision.id for revision in version_source_revisions(session, version.id)
+        }
+        seen: set[tuple[UUID, str]] = set()
+        resolved: list[dict[str, object]] = []
+        model_parts: list[dict[str, object]] = []
+        for part in instruction.content:
+            if isinstance(part, InstructionText):
+                model_parts.append(part.model_dump())
+                continue
+            if part.identity in seen:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=DUPLICATE_CAPSULE,
+                )
+            seen.add(part.identity)
+            report = session.get(ZhiyanReport, part.report_id)
+            if (
+                part.task_version_id != version.id
+                or report is None
+                or report.source_revision_id not in current_revision_ids
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=INVALID_CAPSULE,
+                )
+            item = _report_item(report.document, part.item_id)
+            if item is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=INVALID_CAPSULE,
+                )
+            kind, content = item
+            number = len(resolved) + 1
+            resolved.append({"capsule": number, "kind": kind, "content": content})
+            model_parts.append({"type": "capsule", "capsule": number})
+        return resolved, {"content": model_parts}
+
     def article_for(
         session: Session, version: TaskVersion, owner_id: UUID
     ) -> LiyanArticle:
@@ -226,7 +281,7 @@ def liyan_router(
             status=run_status,
             execution=execution_payload,
             result=(
-                _result_response(recoverable_result)
+                _result_response(session, recoverable_result)
                 if recoverable_result is not None
                 else None
             ),
@@ -292,12 +347,15 @@ def liyan_router(
     ) -> LiyanStateResponse:
         task, version = owned_current(session, task_id, user.id)
         context = complete_context(session, version)
+        resolved_context, model_instruction = resolve_instruction(
+            session, version, request.instruction
+        )
         working_copy = request.working_copy.model_dump() if request.working_copy else None
         input_text = liyan_input_text(
             source_report_context=context,
             working_copy=working_copy,
-            resolved_instruction_context=[],
-            instruction=request.instruction,
+            resolved_instruction_context=resolved_context,
+            instruction=model_instruction,
         )
         request_hash = _request_hash(version.id, request.instruction, working_copy)
         replay = session.scalar(
@@ -391,12 +449,14 @@ def liyan_router(
 
 
 def _request_hash(
-    version_id: UUID, instruction: str, working_copy: dict[str, str] | None
+    version_id: UUID,
+    instruction: InstructionDocument,
+    working_copy: dict[str, str] | None,
 ) -> str:
     value = json.dumps(
         {
             "task_version_id": str(version_id),
-            "instruction": instruction,
+            "instruction": instruction.model_dump(mode="json"),
             "working_copy": working_copy,
         },
         ensure_ascii=False,
@@ -434,14 +494,21 @@ def _request_response(execution: Execution | None) -> LiyanRunRequestResponse | 
     )
 
 
-def _result_response(result: LiyanRunResult) -> LiyanResultResponse:
+def _result_response(session: Session, result: LiyanRunResult) -> LiyanResultResponse:
+    execution = session.get(Execution, result.execution_id)
+    instruction = InstructionDocument.from_text(result.instruction)
+    if execution is not None:
+        from liyan_server.liyan.runs import InvalidRunSnapshot, LiyanRunSnapshot
+
+        with suppress(InvalidRunSnapshot):
+            instruction = LiyanRunSnapshot.from_json(execution.input_snapshot).instruction
     return LiyanResultResponse(
         id=str(result.id),
         execution_id=str(result.execution_id),
         task_version_id=str(result.task_version_id),
         title=result.title,
         body_markdown=result.body_markdown,
-        instruction=result.instruction,
+        instruction=instruction,
         prompt_version=result.prompt_version,
         model=result.model,
         created_at=aware_utc(result.created_at),
@@ -452,3 +519,28 @@ def _retry_after(retry: RetryState, now: datetime) -> dict[str, str]:
     if retry.allowed_at is None:
         return {}
     return {"Retry-After": str(max(1, int((retry.allowed_at - now).total_seconds())))}
+
+
+def _report_item(
+    document: dict[str, object], item_id: str
+) -> tuple[str, dict[str, object]] | None:
+    for section_name, kind in (
+        ("facts", "fact"),
+        ("viewpoints", "viewpoint"),
+        ("logic", "logic"),
+        ("intent", "intent"),
+    ):
+        section = document.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        items = section.get("items")
+        if not isinstance(items, list):
+            continue
+        for candidate in items:
+            if isinstance(candidate, dict) and candidate.get("id") == item_id:
+                return kind, {
+                    key: value
+                    for key, value in candidate.items()
+                    if key not in {"id", "evidence_ids", "related_ids"}
+                }
+    return None

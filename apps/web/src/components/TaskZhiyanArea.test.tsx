@@ -295,6 +295,31 @@ describe("TaskZhiyanArea", () => {
     ).not.toHaveLength(0);
   });
 
+  it("offers each F V L I item as a stable current-version capsule", async () => {
+    respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
+    const user = userEvent.setup();
+    const onCapsuleSelect = vi.fn();
+
+    render(
+      <TaskZhiyanArea
+        accessToken="token"
+        taskId="task-1"
+        onCapsuleSelect={onCapsuleSelect}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "插入 F-01 到立言指令" }));
+
+    expect(onCapsuleSelect).toHaveBeenCalledWith({
+      label: "城市空气质量年度回顾 · F-01",
+      reference: {
+        type: "capsule",
+        task_version_id: "version-1",
+        report_id: "report-1",
+        item_id: "F-01",
+      },
+    });
+  });
+
   it("keeps a succeeded report readable while another source has failed", async () => {
     respondWith(
       overviewResponse(

@@ -5,12 +5,14 @@ import {
   cancelExecution,
   getTaskLiyan,
   startLiyanRun,
+  type InstructionDocument,
   type LiyanStateResponse,
   type StartLiyanRunRequest,
 } from "../api/client";
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
+import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
 import { canonicalizeArticleMarkdown } from "./articleMarkdown";
 import {
   loadWorkingCopy,
@@ -32,15 +34,17 @@ export function LiyanPanel({
   userId,
   accessToken,
   taskId,
+  capsuleSelection = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
 }: {
   userId: string;
   accessToken: string;
   taskId: string;
+  capsuleSelection?: CapsuleSelection | null;
   pollIntervalMs?: number;
 }) {
   const [state, setState] = useState<LiyanStateResponse | null>(null);
-  const [instruction, setInstruction] = useState("");
+  const [instruction, setInstruction] = useState<InstructionDocument>({ content: [] });
   const [workingCopy, setWorkingCopy] = useState<LiyanWorkingCopy | null>(() =>
     loadWorkingCopy(userId, taskId));
   const [lastRequest, setLastRequest] = useState<StartLiyanRunRequest | null>(null);
@@ -167,13 +171,13 @@ export function LiyanPanel({
       <p className="section-kicker">立言</p>
       <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>立言文章</h3>
 
-      <label htmlFor={`liyan-instruction-${taskId}`}>立言指令（可选）</label>
-      <textarea
-        id={`liyan-instruction-${taskId}`}
+      <p className="liyan-instruction-label">立言指令（可选）</p>
+      <InstructionEditor
+        taskId={taskId}
         value={instruction}
         disabled={active || busy}
-        onChange={(event) => setInstruction(event.target.value)}
-        placeholder="留空时使用立言 Prompt 内置的默认方式"
+        selection={capsuleSelection}
+        onChange={setInstruction}
       />
 
       {error ? <p role="alert" className="form-error">{error}</p> : null}

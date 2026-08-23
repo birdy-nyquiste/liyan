@@ -34,7 +34,7 @@ function state(status: "absent" | "running" | "succeeded" | "failed" = "absent")
       task_version_id: "version-1",
       title: "完整文章",
       body_markdown: "第一段。\n\n## 继续讨论\n\n第二段。",
-      instruction: "语气克制。",
+      instruction: { content: [{ type: "text", text: "语气克制。" }] },
       prompt_version: "liyan-v0.1",
       model: "deepseek-v4-flash",
       created_at: "2026-08-22T18:00:04Z",
@@ -77,8 +77,12 @@ describe("LiyanPanel", () => {
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post).toBeDefined();
-    const body = JSON.parse(await post![0].clone().text()) as { instruction: string };
-    expect(body.instruction).toBe("语气克制。");
+    const body = JSON.parse(await post![0].clone().text()) as {
+      instruction: { content: Array<{ type: string; text: string }> };
+    };
+    expect(body.instruction).toEqual({
+      content: [{ type: "text", text: "语气克制。" }],
+    });
   });
 
   it("offers a completed background result after navigation before loading it locally", async () => {

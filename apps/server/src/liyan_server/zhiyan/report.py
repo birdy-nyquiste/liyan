@@ -29,7 +29,10 @@ type Narrative = Annotated[str, StringConstraints(strip_whitespace=True, min_len
 
 
 class ReportModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # The provider does not reliably honour additionalProperties, so unspecified
+    # keys are dropped rather than fatal. Every declared field stays required, so
+    # an accepted document is exactly the shape Agent Spec 知言 v0.4 defines.
+    model_config = ConfigDict(extra="ignore")
 
 
 class KeyFinding(ReportModel):
@@ -139,9 +142,27 @@ def report_json_schema() -> dict[str, object]:
 
     Strict structured output accepts only a subset of JSON Schema, so keywords
     that merely tighten strings are dropped here. Application acceptance, not the
-    provider schema, is what actually enforces them.
+    provider schema, is what actually enforces them. Strict mode also requires
+    every object to close itself and list all of its keys as required, which is
+    stated explicitly rather than inferred from the model's `extra` policy.
     """
-    return _without_generation_only_keywords(ZhiyanReportDocument.model_json_schema())
+    generated = ZhiyanReportDocument.model_json_schema()
+    return _closed_objects(_without_generation_only_keywords(generated))
+
+
+def _closed_objects(schema: dict[str, object]) -> dict[str, object]:
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        schema["additionalProperties"] = False
+        schema["required"] = list(properties)
+    for value in schema.values():
+        if isinstance(value, dict):
+            _closed_objects(value)
+        elif isinstance(value, list):
+            for entry in value:
+                if isinstance(entry, dict):
+                    _closed_objects(entry)
+    return schema
 
 
 def _without_generation_only_keywords(schema: object) -> dict[str, object]:

@@ -378,6 +378,44 @@ def test_a_non_web_evidence_url_is_rejected() -> None:
     assert rejection.value.code == "unsupported_evidence_url"
 
 
+def test_evidence_matches_an_opened_page_carrying_a_provider_call_fragment() -> None:
+    """DeepSeek appends #ws_call_id=... to open_page URLs but cites the clean URL."""
+    document = valid_document()
+
+    report = accept_report_text(
+        json.dumps(document, ensure_ascii=False),
+        opened_urls=(
+            "https://autonomy.work/four-day-week-pilot#ws_call_id=call_12_qyuZZNHpOB8T20gdaXdJ8996",
+        ),
+    )
+
+    assert report.evidence.items[0].url == "https://autonomy.work/four-day-week-pilot"
+
+
+def test_a_field_the_schema_does_not_define_is_dropped_rather_than_fatal() -> None:
+    """The provider does not reliably close its objects, so extra keys are noise."""
+    document = valid_document()
+    document["intent"]["items"][0]["related_ids"] = []
+    document["facts"]["items"][0]["confidence"] = 0.9
+
+    report = accept(document)
+
+    stored = report.model_dump()
+    assert "related_ids" not in stored["intent"]["items"][0]
+    assert "confidence" not in stored["facts"]["items"][0]
+    assert stored["intent"]["items"][0]["possible_intent"]
+
+
+def test_a_field_the_schema_requires_is_still_mandatory() -> None:
+    document = valid_document()
+    del document["intent"]["items"][0]["possible_intent"]
+
+    with pytest.raises(ZhiyanRejected) as rejection:
+        accept(document)
+
+    assert rejection.value.code == "invalid_report_schema"
+
+
 def test_a_blank_required_narrative_is_rejected() -> None:
     document = valid_document()
     document["overview"]["content_summary"] = "   "

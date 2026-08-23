@@ -73,6 +73,7 @@ ZHIYAN_INSTRUCTIONS = f"""\
   已有判断，不能引入新结论。
 - 某一部分没有内容时，items 为空数组并在 empty_state 写明原因；有内容时 empty_state 为 null。
 - 只输出符合给定 JSON Schema 的 JSON，不要附加解释、Markdown 代码块或生成过程说明。
+- 不要添加 Schema 未定义的字段；intent 的条目没有 related_ids。
 
 # 输出前自检
 

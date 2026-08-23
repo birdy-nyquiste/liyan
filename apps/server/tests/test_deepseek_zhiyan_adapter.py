@@ -208,6 +208,27 @@ def test_an_unconfigured_api_key_fails_before_any_request() -> None:
     assert failure.value.code == "provider_unconfigured"
 
 
+def test_open_page_actions_keep_the_provider_call_fragment_for_matching() -> None:
+    """A real run returns open_page URLs with #ws_call_id appended."""
+    payload = completed_payload()
+    payload["output"] = [
+        {
+            "type": "web_search_call",
+            "action": {
+                "type": "open_page",
+                "url": "https://www.4dayweek.co.uk/pilot-results#ws_call_id=call_12_abc",
+            },
+        },
+        {"type": "message", "content": [{"type": "output_text", "text": "{}"}]},
+    ]
+
+    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert result.opened_urls == (
+        "https://www.4dayweek.co.uk/pilot-results#ws_call_id=call_12_abc",
+    )
+
+
 def test_the_report_schema_stays_inside_the_strict_structured_output_subset() -> None:
     schema = request_body(a_request())["text"]["format"]["schema"]  # type: ignore[index]
 
@@ -224,3 +245,38 @@ def test_the_report_schema_stays_inside_the_strict_structured_output_subset() ->
                 walk(entry)
 
     walk(schema)
+
+
+@pytest.mark.parametrize(
+    "wrapped",
+    [
+        '```json\n{"overview": "ok"}\n```',
+        '```\n{"overview": "ok"}\n```',
+        '```json\n{"overview": "ok"}\n```   ',
+    ],
+)
+def test_a_markdown_fenced_body_is_unwrapped(wrapped: str) -> None:
+    """Live runs return a ```json fence intermittently despite strict json_schema."""
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "message", "content": [{"type": "output_text", "text": wrapped}]}
+    ]
+
+    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert result.report_text == '{"overview": "ok"}'
+
+
+@pytest.mark.parametrize(
+    "unfenced",
+    ['{"overview": "ok"}', '  {"overview": "ok"}  ', '{"body": "``` inside a value"}'],
+)
+def test_text_that_is_not_fenced_is_passed_through(unfenced: str) -> None:
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "message", "content": [{"type": "output_text", "text": unfenced}]}
+    ]
+
+    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert result.report_text == unfenced.strip()

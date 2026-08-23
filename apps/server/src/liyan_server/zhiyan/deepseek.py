@@ -165,7 +165,7 @@ def provider_result(payload: object, *, fallback_model: str) -> ZhiyanProviderRe
                 actions.append(action)
         elif item.get("type") == "message":
             texts.extend(_message_texts(item))
-    report_text = "".join(texts).strip()
+    report_text = _unfenced("".join(texts).strip())
     if not report_text:
         raise ZhiyanProviderFailure(
             "invalid_provider_response",
@@ -180,6 +180,30 @@ def provider_result(payload: object, *, fallback_model: str) -> ZhiyanProviderRe
         model=model if isinstance(model, str) else fallback_model,
         response_id=response_id if isinstance(response_id, str) else None,
     )
+
+
+def _unfenced(text: str) -> str:
+    """Strip a Markdown code fence DeepSeek sometimes wraps structured output in.
+
+    Observed live: the same request returns raw JSON on one call and a
+    ```json-fenced body on the next, even with `text.format` set to a strict
+    json_schema. Normalising the provider's quirk here keeps acceptance strict
+    about receiving real JSON.
+    """
+    if not text.startswith("```"):
+        return text
+    body = text[3:]
+    newline = body.find("\n")
+    if newline == -1:
+        return text
+    language = body[:newline].strip()
+    if language and not language.isalpha():
+        return text
+    body = body[newline + 1 :]
+    closing = body.rstrip()
+    if not closing.endswith("```"):
+        return text
+    return closing[: -len("```")].strip()
 
 
 def _search_action(action: object) -> SearchAction | None:

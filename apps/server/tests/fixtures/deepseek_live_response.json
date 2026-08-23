@@ -1,0 +1,73 @@
+{
+  "id": "6df96686-30bc-4c0f-b7a4-040cf7d6e27b",
+  "model": "deepseek-v4-flash",
+  "status": "completed",
+  "output": [
+    {
+      "type": "web_search_call",
+      "id": "call_00_Ep6J4czAaUrP5fBIC3jA1338",
+      "status": "completed",
+      "action": {
+        "type": "search",
+        "queries": [
+          "UK four day week trial 2022 results 61 companies revenue 35%",
+          "four day week trial report Autonomy 61 companies burnout 71%",
+          "4 Day Week Global trial results 2023 revenue 1.4% 35%",
+          "UK four day week trial 56 of 61 companies continue",
+          "ws_call_id=call_00_Ep6J4czAaUrP5fBIC3jA1338"
+        ]
+      }
+    },
+    {
+      "type": "web_search_call",
+      "id": "call_01_veXMAiQVHt9f5km8lLFQ5793",
+      "status": "completed",
+      "action": {
+        "type": "open_page",
+        "url": "https://www.research-live.com/article/news/uk-fourday-week-trial-results-in-reduced-staff-burnout/id/5109272#ws_call_id=call_01_veXMAiQVHt9f5km8lLFQ5793"
+      }
+    },
+    {
+      "type": "web_search_call",
+      "id": "call_02_V8CyjnXAx1zv0qEQXTjs6284",
+      "status": "failed",
+      "action": {
+        "type": "open_page",
+        "url": "https://www.theguardian.com/business/2025/jul/03/nearly-1000-britons-adopt-permanently-shorter-working-week-after-trial#ws_call_id=call_02_V8CyjnXAx1zv0qEQXTjs6284"
+      }
+    },
+    {
+      "type": "web_search_call",
+      "id": "call_03_guQ2Z6nQ3Os741oRY6y18742",
+      "status": "completed",
+      "action": {
+        "type": "open_page",
+        "url": "https://digit-research.org/projects/the-four-day-week-and-reducing-working-time/#ws_call_id=call_03_guQ2Z6nQ3Os741oRY6y18742"
+      }
+    },
+    {
+      "type": "web_search_call",
+      "id": "call_04_WNiwY81tGhiKGIe9XfCG8958",
+      "status": "completed",
+      "action": {
+        "type": "open_page",
+        "url": "https://www-ak-ms.foxbusiness.com/economy/more-than-60-companies-tried-four-day-work-week-results-show-why-92-are-keeping-it#ws_call_id=call_04_WNiwY81tGhiKGIe9XfCG8958"
+      }
+    },
+    {
+      "type": "message",
+      "id": "94e4d00a-17ba-42f5-973d-7d6817367252",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "{\"overview\":{\"content_summary\":\"一篇未署名的简体中文观点短文，以英国2022年四天工作制试验为据，主张「四天工作制已经没有争议」、政府应立即强制所有企业实施，并把反对者描述为「习惯了低效加班」。全文约150字，将试验数据、规范性政策主张与对异议者的贬损混合呈现。\",\"fact_check_summary\":\"核查显示，原文引用的试验数据存在关键失真：35%是与上年同期相比的平均自我报告营收增幅，并非「所有参与企业都增长35%」，试验期内按规模加权的营收平均增长约1.4%；61家企业中只有56家（92%）在试验后继续四天工作制，且当时仅18家（29.5%）确认永久化，并非「全部永久保留」；71%是报告倦怠感下降的员工比例，而压力减轻的比例为39%。这些数据均源自Autonomy等机构2023年2月发布的2022年英国试验报告，但原文在转述时被明显放大、混用和绝对化。\",\"key_findings\":[{\"ref_id\":\"F-01\",\"text\":\"「所有参与企业营收都会增长35%」与报告口径不符：35%是与上年同期相比的平均自我报告增幅，试验期内加权平均营收增长约1.4%。\"},{\"ref_id\":\"F-02\",\"text\":\"「61家全部永久保留」不成立：试验后有56家（92%）继续，其中18家（29.5%）当时确认永久化，另有2家延长试验、3家暂停。\"},{\"ref_id\":\"F-03\",\"text\":\"「压力下降71%」混淆了指标：71%是倦怠感下降的员工比例，压力减轻的比例为39%。\"},{\"ref_id\":\"L-01\",\"text\":\"从61家自愿参与的样本推出「对所有行业都有效」，存在以偏概全的外推问题。\"},{\"ref_id\":\"V-01\",\"text\":\"核心主张「政府应立即强制所有企业实施四天工作制」是规范性观点而非事实，其前提建立在被放大的数据之上。\"}],\"reading_note\":\"本报告针对单个来源（example.com 占位出处、未署名短文）进行分析。文中所涉试验数据可追溯至Autonomy等机构发布的2022年英国四天工作制试验报告，但原文对数据的转述存在明显放大与混用，阅读时宜对照原始报告核实具体口径。\"},\"source\":{\"genre\":\"观点评论（时评）\",\"provenance\":\"来源自带的出处为 example.com 占位域名，无法核实真实发布平台；正文为简体中文观点短文，未署名，作者、媒体与发布时间未知。\",\"completeness\":\"正文完整，为一段约150字的短文，无缺页或截断迹象。\",\"note\":\"该来源以占位域名出现，发布方真实性存疑；正文把试验数据（事实层面）、政策主张（规范层面）与对反对者的贬损（态度层面）混合呈现，且未提供任何数据来源链接。\"},\"facts\":{\"items\":[{\"id\":\"F-01\",\"quote\":\"英国2022年的四天工作制试验已经证明，所有参与企业实行四天工作制后，营收都会增长35%。\",\"claim\":\"2022年英国试验中「所有参与企业」的营收都增长35%。\",\"verdict\":\"部分准确\",\"explanation\":\"2023年2月发布的试验报告显示，35%是参与企业「与上年同期相比」的平均自我报告营收增幅；而在试验期内，按企业规模加权的营收平均仅增长1.4%。报告并未得出「所有参与企业营收都增长35%」的结论——35%是平均数，且非全员、非试验期内直接测量的结果。\",\"evidence_ids\":[\"E-01\",\"E-02\",\"E-03\"]},{\"id\":\"F-02\",\"quote\":\"61家参与企业后来全部永久保留了四天工作制\",\"claim\":\"61家参与企业后来全部永久保留四天工作制。\",\"verdict\":\"有证据反驳\",\"explanation\":\"试验报告显示，61家企业中56家（92%）在试验结束后继续四天工作制，其中仅18家（29.5%）当时确认为永久性改变，另有2家延长试验、3家暂停；2024年2月的跟进报告显示至少54家一年后仍在执行、至少31家已永久化。无论按哪个时点，「全部永久保留」均不成立。\",\"evidence_ids\":[\"E-01\",\"E-02\",\"E-03\"]},{\"id\":\"F-03\",\"quote\":\"员工压力下降71%\",\"claim\":\"试验员工压力下降71%。\",\"verdict\":\"部分准确\",\"explanation\":\"报告口径是「71%的员工报告倦怠感（burnout）水平下降」，而「压力（stress）减轻」的员工比例为39%。原文把71%的倦怠感改善直接套在「压力下降」上，混淆了两个不同的测量指标。\",\"evidence_ids\":[\"E-01\",\"E-02\",\"E-03\"]},{\"id\":\"F-04\",\"quote\":\"英国2022年的四天工作制试验已经证明\",\"claim\":\"该试验确实存在：2022年6月至12月在英国进行，涉及61家企业、约2900名员工，由4 Day Week Global、4 Day Week Campaign与智库Autonomy等组织。\",\"verdict\":\"有证据支持\",\"explanation\":\"多家来源一致确认这一背景：试验时间为2022年6月至12月，61家企业、约2900名员工参与，研究团队包括波士顿学院Juliet Schor及剑桥大学等学者，结果由Autonomy于2023年2月发布。此背景与原文描述一致。\",\"evidence_ids\":[\"E-01\",\"E-02\",\"E-03\"]}],\"empty_state\":null},\"viewpoints\":{\"items\":[{\"id\":\"V-01\",\"quote\":\"既然数据已经证明四天工作制对所有行业都有效，政府就应立即要求所有企业实施。\",\"viewpoint\":\"政府应立即强制所有企业实施四天工作制。\",\"owner\":\"来源作者（未署名，归属不明确）\",\"analysis\":\"这是把试验结论直接转化为强制性政策主张的规范性判断。其前提「对所有行业都有效」来自对试验数据的过度概括，属于价值主张而非可验证的事实陈述。\"},{\"id\":\"V-02\",\"quote\":\"反对者不过是习惯了低效加班。\",\"viewpoint\":\"反对四天工作制的人只是习惯了低效加班。\",\"owner\":\"来源作者（未署名，归属不明确）\",\"analysis\":\"这是对反对者动机的贬损性归因，未提供任何依据，属于态度表达而非论证，作用在于预先消解异议。\"}],\"empty_state\":null},\"logic\":{\"argument_chain\":\"前提一：英国2022年试验证明所有参与企业营收增长35%（数据主张）→ 前提二：61家企业全部永久保留四天工作制（数据主张）→ 前提三：员工压力下降71%（数据主张）→ 推论：四天工作制对所有行业都有效 → 结论：政府应立即强制所有企业实施 → 补充：反对者只是习惯低效加班（消解异议）。\",\"items\":[{\"id\":\"L-01\",\"quote\":\"既然数据已经证明四天工作制对所有行业都有效\",\"judgment\":\"以偏概全（样本外推）\",\"explanation\":\"试验由61家自愿报名、行业分布有限的企业构成，报告仅称结果「在各类规模的企业中大体稳定」，并未覆盖所有行业；从自愿样本直接推出「对所有行业都有效」，属过度外推。\",\"related_ids\":[\"F-01\",\"F-04\"]},{\"id\":\"L-02\",\"quote\":\"所有参与企业实行四天工作制后，营收都会增长35%\",\"judgment\":\"平均数被当作全称判断（数据误读）\",\"explanation\":\"35%是与上年同期相比的平均自我报告增幅，试验期内加权平均营收仅增长1.4%；把平均值表述为「所有企业都增长35%」，不符合报告口径。\",\"related_ids\":[\"F-01\"]},{\"id\":\"L-03\",\"quote\":\"政府就应立即要求所有企业实施\",\"judgment\":\"从「试验有效」到「政府强制」的论证跳跃\",\"explanation\":\"自愿试点中企业可自主选择并保有退出权，试点效果不能直接推出强制推广的正当性与可行性；原文未讨论行业差异、执行成本以及强制与自愿之间的本质差别。\",\"related_ids\":[\"F-01\",\"V-01\"]},{\"id\":\"L-04\",\"quote\":\"反对者不过是习惯了低效加班\",\"judgment\":\"动机贬损、回避实质论证\",\"explanation\":\"将反对意见一概归因于「习惯低效」，而非回应反对者可能提出的成本、行业适用性、劳动强度等实质理由，属于稻草人式的消解策略。\",\"related_ids\":[\"V-02\"]}],\"empty_state\":null},\"intent\":{\"explicit_purpose\":\"主张政府应立即强制所有企业实施四天工作制，并用2022年英国试验的数据为该主张背书。\",\"items\":[{\"id\":\"I-01\",\"quote\":\"既然数据已经证明四天工作制对所有行业都有效，政府就应立即要求所有企业实施。\",\"possible_intent\":\"推动四天工作制的强制性立法议程。\",\"explanation\":\"通过把选择性呈现、被放大的数据说成「已经证明」，将复杂政策问题简化为单一结论，可能意在为强制推广制造舆论压力。\"},{\"id\":\"I-02\",\"quote\":\"反对者不过是习惯了低效加班。\",\"possible_intent\":\"消解并贬低反对声音。\",\"explanation\":\"预先将反对者污名化，使讨论缺乏反驳空间，符合说服性短评的常见策略。\"}],\"target_audience\":\"关注劳动政策与工作制度的公众、媒体及政策讨论参与者。\",\"expression_methods\":[\"引用统计数据并加以放大（35%、71%、61家全部保留）\",\"绝对化表述（「全部」「所有」「立即」）\",\"将异议者作贬损性概括（「习惯了低效加班」）\",\"以「数据已经证明」「已经没有争议」的口吻制造无争议感\"],\"empty_state\":null},\"evidence\":{\"items\":[{\"id\":\"E-01\",\"title\":\"UK four-day week trial results in reduced staff burnout\",\"url\":\"https://www.research-live.com/article/news/uk-fourday-week-trial-results-in-reduced-staff-burnout/id/5109272\",\"explanation\":\"MRS旗下Research Live于2023年2月21日的报道，写明61家企业参与、56家（92%）继续四天工作制、35%为与上年同期相比的平均营收增幅、71%为倦怠感下降的员工比例、39%为压力减轻的员工比例，并说明试验由4 Day Week Global、Autonomy等组织及剑桥、波士顿学院学者开展。\"},{\"id\":\"E-02\",\"title\":\"The four-day week and reducing working time - Digital Futures at Work Research Centre (Digit)\",\"url\":\"https://digit-research.org/projects/the-four-day-week-and-reducing-working-time/\",\"explanation\":\"ESRC数字未来工作研究中心页面，汇总2022年英国试验及跟进数据：61家企业约2900名员工参与，56家（92%）继续、18家（29.5%）当时确认永久化；2024年2月跟进显示至少54家一年后仍在执行、至少31家已永久化；试验期内加权平均营收增长1.4%，与上年同期相比平均增长35%；39%压力减轻、71%倦怠感下降。\"},{\"id\":\"E-03\",\"title\":\"More than 60 companies tried a four-day work week and results show why 92% are keeping it\",\"url\":\"https://www-ak-ms.foxbusiness.com/economy/more-than-60-companies-tried-four-day-work-week-results-show-why-92-are-keeping-it\",\"explanation\":\"福克斯商业频道对Autonomy发布试验结果的报道：61家企业约2900名员工参与（2022年6-12月），56家（92%）继续、18家永久化；试验期加权平均营收增长1.4%，与上年同期相比平均增长35%；71%倦怠感下降、39%压力减轻。\"}],\"empty_state\":null}}"
+        }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+    }
+  ]
+}

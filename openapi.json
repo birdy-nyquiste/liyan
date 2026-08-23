@@ -1474,7 +1474,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -1505,7 +1504,6 @@
             "title": "Empty State"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
@@ -1678,7 +1676,6 @@
             "title": "Evidence Ids"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -1711,7 +1708,6 @@
             "title": "Empty State"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
@@ -1902,7 +1898,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -1946,7 +1941,6 @@
             "title": "Empty State"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "explicit_purpose",
@@ -1966,7 +1960,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "ref_id",
@@ -2010,7 +2003,6 @@
             "title": "Related Ids"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -2045,7 +2037,6 @@
             "title": "Empty State"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "argument_chain",
@@ -2077,7 +2068,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "content_summary",
@@ -2505,7 +2495,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "genre",
@@ -2877,7 +2866,6 @@
             "$ref": "#/components/schemas/Narrative"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -2909,7 +2897,6 @@
             "title": "Empty State"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
@@ -2959,7 +2946,6 @@
             "$ref": "#/components/schemas/EvidenceSection"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "overview",

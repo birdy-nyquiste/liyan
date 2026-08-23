@@ -44,7 +44,7 @@ Prerequisites: Docker, Python 3.13 with `uv`, and Node.js 22 with npm.
    uv run celery -A liyan_server.celery_worker:celery_app worker -Q source-processing --loglevel=INFO
    ```
 
-Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare pasted text, a public article URL, or an uploaded PDF, DOCX, TXT, or Markdown document before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI; file parsing is deterministic and uses no LLM or OCR. Opening a task starts one 知言 run per source Revision of its current version and renders each immutable 知言报告 through typed components. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
+Open [http://localhost:5173](http://localhost:5173). The status badge should show `服务正常`. An allowlisted user can request and verify an Email OTP, then prepare pasted text, a public article URL, or an uploaded PDF, DOCX, TXT, or Markdown document before confirming a numbered `立言任务`. URL extraction runs through Crawl4AI; file parsing is deterministic and uses no LLM or OCR. Opening a task shows one 知言 area per source Revision of its current version, where a run can be started and its immutable 知言报告 is rendered through typed components. The server exposes liveness at [http://localhost:8000/health/live](http://localhost:8000/health/live) and dependency readiness at [http://localhost:8000/health/ready](http://localhost:8000/health/ready).
 
 ## Verify changes
 

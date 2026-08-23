@@ -419,6 +419,93 @@ h1 {
   margin: 0;
 }
 
+.liyan-panel > label,
+.liyan-working-copy > label {
+  display: block;
+  margin: 18px 0 7px;
+  color: #595346;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.liyan-panel > textarea,
+.liyan-working-copy > input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid #cfc5b3;
+  border-radius: 10px;
+  background: #fff;
+  color: #29261f;
+}
+
+.liyan-panel > textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.liyan-working-copy {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}
+
+.liyan-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 12px 0 8px;
+}
+
+.liyan-toolbar__button {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
+.liyan-toolbar__button[aria-pressed="true"] {
+  border-color: #b9a77f;
+  background: #eee7d7;
+  color: #29261f;
+}
+
+.liyan-editor__content {
+  min-height: 260px;
+  padding: 18px;
+  border: 1px solid #cfc5b3;
+  border-radius: 10px;
+  background: #fff;
+  line-height: 1.7;
+  outline: none;
+}
+
+.liyan-editor__content:focus-visible,
+.liyan-working-copy > input:focus-visible,
+.liyan-panel > textarea:focus-visible {
+  border-color: #856b37;
+  box-shadow: 0 0 0 3px rgb(133 107 55 / 18%);
+}
+
+.liyan-editor__content h2,
+.liyan-editor__content h3 {
+  margin: 1.4em 0 0.5em;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.liyan-editor__content blockquote {
+  margin-left: 0;
+  padding-left: 14px;
+  border-left: 3px solid #d9cfb8;
+  color: #6e685b;
+}
+
+.liyan-editor__content hr {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid #d9cfb8;
+}
+
 .zhiyan-section {
   margin-top: 18px;
   padding-top: 14px;

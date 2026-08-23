@@ -10,24 +10,31 @@ import {
 } from "../api/client";
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
+import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
+import {
+  loadWorkingCopy,
+  saveWorkingCopy,
+  type LiyanWorkingCopy,
+} from "./workingCopyStorage";
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const TOO_MANY_REQUESTS = 429;
 
-type WorkingCopy = NonNullable<StartLiyanRunRequest["working_copy"]>;
-
 export function LiyanPanel({
+  userId,
   accessToken,
   taskId,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
 }: {
+  userId: string;
   accessToken: string;
   taskId: string;
   pollIntervalMs?: number;
 }) {
   const [state, setState] = useState<LiyanStateResponse | null>(null);
   const [instruction, setInstruction] = useState("");
-  const [workingCopy, setWorkingCopy] = useState<WorkingCopy | null>(null);
+  const [workingCopy, setWorkingCopy] = useState<LiyanWorkingCopy | null>(() =>
+    loadWorkingCopy(userId, taskId));
   const [lastRequest, setLastRequest] = useState<StartLiyanRunRequest | null>(null);
   const [startedExecutionId, setStartedExecutionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,20 +44,25 @@ export function LiyanPanel({
   const startedExecutionIdRef = useRef<string | null>(null);
   const appliedResultIdRef = useRef<string | null>(null);
 
+  const updateWorkingCopy = useCallback((next: LiyanWorkingCopy) => {
+    setWorkingCopy(next);
+    saveWorkingCopy(userId, taskId, next);
+  }, [taskId, userId]);
+
   const applyStartedResult = useCallback((next: LiyanStateResponse) => {
     if (
       next.result &&
       next.result.execution_id === startedExecutionIdRef.current &&
       next.result.id !== appliedResultIdRef.current
     ) {
-      setWorkingCopy({
+      updateWorkingCopy({
         title: next.result.title,
         body_markdown: next.result.body_markdown,
       });
       setInstruction(next.result.instruction);
       appliedResultIdRef.current = next.result.id;
     }
-  }, []);
+  }, [updateWorkingCopy]);
 
   const load = useCallback(async () => {
     try {
@@ -132,7 +144,7 @@ export function LiyanPanel({
 
   function recover() {
     if (!state?.result) return;
-    setWorkingCopy({
+    updateWorkingCopy({
       title: state.result.title,
       body_markdown: state.result.body_markdown,
     });
@@ -212,11 +224,12 @@ export function LiyanPanel({
       ) : null}
 
       {workingCopy ? (
-        <article className="liyan-working-copy" aria-label="未保存 Working Copy">
-          <p className="section-kicker">未保存 Working Copy</p>
-          <h3>{workingCopy.title}</h3>
-          <pre>{workingCopy.body_markdown}</pre>
-        </article>
+        <ArticleWorkingCopyEditor
+          taskId={taskId}
+          value={workingCopy}
+          disabled={active || busy}
+          onChange={updateWorkingCopy}
+        />
       ) : null}
     </section>
   );

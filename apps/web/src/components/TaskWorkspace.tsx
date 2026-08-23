@@ -81,6 +81,7 @@ export function TaskWorkspace({
           <TaskCard
             key={task.id}
             task={task}
+            userId={identity.id}
             accessToken={accessToken}
             opened={task.id === openedTaskId}
             onOpen={openTask}

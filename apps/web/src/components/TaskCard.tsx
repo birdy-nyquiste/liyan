@@ -8,12 +8,14 @@ import { TaskSourceVersions } from "./TaskSourceVersions";
 
 export function TaskCard({
   task: initialTask,
+  userId,
   accessToken,
   opened = false,
   onOpen,
   onSourceEditingChange,
 }: {
   task: TaskSummary;
+  userId: string;
   accessToken: string;
   opened?: boolean;
   onOpen?(taskId: string): void;
@@ -123,7 +125,7 @@ export function TaskCard({
             onLiyanAvailabilityChange={setLiyanReady}
           />
           {selectedVersionId === task.current_version_id && liyanReady ? (
-            <LiyanPanel accessToken={accessToken} taskId={task.id} />
+            <LiyanPanel userId={userId} accessToken={accessToken} taskId={task.id} />
           ) : null}
         </div>
       ) : null}

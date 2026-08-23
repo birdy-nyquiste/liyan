@@ -61,18 +61,19 @@ function respondWith(...payloads: unknown[]) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe("LiyanPanel", () => {
   it("generates from the optional instruction and initializes an unsaved Working Copy", async () => {
     const fetchMock = respondWith(state(), state("running"), state("running"), state("succeeded"));
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" pollIntervalMs={1} />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" pollIntervalMs={1} />);
 
     await user.type(await screen.findByLabelText("立言指令（可选）"), "语气克制。");
     await user.click(screen.getByRole("button", { name: "生成立言" }));
 
-    expect(await screen.findByRole("heading", { name: "完整文章" })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post).toBeDefined();
@@ -83,14 +84,28 @@ describe("LiyanPanel", () => {
   it("offers a completed background result after navigation before loading it locally", async () => {
     respondWith(state("succeeded"));
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     expect(await screen.findByText("有一份已完成的立言结果可载入。")) .toBeInTheDocument();
     expect(screen.queryByText("未保存 Working Copy")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "载入为未保存草稿" }));
 
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "完整文章" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
+  });
+
+  it("projects canonical Markdown through the constrained Tiptap editor", async () => {
+    respondWith(state("succeeded"));
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+
+    expect(screen.getByRole("heading", { name: "继续讨论", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "文章格式" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "加粗" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "分隔线" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文章正文" }).querySelector("pre")).toBeNull();
   });
 
   it("replaces an existing Working Copy with the completed regeneration", async () => {
@@ -116,14 +131,14 @@ describe("LiyanPanel", () => {
     };
     respondWith(initial, running, running, replacement);
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" pollIntervalMs={1} />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" pollIntervalMs={1} />);
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
-    expect(screen.getByRole("heading", { name: "完整文章" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "生成立言" }));
 
-    expect(await screen.findByRole("heading", { name: "替代文章" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "完整文章" })).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue("替代文章")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("完整文章")).not.toBeInTheDocument();
   });
 
   it("terminates the active Execution advertised by the server", async () => {
@@ -134,7 +149,7 @@ describe("LiyanPanel", () => {
     };
     const fetchMock = respondWith(state("running"), { ...execution("running"), status: "cancel_requested" }, cancelled);
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
 
     await user.click(await screen.findByRole("button", { name: "终止生成" }));
 
@@ -154,7 +169,7 @@ describe("LiyanPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     const generate = await screen.findByRole("button", { name: "生成立言" });
     await user.click(generate);
@@ -171,12 +186,85 @@ describe("LiyanPanel", () => {
   it("applies a completed result returned directly by the start replay", async () => {
     respondWith(state(), state("succeeded"));
     const user = userEvent.setup();
-    render(<LiyanPanel accessToken="token" taskId="task-1" />);
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     await user.click(await screen.findByRole("button", { name: "生成立言" }));
 
-    expect(await screen.findByRole("heading", { name: "完整文章" })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
     expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
+  });
+
+  it("edits the Tiptap Working Copy and sends the canonical Markdown on regeneration", async () => {
+    const fetchMock = respondWith(state("succeeded"), state("running"));
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    const title = screen.getByRole("textbox", { name: "文章标题" });
+    const body = screen.getByRole("textbox", { name: "文章正文" });
+    await user.clear(title);
+    await user.type(title, "手动标题");
+    await user.clear(body);
+    await user.type(body, "Edited body.");
+    await user.click(screen.getByRole("button", { name: "生成立言" }));
+
+    const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
+    expect(fetchMock.mock.calls.filter(([request]) => request.method === "POST")).toHaveLength(1);
+    expect(post![0].url).toContain("/liyan-runs");
+    const request = JSON.parse(await post![0].clone().text()) as {
+      working_copy: { title: string; body_markdown: string };
+    };
+    expect(request.working_copy).toEqual({
+      title: "手动标题",
+      body_markdown: "Edited body.",
+    });
+  });
+
+  it("recovers a Working Copy after refresh in the same browser", async () => {
+    respondWith(state("succeeded"));
+    const user = userEvent.setup();
+    const first = render(
+      <LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await user.clear(screen.getByRole("textbox", { name: "文章标题" }));
+    await user.type(screen.getByRole("textbox", { name: "文章标题" }), "浏览器恢复标题");
+    await user.clear(screen.getByRole("textbox", { name: "文章正文" }));
+    await user.type(screen.getByRole("textbox", { name: "文章正文" }), "Recovered body.");
+    first.unmount();
+    respondWith(state("succeeded"));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    expect(await screen.findByDisplayValue("浏览器恢复标题")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文章正文" })).toHaveTextContent("Recovered body.");
+    expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
+    expect(screen.getByText("仅保存在当前浏览器；退出登录、换设备或清除浏览器数据后无法恢复。")).toBeInTheDocument();
+  });
+
+  it("isolates browser-local Working Copies by authenticated user and task", async () => {
+    respondWith(state("succeeded"));
+    const user = userEvent.setup();
+    const first = render(
+      <LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />,
+    );
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await user.clear(screen.getByRole("textbox", { name: "文章标题" }));
+    await user.type(screen.getByRole("textbox", { name: "文章标题" }), "用户一的内容");
+    first.unmount();
+
+    respondWith(state("succeeded"));
+    const second = render(
+      <LiyanPanel userId="user-2" accessToken="token" taskId="task-1" />,
+    );
+    expect(await screen.findByText("有一份已完成的立言结果可载入。")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("用户一的内容")).not.toBeInTheDocument();
+    second.unmount();
+
+    respondWith(state("succeeded"));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-2" />);
+    expect(await screen.findByText("有一份已完成的立言结果可载入。")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("用户一的内容")).not.toBeInTheDocument();
   });
 });

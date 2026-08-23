@@ -45,6 +45,16 @@ the Cloudflare dashboard, then set the S3-compatible endpoint
 (`https://<account-id>.r2.cloudflarestorage.com`), the access key id, the secret
 access key, and the bucket name.
 
+Once it is configured, an opt-in test proves the credentials, endpoint, and
+bucket name actually agree — something the in-memory double cannot tell you:
+
+```bash
+LIYAN_LIVE_R2=1 .venv/bin/python -m pytest apps/server/tests/test_r2_live_contract.py
+```
+
+It writes one object to the configured bucket and deletes it again. The default
+suite skips it and stays offline.
+
 ## Checks
 
 ```bash

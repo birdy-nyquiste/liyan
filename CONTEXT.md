@@ -53,8 +53,12 @@ An independent attempt to submit the locked snapshot of an eligible article Revi
 _Avoid_: 发布状态, 定稿
 
 **发布目标**:
-A server-configured destination and author identity that a specific user is authorized to publish to.
+A server-configured destination that specific users are authorized to publish to. It grants access only: the author name shown on the published item is the user's to give, not the target's.
 _Avoid_: 平台账号, Blog 配置
+
+**发布作者名**:
+The author name a user types when confirming a 发布任务, sent to the platform and displayed there. The platform treats one name as one author across submissions, so it is trimmed before it is locked into the snapshot.
+_Avoid_: 作者映射, 用户昵称
 
 **Blog Preview**:
 A password-protected Blog draft and Preview URL created by a successful MVP 发布任务. Any subsequent action by the user in Blog is outside 立言阁.

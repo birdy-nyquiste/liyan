@@ -36,6 +36,15 @@ export class ApiError extends Error {
   }
 }
 
+/** An ApiError carrying whatever the server said, when the message is the point. */
+function refusalOf(result: { error?: unknown; response: Response }): ApiError {
+  const error = result.error as { detail?: unknown } | undefined;
+  return new ApiError(
+    result.response.status,
+    typeof error?.detail === "string" ? error.detail : null,
+  );
+}
+
 export async function serverIsAlive(): Promise<boolean> {
   const api = createClient<paths>({
     baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
@@ -520,7 +529,30 @@ export async function confirmPublication(
   const result = await authenticatedApi(accessToken).POST("/publication/publish-tasks", {
     body: request,
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  // The refusal text matters here: one of these answers is the warning that a
+  // newer Revision would create a second Blog item, which the user must read.
+  if (!result.data) throw refusalOf(result);
+  return result.data;
+}
+
+/** Send the locked snapshot again. Only a definitive failure may be retried. */
+export async function retryPublication(
+  accessToken: string,
+  publishTaskId: string,
+  idempotencyKey: string,
+  acknowledgeExistingPreview = false,
+): Promise<PublishTaskResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/publication/publish-tasks/{publish_task_id}/retry",
+    {
+      params: { path: { publish_task_id: publishTaskId } },
+      body: {
+        idempotency_key: idempotencyKey,
+        acknowledge_existing_preview: acknowledgeExistingPreview,
+      },
+    },
+  );
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 

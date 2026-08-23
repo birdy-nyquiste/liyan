@@ -45,6 +45,9 @@ function publishTask(status: string, previewUrl: string | null = null) {
   };
 }
 
+/** A refusal the component must read, rather than a payload it can use. */
+const refusal = (status: number, detail: string) => ({ __status: status, detail });
+
 /** Answers each request by URL so the order of the component's reads is free. */
 function respondWith(routes: Array<[RegExp, unknown | unknown[]]>) {
   type FetchCall = (request: Request) => Promise<Response>;
@@ -56,7 +59,8 @@ function respondWith(routes: Array<[RegExp, unknown | unknown[]]>) {
       const answer = Array.isArray(payload)
         ? (payload.length > 1 ? payload.shift() : payload[0])
         : payload;
-      return Response.json(answer);
+      const refused = answer as { __status?: number };
+      return Response.json(answer, { status: refused?.__status ?? 200 });
     }
     throw new Error(`No route for ${request.url}`);
   });
@@ -207,6 +211,128 @@ describe("PublicationConfirmation", () => {
       expect(screen.queryByRole("button", { name: "确认发布" })).not.toBeInTheDocument(),
     );
     expect(screen.queryByRole("button", { name: /重试|重新/ })).not.toBeInTheDocument();
+  });
+
+  it("resends the original submission when Blog definitively refused it", async () => {
+    const requests = respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+      [/\/publication\/publish-tasks\/[^/]+\/retry$/, publishTask("pending")],
+      [/\/publication\/publish-tasks$/, publishTask("pending")],
+      [
+        /\/publication\/publish-tasks\//,
+        [publishTask("failed"), publishTask("succeeded", "https://lsforum.example/preview/abc")],
+      ],
+    ]);
+    const user = userEvent.setup();
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        pollIntervalMs={1}
+        onClose={() => undefined}
+      />,
+    );
+
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
+    await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
+
+    const retried = requests.find((request) => request.url.includes("/retry"));
+    expect(retried).toBeDefined();
+    expect(retried!.method).toBe("POST");
+    // The retry carries no content: the snapshot is already the server's, and
+    // a body naming a title or Revision could smuggle in something newer.
+    expect(JSON.parse(await retried!.text())).toEqual({
+      idempotency_key: expect.any(String),
+      acknowledge_existing_preview: false,
+    });
+    expect(
+      await screen.findByRole("link", { name: "https://lsforum.example/preview/abc" }),
+    ).toBeInTheDocument();
+  });
+
+  it("warns before a retry resends behind a newer Revision", async () => {
+    const requests = respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+      [
+        /\/publication\/publish-tasks\/[^/]+\/retry$/,
+        [
+          refusal(412, "该立言任务已有文章提交到这个发布目标。继续发布会新建另一条 Blog 内容。"),
+          publishTask("pending"),
+        ],
+      ],
+      [/\/publication\/publish-tasks$/, publishTask("pending")],
+      [/\/publication\/publish-tasks\//, publishTask("failed")],
+    ]);
+    const user = userEvent.setup();
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        pollIntervalMs={1}
+        onClose={() => undefined}
+      />,
+    );
+
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
+    await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
+
+    expect(await screen.findByText(/继续发布会新建另一条 Blog 内容/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "仍要发布" }));
+
+    const retries = requests.filter((request) => request.url.includes("/retry"));
+    expect(retries).toHaveLength(2);
+    expect(JSON.parse(await retries[0].text())).toMatchObject({
+      acknowledge_existing_preview: false,
+    });
+    expect(JSON.parse(await retries[1].text())).toMatchObject({
+      acknowledge_existing_preview: true,
+    });
+  });
+
+  it("warns that a newer Revision creates another Blog item before it does", async () => {
+    const requests = respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+      [
+        /\/publication\/publish-tasks$/,
+        [
+          refusal(412, "该立言任务已有文章提交到这个发布目标。继续发布会新建另一条 Blog 内容。"),
+          publishTask("pending"),
+        ],
+      ],
+      [/\/publication\/publish-tasks\//, publishTask("pending")],
+    ]);
+    const user = userEvent.setup();
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        pollIntervalMs={1}
+        onClose={() => undefined}
+      />,
+    );
+
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
+
+    expect(await screen.findByText(/继续发布会新建另一条 Blog 内容/)).toBeInTheDocument();
+    const posts = requests.filter((request) => request.method === "POST");
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(await posts[0].text())).toMatchObject({
+      acknowledge_existing_preview: false,
+    });
+
+    await user.click(screen.getByRole("button", { name: "仍要发布" }));
+
+    const acknowledged = requests.filter((request) => request.method === "POST");
+    expect(acknowledged).toHaveLength(2);
+    expect(JSON.parse(await acknowledged[1].text())).toMatchObject({
+      acknowledge_existing_preview: true,
+    });
   });
 
   it("lets the author be typed while the article itself stays read-only", async () => {

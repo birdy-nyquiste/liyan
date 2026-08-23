@@ -75,8 +75,10 @@ describe("PublicationCenter", () => {
       author: "Birdy Yao",
       working_copy_hash: await articleContentHash(DRAFT),
     });
+    // The server's own reason, not a generic refusal: "unsaved edits",
+    // "superseded Revision", and "already submitted" call for different acts.
     expect(
-      await screen.findByText("该文章已不可发布，请保存最新 Revision 后重试。"),
+      await screen.findByText("有未保存的修改，请先保存后再发布。"),
     ).toBeInTheDocument();
   });
 
@@ -136,5 +138,106 @@ describe("PublicationCenter", () => {
       "https://lsforum.example/preview/kept",
     );
     expect(screen.getByText(/Revision 2/)).toBeInTheDocument();
+  });
+
+  const record = (status: string, overrides: Record<string, unknown> = {}) => ({
+    id: "publish-1",
+    status,
+    task_id: "task-1",
+    task_version_id: "version-1",
+    revision_id: "revision-2",
+    revision_number: 2,
+    title: "四天工作制的真问题",
+    body_markdown: "锁定正文",
+    target,
+    author: "Birdy Yao",
+    post_type: "opinion",
+    requested_status: "preview",
+    preview_url: null,
+    external_slug: null,
+    external_version: null,
+    response_evidence: null,
+    failure_message: "Blog 暂时无法提交，请稍后重试。",
+    created_at: "2026-08-23T10:00:00Z",
+    completed_at: "2026-08-23T10:01:00Z",
+    execution: null,
+    attempts: [],
+    ...overrides,
+  });
+
+  function listing(items: unknown[]) {
+    const requests: Request[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
+      requests.push(request.clone());
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/publication/eligible-articles")) return Response.json({ items: [] });
+      if (path.endsWith("/publication/targets")) return Response.json({ items: [target] });
+      if (path.endsWith("/retry")) return Response.json(record("pending"));
+      if (path.endsWith("/publication/publish-tasks")) return Response.json({ items });
+      return new Response(null, { status: 404 });
+    }));
+    return requests;
+  }
+
+  it("keeps a definitive failure recoverable after the confirmation screen is gone", async () => {
+    const requests = listing([record("failed")]);
+    const user = userEvent.setup();
+
+    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+
+    await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
+
+    const retried = requests.find((request) => request.url.endsWith("/retry"));
+    expect(retried).toBeDefined();
+    expect(retried!.method).toBe("POST");
+  });
+
+  it("warns before a retry resends behind a newer Revision, and keeps one key", async () => {
+    const requests: Request[] = [];
+    let retries = 0;
+    vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
+      requests.push(request.clone());
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/publication/eligible-articles")) return Response.json({ items: [] });
+      if (path.endsWith("/publication/targets")) return Response.json({ items: [target] });
+      if (path.endsWith("/retry")) {
+        retries += 1;
+        return retries === 1
+          ? Response.json(
+              { detail: "该立言任务已有文章提交到这个发布目标。继续发布会新建另一条 Blog 内容。" },
+              { status: 412 },
+            )
+          : Response.json(record("pending"));
+      }
+      if (path.endsWith("/publication/publish-tasks")) {
+        return Response.json({ items: [record("failed")] });
+      }
+      return new Response(null, { status: 404 });
+    }));
+    const user = userEvent.setup();
+
+    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+
+    await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
+    expect(await screen.findByText(/继续发布会新建另一条 Blog 内容/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "仍要发布" }));
+
+    const sent = requests.filter((request) => request.url.endsWith("/retry"));
+    expect(sent).toHaveLength(2);
+    const bodies = [JSON.parse(await sent[0].text()), JSON.parse(await sent[1].text())];
+    expect(bodies[0].acknowledge_existing_preview).toBe(false);
+    expect(bodies[1].acknowledge_existing_preview).toBe(true);
+    // One retry, one key: the acknowledged resend is the same attempt, so the
+    // server's repeated-key guard still recognises it as one.
+    expect(bodies[1].idempotency_key).toBe(bodies[0].idempotency_key);
+  });
+
+  it("offers no resend for an outcome nobody can confirm", async () => {
+    listing([record("outcome_unknown")]);
+
+    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+
+    expect(await screen.findByText("四天工作制的真问题")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重试本次提交" })).not.toBeInTheDocument();
   });
 });

@@ -657,6 +657,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/publication/publish-tasks/{publish_task_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Publication
+         * @description Send the snapshot again, and only the snapshot.
+         *
+         *     Retrying reads nothing the user could have changed since: the 发布任务
+         *     already holds the title, body, author, and target this attempt will use.
+         *     A newer article therefore cannot ride out on a retry — publishing it is
+         *     a new confirmation, with the warning that goes with one.
+         */
+        post: operations["retry_publication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/publication/publish-tasks/{publish_task_id}": {
         parameters: {
             query?: never;
@@ -712,6 +737,11 @@ export interface components {
             author: string;
             /** Working Copy Hash */
             working_copy_hash?: string | null;
+            /**
+             * Acknowledge Existing Preview
+             * @default false
+             */
+            acknowledge_existing_preview: boolean;
         };
         /** ConfirmTaskRequest */
         ConfirmTaskRequest: {
@@ -1281,6 +1311,23 @@ export interface components {
         RestoreVersionRequest: {
             /** Idempotency Key */
             idempotency_key: string;
+        };
+        /**
+         * RetryPublicationRequest
+         * @description Identity and consent — never content.
+         *
+         *     The 发布任务 already holds everything the attempt will send. A body that could
+         *     name a title, an author, or a Revision would be a way to publish something
+         *     newer under the word "retry".
+         */
+        RetryPublicationRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Acknowledge Existing Preview
+             * @default false
+             */
+            acknowledge_existing_preview: boolean;
         };
         /** SaveLiyanRevisionRequest */
         SaveLiyanRevisionRequest: {
@@ -2969,6 +3016,69 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PublishTaskResponse"];
                 };
+            };
+            /** @description Refused outright: nothing about this request can be made to work as sent. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The target may already hold an item for this 立言任务. Resend with `acknowledge_existing_preview` once the user has read the warning. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_publication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publish_task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryPublicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTaskResponse"];
+                };
+            };
+            /** @description Refused outright: nothing about this request can be made to work as sent. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The target may already hold an item for this 立言任务. Resend with `acknowledge_existing_preview` once the user has read the warning. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

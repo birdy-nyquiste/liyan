@@ -439,6 +439,14 @@ class PublishTask(Base):
             "idempotency_key",
             name="uq_publish_tasks_owner_idempotency_key",
         ),
+        #: One Revision reaches one 发布目标 at most once. Blog v0.11 has no
+        #: idempotency key and no Preview lookup, so a duplicate could never be
+        #: detected afterwards — the database is where it has to be impossible.
+        UniqueConstraint(
+            "revision_id",
+            "target_key",
+            name="uq_publish_tasks_revision_target",
+        ),
         Index("ix_publish_tasks_owner_id", "owner_id"),
         Index("ix_publish_tasks_revision_id", "revision_id"),
     )

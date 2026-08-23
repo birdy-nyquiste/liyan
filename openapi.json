@@ -1976,6 +1976,12 @@
               }
             }
           },
+          "409": {
+            "description": "Refused outright: nothing about this request can be made to work as sent."
+          },
+          "412": {
+            "description": "The target may already hold an item for this 立言任务. Resend with `acknowledge_existing_preview` once the user has read the warning."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1992,6 +1998,71 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/publication/publish-tasks/{publish_task_id}/retry": {
+      "post": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "Retry Publication",
+        "description": "Send the snapshot again, and only the snapshot.\n\nRetrying reads nothing the user could have changed since: the 发布任务\nalready holds the title, body, author, and target this attempt will use.\nA newer article therefore cannot ride out on a retry — publishing it is\na new confirmation, with the warning that goes with one.",
+        "operationId": "retry_publication",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publish_task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Publish Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPublicationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTaskResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Refused outright: nothing about this request can be made to work as sent."
+          },
+          "412": {
+            "description": "The target may already hold an item for this 立言任务. Resend with `acknowledge_existing_preview` once the user has read the warning."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/publication/publish-tasks/{publish_task_id}": {
@@ -2119,6 +2190,11 @@
               }
             ],
             "title": "Working Copy Hash"
+          },
+          "acknowledge_existing_preview": {
+            "type": "boolean",
+            "title": "Acknowledge Existing Preview",
+            "default": false
           }
         },
         "type": "object",
@@ -3915,6 +3991,25 @@
           "idempotency_key"
         ],
         "title": "RestoreVersionRequest"
+      },
+      "RetryPublicationRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "acknowledge_existing_preview": {
+            "type": "boolean",
+            "title": "Acknowledge Existing Preview",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "RetryPublicationRequest",
+        "description": "Identity and consent — never content.\n\nThe 发布任务 already holds everything the attempt will send. A body that could\nname a title, an author, or a Revision would be a way to publish something\nnewer under the word \"retry\"."
       },
       "SaveLiyanRevisionRequest": {
         "properties": {

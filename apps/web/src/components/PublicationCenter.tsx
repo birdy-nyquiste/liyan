@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  ApiError,
   listEligibleArticles,
   listPublishTasks,
+  retryPublication,
   type EligibleArticleResponse,
   type PublishTaskResponse,
 } from "../api/client";
@@ -11,6 +13,11 @@ import {
   PublicationConfirmation,
   type PublicationArticle,
 } from "./PublicationConfirmation";
+import {
+  EXISTING_PREVIEW_WARNING,
+  PRECONDITION_FAILED,
+  RETRY_FAILED,
+} from "./publicationMessages";
 import { loadWorkingCopy } from "./workingCopyStorage";
 
 const publicationArticle = (article: EligibleArticleResponse): PublicationArticle => ({
@@ -44,6 +51,11 @@ export function PublicationCenter({
   const [selected, setSelected] = useState<EligibleArticleResponse | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [warning, setWarning] = useState<{ message: string; publishTaskId: string } | null>(
+    null,
+  );
+  const retryKeys = useRef(new Map<string, string>());
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +74,43 @@ export function PublicationCenter({
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Send one failed 发布任务's snapshot again, from the record itself.
+   *
+   * A failure outlives the screen that produced it, so the list is where a
+   * retry has to be reachable — otherwise closing the confirmation is what
+   * decides whether an article can still be published.
+   *
+   * One 发布任务 keeps one retry key for the life of this screen, so a warning
+   * cleared and resent stays the same attempt rather than becoming a second.
+   */
+  const resend = useCallback(
+    async (publishTaskId: string, acknowledged = false) => {
+      const key = retryKeys.current.get(publishTaskId) ?? crypto.randomUUID();
+      retryKeys.current.set(publishTaskId, key);
+      setRetrying(publishTaskId);
+      try {
+        await retryPublication(accessToken, publishTaskId, key, acknowledged);
+        setError(null);
+        setWarning(null);
+        await load();
+        onPublicationChanged?.();
+      } catch (thrown) {
+        if (thrown instanceof ApiError && thrown.status === PRECONDITION_FAILED) {
+          setWarning({
+            message: thrown.detail ?? EXISTING_PREVIEW_WARNING,
+            publishTaskId,
+          });
+          return;
+        }
+        setError(thrown instanceof ApiError && thrown.detail ? thrown.detail : RETRY_FAILED);
+      } finally {
+        setRetrying(null);
+      }
+    },
+    [accessToken, load, onPublicationChanged],
+  );
 
   // The draft lives in this browser, so only this browser can prove the chosen
   // Revision is what the user is looking at. Without that proof the server has
@@ -155,6 +204,32 @@ export function PublicationCenter({
               <a href={record.preview_url} target="_blank" rel="noreferrer">
                 打开 Blog Preview
               </a>
+            ) : null}
+            {/* Only a definitive failure. 结果未知 gets no button here for the
+                same reason it gets none on the confirmation screen: Blog may
+                already hold the item, and nothing here can look. */}
+            {record.status === "failed" ? (
+              <button
+                className="button button--quiet"
+                type="button"
+                disabled={retrying === record.id}
+                onClick={() => void resend(record.id)}
+              >
+                重试本次提交
+              </button>
+            ) : null}
+            {warning?.publishTaskId === record.id ? (
+              <div className="publication-warning">
+                <p role="alert" className="form-error">{warning.message}</p>
+                <button
+                  className="button"
+                  type="button"
+                  disabled={retrying === record.id}
+                  onClick={() => void resend(record.id, true)}
+                >
+                  仍要发布
+                </button>
+              </div>
             ) : null}
           </li>
         ))}

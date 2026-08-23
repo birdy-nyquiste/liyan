@@ -10,14 +10,26 @@ from datetime import datetime
 from uuid import UUID
 
 from liyan_server.database import Execution, PublishTask
+from liyan_server.execution_states import RunOrigin
 
 PUBLISH_OPERATION = "publish_preview"
 PUBLISH_TARGET_TYPE = "publish_task"
 
 
 def new_publish_execution(
-    publish_task: PublishTask, *, created_at: datetime, attempt: int = 1
+    publish_task: PublishTask,
+    *,
+    created_at: datetime,
+    attempt: int = 1,
+    origin: RunOrigin = "initial",
+    idempotency_key: str | None = None,
 ) -> Execution:
+    """One attempt at the 发布任务's snapshot, whichever attempt it is.
+
+    Every attempt reads the same snapshot, so a retry cannot send anything the
+    first attempt did not: `input_identity` is derived from the Revision and the
+    locked content hash, and stays equal across attempts by construction.
+    """
     identity = ":".join(
         (
             "publish",
@@ -36,10 +48,10 @@ def new_publish_execution(
         input_identity=hashlib.sha256(identity.encode()).hexdigest(),
         input_snapshot=publish_snapshot(publish_task),
         attempt=attempt,
-        origin="initial",
+        origin=origin,
         status="queued",
         created_at=created_at,
-        idempotency_key=None,
+        idempotency_key=idempotency_key,
         request_hash=publish_task.content_hash,
     )
 

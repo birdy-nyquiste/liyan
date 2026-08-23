@@ -1,32 +1,20 @@
 """Submitting an eligible Revision to an authorized Blog target as a Preview."""
 
 from pathlib import Path
-from typing import Any
 
-from blog_support import SITE_URL, DeterministicBlogSubmitter, accepted
-from fastapi.testclient import TestClient
-from publication_support import publication_client, publish, saved_article
-from zhiyan_support import RecordingDispatcher
+from blog_support import SITE_URL, accepted
+from publication_support import (
+    publication_client,
+    publish,
+    ready_to_publish,
+    submitter_of,
+)
 
 from liyan_server.publication.blog import (
     BlogOutcomeUnknown,
     BlogPreviewAccepted,
     BlogSubmissionFailure,
 )
-
-
-def _ready(
-    tmp_path: Path,
-) -> tuple[TestClient, dict[str, str], RecordingDispatcher, str, dict[str, Any]]:
-    client, headers, dispatcher = publication_client(tmp_path)
-    task_id, revision = saved_article(client, headers, dispatcher)
-    return client, headers, dispatcher, task_id, revision
-
-
-def _submitter(dispatcher: RecordingDispatcher) -> DeterministicBlogSubmitter:
-    submitter = dispatcher.blog
-    assert isinstance(submitter, DeterministicBlogSubmitter)
-    return submitter
 
 
 def test_only_targets_the_server_authorized_for_this_user_are_selectable(
@@ -63,7 +51,7 @@ def test_a_target_never_exposes_the_credential_the_server_publishes_with(
 def test_blog_receives_the_author_the_user_typed_at_confirmation(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     publish(
         client, headers, task_id=task_id, revision_id=revision["id"], author="  曾总  "
     )
@@ -74,7 +62,7 @@ def test_blog_receives_the_author_the_user_typed_at_confirmation(
 
     # Blog treats one name as one author across submissions, so the stray
     # spacing must not create a second one.
-    assert submission_body(_submitter(dispatcher).submissions[0])["author"] == {
+    assert submission_body(submitter_of(dispatcher).submissions[0])["author"] == {
         "name": "曾总"
     }
 
@@ -82,7 +70,7 @@ def test_blog_receives_the_author_the_user_typed_at_confirmation(
 def test_an_author_nobody_typed_is_refused_before_anything_is_locked(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
 
     rejected = publish(
         client, headers, task_id=task_id, revision_id=revision["id"], author="   "
@@ -95,7 +83,7 @@ def test_an_author_nobody_typed_is_refused_before_anything_is_locked(
 def test_the_publication_center_offers_the_newest_saved_revision_of_each_task(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, first = _ready(tmp_path)
+    client, headers, dispatcher, task_id, first = ready_to_publish(tmp_path)
     second = client.post(
         f"/tasks/{task_id}/liyan-revisions",
         headers=headers,
@@ -137,7 +125,7 @@ def test_a_task_without_a_saved_revision_offers_nothing_to_publish(
 def test_confirmation_rejects_a_revision_that_is_no_longer_the_newest_saved_one(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, first = _ready(tmp_path)
+    client, headers, dispatcher, task_id, first = ready_to_publish(tmp_path)
     superseded = client.post(
         f"/tasks/{task_id}/liyan-revisions",
         headers=headers,
@@ -159,7 +147,7 @@ def test_confirmation_rejects_a_revision_that_is_no_longer_the_newest_saved_one(
 def test_confirmation_rejects_a_draft_that_still_holds_unsaved_edits(
     tmp_path: Path,
 ) -> None:
-    client, headers, _, task_id, revision = _ready(tmp_path)
+    client, headers, _, task_id, revision = ready_to_publish(tmp_path)
 
     rejected = publish(
         client,
@@ -176,7 +164,7 @@ def test_confirmation_rejects_a_draft_that_still_holds_unsaved_edits(
 def test_confirmation_rejects_a_target_this_user_is_not_authorized_for(
     tmp_path: Path,
 ) -> None:
-    client, headers, _, task_id, revision = _ready(tmp_path)
+    client, headers, _, task_id, revision = ready_to_publish(tmp_path)
 
     rejected = publish(
         client, headers, task_id=task_id, revision_id=revision["id"], target_key="lsforum-cn"
@@ -188,7 +176,7 @@ def test_confirmation_rejects_a_target_this_user_is_not_authorized_for(
 def test_confirmation_locks_the_snapshot_before_anything_is_dispatched(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
 
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
 
@@ -210,7 +198,7 @@ def test_confirmation_locks_the_snapshot_before_anything_is_dispatched(
 def test_a_later_revision_cannot_change_what_a_confirmed_publication_sends(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
     assert started.status_code == 202, started.text
     replaced = client.post(
@@ -227,7 +215,7 @@ def test_a_later_revision_cannot_change_what_a_confirmed_publication_sends(
 
     dispatcher.run_all()
 
-    submission = _submitter(dispatcher).submissions[0]
+    submission = submitter_of(dispatcher).submissions[0]
     assert submission.title == revision["title"]
     assert submission.body_markdown == revision["body_markdown"]
 
@@ -235,14 +223,14 @@ def test_a_later_revision_cannot_change_what_a_confirmed_publication_sends(
 def test_the_blog_request_carries_only_the_fields_the_mvp_contract_requires(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     publish(client, headers, task_id=task_id, revision_id=revision["id"])
 
     dispatcher.run_all()
 
     from liyan_server.publication.blog import submission_body, submission_url
 
-    submission = _submitter(dispatcher).submissions[0]
+    submission = submitter_of(dispatcher).submissions[0]
     assert submission_url(submission) == "https://blog.lsforum.org/api/v1/posts"
     assert submission_body(submission) == {
         "title": revision["title"],
@@ -256,7 +244,7 @@ def test_the_blog_request_carries_only_the_fields_the_mvp_contract_requires(
 def test_a_confirmed_preview_becomes_the_terminal_successful_outcome(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
 
     dispatcher.run_all()
@@ -276,7 +264,7 @@ def test_a_confirmed_preview_becomes_the_terminal_successful_outcome(
 def test_a_created_preview_is_evidence_the_server_can_show_again_later(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
     dispatcher.run_all()
 
@@ -293,8 +281,8 @@ def test_a_created_preview_is_evidence_the_server_can_show_again_later(
 def test_a_refused_request_is_a_definitive_failure_that_created_nothing(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
-    _submitter(dispatcher).outcomes.append(
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
+    submitter_of(dispatcher).outcomes.append(
         BlogSubmissionFailure("provider_rejected", "Blog 暂时无法提交，请稍后重试。", "400")
     )
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
@@ -312,8 +300,8 @@ def test_a_refused_request_is_a_definitive_failure_that_created_nothing(
 def test_a_created_response_without_a_confirmed_preview_is_never_a_failure_to_resend(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
-    _submitter(dispatcher).outcomes.append(BlogOutcomeUnknown("no previewPath"))
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
+    submitter_of(dispatcher).outcomes.append(BlogOutcomeUnknown("no previewPath"))
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
 
     dispatcher.run_all()
@@ -328,8 +316,8 @@ def test_a_created_response_without_a_confirmed_preview_is_never_a_failure_to_re
 def test_an_unexpected_fault_never_leaves_a_publication_waiting_forever(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
-    _submitter(dispatcher).outcomes.append(RuntimeError("The adapter broke."))
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
+    submitter_of(dispatcher).outcomes.append(RuntimeError("The adapter broke."))
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
 
     dispatcher.run_all()
@@ -342,7 +330,7 @@ def test_an_unexpected_fault_never_leaves_a_publication_waiting_forever(
 
 
 def test_publication_leaves_the_task_open_for_continued_work(tmp_path: Path) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     publish(client, headers, task_id=task_id, revision_id=revision["id"])
     dispatcher.run_all()
 
@@ -355,7 +343,7 @@ def test_publication_leaves_the_task_open_for_continued_work(tmp_path: Path) -> 
 
 
 def test_one_user_cannot_read_or_publish_another_users_article(tmp_path: Path) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
     intruder = {"Authorization": "Bearer second-token"}
 
@@ -381,7 +369,7 @@ def test_one_user_cannot_read_or_publish_another_users_article(tmp_path: Path) -
 def test_repeating_one_confirmation_returns_the_same_publication_task(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
 
     first = publish(client, headers, task_id=task_id, revision_id=revision["id"])
     second = publish(client, headers, task_id=task_id, revision_id=revision["id"])
@@ -425,7 +413,7 @@ def test_an_accepted_preview_keeps_the_response_the_platform_actually_returned()
 def test_a_publication_that_could_not_be_queued_does_not_wait_forever(
     tmp_path: Path,
 ) -> None:
-    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
 
     def refuse(execution_id: object) -> None:
         raise RuntimeError("The broker is unreachable.")

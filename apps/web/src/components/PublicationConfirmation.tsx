@@ -5,10 +5,16 @@ import {
   confirmPublication,
   getPublishTask,
   listPublicationTargets,
+  retryPublication,
   type PublicationTargetResponse,
   type PublishTaskResponse,
 } from "../api/client";
 import { ArticleReader } from "./ArticleReader";
+import {
+  EXISTING_PREVIEW_WARNING,
+  PRECONDITION_FAILED,
+  RETRY_FAILED,
+} from "./publicationMessages";
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const CONFLICT = 409;
@@ -83,9 +89,20 @@ export function PublicationConfirmation({
   const [author, setAuthor] = useState(() => rememberedAuthor(userId));
   const [publishTask, setPublishTask] = useState<PublishTaskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * A warning is a question, so it carries the answer's action with it.
+   *
+   * Both confirming and retrying can raise the same warning, and pressing on
+   * means something different for each. Holding the continuation here keeps
+   * the button from having to work out which one it is.
+   */
+  const [warning, setWarning] = useState<{ message: string; proceed(): Promise<void> } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [polls, setPolls] = useState(0);
   const idempotencyKey = useRef(crypto.randomUUID());
+  const retryKey = useRef(crypto.randomUUID());
 
   useEffect(() => {
     let active = true;
@@ -122,7 +139,14 @@ export function PublicationConfirmation({
     return () => clearTimeout(timer);
   }, [pending, publishTask, pollIntervalMs, polls, refresh]);
 
-  async function confirm() {
+  /**
+   * Confirm, and stop at the warning the first time the server raises one.
+   *
+   * `acknowledged` is only ever true because the user read the warning and
+   * pressed on. Nothing else sets it, so a second Blog item cannot be created
+   * by a stray click or a retried request.
+   */
+  async function confirm(acknowledged = false) {
     const name = author.trim();
     if (!targetKey || !name) return;
     setBusy(true);
@@ -134,16 +158,57 @@ export function PublicationConfirmation({
           target_key: targetKey,
           author: name,
           working_copy_hash: workingCopyHash,
+          acknowledge_existing_preview: acknowledged,
         });
       setPublishTask(confirmedTask);
       onStatusChange?.();
       rememberAuthor(userId, name);
       setError(null);
+      setWarning(null);
     } catch (thrown) {
+      if (thrown instanceof ApiError && thrown.status === PRECONDITION_FAILED) {
+        setWarning({
+          message: thrown.detail ?? EXISTING_PREVIEW_WARNING,
+          proceed: () => confirm(true),
+        });
+        return;
+      }
       setError(
         thrown instanceof ApiError && thrown.status === CONFLICT
-          ? "该文章已不可发布，请保存最新 Revision 后重试。"
+          ? (thrown.detail ?? "该文章已不可发布，请保存最新 Revision 后重试。")
           : "发布未能提交，请稍后重试。",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Send the same snapshot again after a definitive failure.
+   *
+   * The button exists only for `failed`, because that is the one outcome that
+   * proves nothing was created. 结果未知 gets no such affordance by design.
+   */
+  async function retry(acknowledged = false) {
+    if (!publishTask) return;
+    setBusy(true);
+    try {
+      setPublishTask(
+        await retryPublication(accessToken, publishTask.id, retryKey.current, acknowledged),
+      );
+      onStatusChange?.();
+      setError(null);
+      setWarning(null);
+    } catch (thrown) {
+      if (thrown instanceof ApiError && thrown.status === PRECONDITION_FAILED) {
+        setWarning({
+          message: thrown.detail ?? EXISTING_PREVIEW_WARNING,
+          proceed: () => retry(true),
+        });
+        return;
+      }
+      setError(
+        thrown instanceof ApiError && thrown.detail ? thrown.detail : RETRY_FAILED,
       );
     } finally {
       setBusy(false);
@@ -222,6 +287,20 @@ export function PublicationConfirmation({
 
       {error ? <p role="alert" className="form-error">{error}</p> : null}
 
+      {warning ? (
+        <div className="publication-warning">
+          <p role="alert" className="form-error">{warning.message}</p>
+          <button
+            className="button"
+            type="button"
+            disabled={busy}
+            onClick={() => void warning.proceed()}
+          >
+            仍要发布
+          </button>
+        </div>
+      ) : null}
+
       {publishTask ? (
         <div className="publication-result">
           <p role="status">{STATUS_TEXT[publishTask.status]}</p>
@@ -243,8 +322,24 @@ export function PublicationConfirmation({
               </p>
             </>
           ) : null}
-          {publishTask.status === "failed" && publishTask.failure_message ? (
-            <p role="alert" className="form-error">{publishTask.failure_message}</p>
+          {publishTask.status === "failed" ? (
+            <>
+              {publishTask.failure_message ? (
+                <p role="alert" className="form-error">{publishTask.failure_message}</p>
+              ) : null}
+              {/* Nothing was created, so the same snapshot may go again — and
+                  only that snapshot: publishing a newer article is a new
+                  confirmation, with the warning that belongs to one. */}
+              <p className="form-hint">Blog 没有收到内容，可以重新提交同一份快照。</p>
+              <button
+                className="button"
+                type="button"
+                disabled={busy}
+                onClick={() => void retry()}
+              >
+                重试本次提交
+              </button>
+            </>
           ) : null}
           {publishTask.status === "outcome_unknown" ? (
             <p role="alert" className="form-error">

@@ -946,6 +946,23 @@ h1 {
   background: #f6f1e5;
 }
 
+/*
+ * The one place publishing asks a second time. It is marked out rather than
+ * folded into the form, because agreeing to it creates a second Blog item that
+ * 立言阁 cannot take back.
+ */
+.publication-warning {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgb(163 87 32 / 30%);
+  border-radius: 10px;
+  background: #fdf1e3;
+}
+
+.publication-warning p {
+  margin: 0 0 10px;
+}
+
 .publication-preview-link {
   display: inline-block;
   margin: 6px 0;

@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from blog_support import SITE_URL, accepted
+from blog_support import SITE_URL, DeterministicBlogSubmitter, accepted
 from fastapi.testclient import TestClient
 from zhiyan_support import (
     DeterministicJwtVerifier,
@@ -21,7 +21,15 @@ from zhiyan_support import (
 from liyan_server.app import create_app
 from liyan_server.settings import Settings
 
-__all__ = ["SITE_URL", "accepted", "publication_client", "publish", "saved_article"]
+__all__ = [
+    "SITE_URL",
+    "accepted",
+    "publication_client",
+    "publish",
+    "ready_to_publish",
+    "saved_article",
+    "submitter_of",
+]
 
 SOURCES = ["四天工作制已经没有争议"]
 TITLE = "四天工作制的真问题"
@@ -105,6 +113,7 @@ def publish(
     key: str = "publish-1",
     author: str = "Zeng Zong",
     working_copy_hash: str | None = None,
+    acknowledge_existing_preview: bool = False,
 ) -> Any:
     return client.post(
         "/publication/publish-tasks",
@@ -116,5 +125,22 @@ def publish(
             "target_key": target_key,
             "author": author,
             "working_copy_hash": working_copy_hash,
+            "acknowledge_existing_preview": acknowledge_existing_preview,
         },
     )
+
+
+def ready_to_publish(
+    tmp_path: Path,
+) -> tuple[TestClient, dict[str, str], RecordingDispatcher, str, dict[str, Any]]:
+    """A signed-in writer with one saved Revision, which is where publishing starts."""
+    client, headers, dispatcher = publication_client(tmp_path)
+    task_id, revision = saved_article(client, headers, dispatcher)
+    return client, headers, dispatcher, task_id, revision
+
+
+def submitter_of(dispatcher: RecordingDispatcher) -> DeterministicBlogSubmitter:
+    """The Blog double this dispatcher runs, narrowed so its record is readable."""
+    submitter = dispatcher.blog
+    assert isinstance(submitter, DeterministicBlogSubmitter)
+    return submitter

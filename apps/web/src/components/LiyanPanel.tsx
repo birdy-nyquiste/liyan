@@ -361,6 +361,7 @@ export function LiyanPanel({
 
       {publishing && publicationArticle ? (
         <PublicationConfirmation
+          userId={userId}
           accessToken={accessToken}
           article={publicationArticle}
           // The server re-checks the draft against the Revision it is asked to

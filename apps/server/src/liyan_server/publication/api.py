@@ -10,7 +10,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -41,6 +41,7 @@ SUPERSEDED_REVISION = "该 Revision 已不是当前任务版本中最新的已�
 TARGET_NOT_FOUND = "Publication target not found."
 PUBLISH_TASK_NOT_FOUND = "Publication task not found."
 IDEMPOTENCY_MISMATCH = "相同幂等键不能用于不同的发布请求。"
+EMPTY_AUTHOR = "请填写发布到 Blog 的作者名。"
 
 
 class PublicationTargetResponse(BaseModel):
@@ -48,17 +49,14 @@ class PublicationTargetResponse(BaseModel):
     platform: str
     display_name: str
     site_url: str
-    author: str
 
     @classmethod
-    def of(cls, target: PublicationTarget, author: str) -> "PublicationTargetResponse":
-        """One target as it looks to one user, under their own author name."""
+    def of(cls, target: PublicationTarget) -> "PublicationTargetResponse":
         return cls(
             key=target.key,
             platform=target.platform,
             display_name=target.display_name,
             site_url=target.site_url,
-            author=author,
         )
 
 
@@ -88,9 +86,20 @@ class ConfirmPublicationRequest(BaseModel):
     task_id: UUID
     revision_id: UUID
     target_key: str
+    #: The name Blog will display. Blog requires it and treats one name as one
+    #: author across submissions, so it is trimmed and never blank.
+    author: str = Field(min_length=1, max_length=100)
     #: The browser's draft hash. Present means "this is what I am looking at";
     #: a mismatch is unsaved editing and must not reach Blog.
     working_copy_hash: str | None = None
+
+    @field_validator("author")
+    @classmethod
+    def trim_author(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError(EMPTY_AUTHOR)
+        return trimmed
 
 
 class PublishTaskResponse(BaseModel):
@@ -103,6 +112,7 @@ class PublishTaskResponse(BaseModel):
     title: str
     body_markdown: str
     target: PublicationTargetResponse
+    author: str
     post_type: str
     requested_status: str
     preview_url: str | None
@@ -132,8 +142,8 @@ class PublishTaskResponse(BaseModel):
                 platform=publish_task.target_platform,
                 display_name=publish_task.target_display_name,
                 site_url=publish_task.target_site_url,
-                author=publish_task.target_author,
             ),
+            author=publish_task.author,
             post_type=publish_task.post_type,
             requested_status=publish_task.requested_status,
             preview_url=publish_task.preview_url,
@@ -199,9 +209,8 @@ def publication_router(
     ) -> PublicationTargetListResponse:
         return PublicationTargetListResponse(
             items=[
-                PublicationTargetResponse.of(target, author)
+                PublicationTargetResponse.of(target)
                 for target in targets_for(settings, user.email)
-                if (author := target.author_for(user.email)) is not None
             ]
         )
 
@@ -264,14 +273,14 @@ def publication_router(
             if (
                 replay.revision_id != request.revision_id
                 or replay.target_key != request.target_key
+                or replay.author != request.author
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
                 )
             return PublishTaskResponse.of(replay, latest_execution(session, replay))
         target = target_for(settings, user.email, request.target_key)
-        author = target.author_for(user.email) if target is not None else None
-        if target is None or author is None:
+        if target is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=TARGET_NOT_FOUND
             )
@@ -298,7 +307,7 @@ def publication_router(
             target_display_name=target.display_name,
             target_site_url=target.site_url,
             target_api_base_url=target.api_base_url,
-            target_author=author,
+            author=request.author,
             post_type=POST_TYPE,
             requested_status=PREVIEW_STATUS,
             title=revision.title,

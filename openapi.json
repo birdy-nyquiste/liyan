@@ -2030,6 +2030,12 @@
             "type": "string",
             "title": "Target Key"
           },
+          "author": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Author"
+          },
           "working_copy_hash": {
             "anyOf": [
               {
@@ -2047,7 +2053,8 @@
           "idempotency_key",
           "task_id",
           "revision_id",
-          "target_key"
+          "target_key",
+          "author"
         ],
         "title": "ConfirmPublicationRequest"
       },
@@ -3519,10 +3526,6 @@
           "site_url": {
             "type": "string",
             "title": "Site Url"
-          },
-          "author": {
-            "type": "string",
-            "title": "Author"
           }
         },
         "type": "object",
@@ -3530,8 +3533,7 @@
           "key",
           "platform",
           "display_name",
-          "site_url",
-          "author"
+          "site_url"
         ],
         "title": "PublicationTargetResponse"
       },
@@ -3570,6 +3572,10 @@
           },
           "target": {
             "$ref": "#/components/schemas/PublicationTargetResponse"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
           },
           "post_type": {
             "type": "string",
@@ -3674,6 +3680,7 @@
           "title",
           "body_markdown",
           "target",
+          "author",
           "post_type",
           "requested_status",
           "preview_url",

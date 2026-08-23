@@ -25,6 +25,7 @@ export type InstructionCapsule = components["schemas"]["InstructionCapsule"];
 export type PublicationTargetResponse = components["schemas"]["PublicationTargetResponse"];
 export type EligibleArticleResponse = components["schemas"]["EligibleArticleResponse"];
 export type PublishTaskResponse = components["schemas"]["PublishTaskResponse"];
+export type ConfirmPublicationRequest = components["schemas"]["ConfirmPublicationRequest"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -491,13 +492,7 @@ export async function listEligibleArticles(
 
 export async function confirmPublication(
   accessToken: string,
-  request: {
-    idempotency_key: string;
-    task_id: string;
-    revision_id: string;
-    target_key: string;
-    working_copy_hash: string | null;
-  },
+  request: ConfirmPublicationRequest,
 ): Promise<PublishTaskResponse> {
   const result = await authenticatedApi(accessToken).POST("/publication/publish-tasks", {
     body: request,

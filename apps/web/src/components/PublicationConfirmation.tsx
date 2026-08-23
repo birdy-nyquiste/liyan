@@ -12,6 +12,25 @@ import { ArticleReader } from "./ArticleReader";
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const CONFLICT = 409;
+const AUTHOR_LIMIT = 100;
+const AUTHOR_KEY = "liyan:publication-author:v1";
+
+/** The last author name this browser used, offered so it needn't be retyped. */
+function rememberedAuthor(userId: string): string {
+  try {
+    return window.localStorage.getItem(`${AUTHOR_KEY}:${encodeURIComponent(userId)}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberAuthor(userId: string, author: string): void {
+  try {
+    window.localStorage.setItem(`${AUTHOR_KEY}:${encodeURIComponent(userId)}`, author);
+  } catch {
+    // Browser storage can be unavailable. Publishing must remain usable.
+  }
+}
 
 /** What both entries hand the confirmation: one saved, eligible Revision. */
 export type PublicationArticle = {
@@ -33,18 +52,24 @@ const STATUS_TEXT: Record<PublishTaskResponse["status"], string> = {
 /**
  * 确认发布: the one flow both the article and the publication center reach.
  *
- * Everything here is read-only on purpose. The title and body shown are the
- * ones the server will lock, and changing them means going back to editing and
- * saving another Revision — a confirmation screen that could edit would make
- * "what was submitted" unanswerable.
+ * The article is read-only on purpose. The title and body shown are the ones
+ * the server will lock, and changing them means going back to editing and
+ * saving another Revision — a confirmation screen that could edit the article
+ * would make "what was submitted" unanswerable.
+ *
+ * The author is the one field the user fills in. Blog needs a display name and
+ * treats one name as one author across submissions, so it belongs to whoever is
+ * publishing rather than to the destination.
  */
 export function PublicationConfirmation({
+  userId,
   accessToken,
   article,
   workingCopyHash = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   onClose,
 }: {
+  userId: string;
   accessToken: string;
   article: PublicationArticle;
   workingCopyHash?: string | null;
@@ -53,6 +78,7 @@ export function PublicationConfirmation({
 }) {
   const [targets, setTargets] = useState<PublicationTargetResponse[] | null>(null);
   const [targetKey, setTargetKey] = useState<string | null>(null);
+  const [author, setAuthor] = useState(() => rememberedAuthor(userId));
   const [publishTask, setPublishTask] = useState<PublishTaskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,7 +120,8 @@ export function PublicationConfirmation({
   }, [pending, publishTask, pollIntervalMs, polls, refresh]);
 
   async function confirm() {
-    if (!targetKey) return;
+    const name = author.trim();
+    if (!targetKey || !name) return;
     setBusy(true);
     try {
       setPublishTask(
@@ -103,9 +130,11 @@ export function PublicationConfirmation({
           task_id: article.taskId,
           revision_id: article.revisionId,
           target_key: targetKey,
+          author: name,
           working_copy_hash: workingCopyHash,
         }),
       );
+      rememberAuthor(userId, name);
       setError(null);
     } catch (thrown) {
       setError(
@@ -140,7 +169,7 @@ export function PublicationConfirmation({
         </div>
         <div>
           <dt>作者</dt>
-          <dd>{selected ? selected.author : "选择发布目标后确定"}</dd>
+          <dd>{confirmed ? publishTask?.author : author.trim() || "尚未填写"}</dd>
         </div>
         <div>
           <dt>发布目标</dt>
@@ -148,6 +177,19 @@ export function PublicationConfirmation({
         </div>
       </dl>
 
+      {!confirmed ? (
+        <label className="field">
+          <span>作者（显示在 Blog 上）</span>
+          <input
+            type="text"
+            value={author}
+            maxLength={AUTHOR_LIMIT}
+            disabled={busy}
+            required
+            onChange={(event) => setAuthor(event.target.value)}
+          />
+        </label>
+      ) : null}
       {!confirmed && targets && targets.length > 1 ? (
         <label className="field">
           <span>发布目标</span>
@@ -215,7 +257,7 @@ export function PublicationConfirmation({
           <button
             className="button"
             type="button"
-            disabled={busy || !targetKey}
+            disabled={busy || !targetKey || !author.trim()}
             onClick={() => void confirm()}
           >
             确认发布

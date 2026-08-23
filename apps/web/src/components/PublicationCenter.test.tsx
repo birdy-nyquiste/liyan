@@ -63,11 +63,13 @@ describe("PublicationCenter", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "发布" }));
-    await user.click(await screen.findByRole("button", { name: "确认发布" }));
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
 
     const posted = requests.find((request) => request.method === "POST");
     expect(JSON.parse(await posted!.text())).toMatchObject({
       revision_id: "revision-2",
+      author: "Birdy Yao",
       working_copy_hash: await articleContentHash(DRAFT),
     });
     expect(
@@ -83,7 +85,8 @@ describe("PublicationCenter", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "发布" }));
-    await user.click(await screen.findByRole("button", { name: "确认发布" }));
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
 
     const posted = requests.find((request) => request.method === "POST");
     expect(JSON.parse(await posted!.text())).toMatchObject({

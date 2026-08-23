@@ -57,37 +57,39 @@ def test_a_target_never_exposes_the_credential_the_server_publishes_with(
         "platform": "lsforum_blog",
         "display_name": "LSForum Blog",
         "site_url": SITE_URL,
-        "author": "Zeng Zong",
     }
 
 
-def test_one_shared_target_gives_each_user_their_own_author_name(
-    tmp_path: Path,
-) -> None:
-    client, headers, _ = publication_client(tmp_path)
-
-    mine = client.get("/publication/targets", headers=headers).json()["items"]
-    theirs = client.get(
-        "/publication/targets", headers={"Authorization": "Bearer second-token"}
-    ).json()["items"]
-
-    assert [(item["key"], item["author"]) for item in mine] == [("lsforum", "Zeng Zong")]
-    assert ("lsforum", "曾总") in [(item["key"], item["author"]) for item in theirs]
-
-
-def test_a_publication_is_sent_under_the_confirming_users_own_author_name(
+def test_blog_receives_the_author_the_user_typed_at_confirmation(
     tmp_path: Path,
 ) -> None:
     client, headers, dispatcher, task_id, revision = _ready(tmp_path)
-    publish(client, headers, task_id=task_id, revision_id=revision["id"])
+    publish(
+        client, headers, task_id=task_id, revision_id=revision["id"], author="  曾总  "
+    )
 
     dispatcher.run_all()
 
     from liyan_server.publication.blog import submission_body
 
+    # Blog treats one name as one author across submissions, so the stray
+    # spacing must not create a second one.
     assert submission_body(_submitter(dispatcher).submissions[0])["author"] == {
-        "name": "Zeng Zong"
+        "name": "曾总"
     }
+
+
+def test_an_author_nobody_typed_is_refused_before_anything_is_locked(
+    tmp_path: Path,
+) -> None:
+    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+
+    rejected = publish(
+        client, headers, task_id=task_id, revision_id=revision["id"], author="   "
+    )
+
+    assert rejected.status_code == 422, rejected.text
+    assert not dispatcher.execution_ids
 
 
 def test_the_publication_center_offers_the_newest_saved_revision_of_each_task(
@@ -197,7 +199,7 @@ def test_confirmation_locks_the_snapshot_before_anything_is_dispatched(
     assert payload["body_markdown"] == revision["body_markdown"]
     assert payload["revision_id"] == revision["id"]
     assert payload["revision_number"] == revision["number"]
-    assert payload["target"]["author"] == "Zeng Zong"
+    assert payload["author"] == "Zeng Zong"
     assert payload["target"]["display_name"] == "LSForum Blog"
     assert payload["post_type"] == "opinion"
     assert payload["requested_status"] == "preview"

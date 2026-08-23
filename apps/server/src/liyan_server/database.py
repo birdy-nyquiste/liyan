@@ -453,7 +453,8 @@ class PublishTask(Base):
     target_display_name: Mapped[str] = mapped_column(String(255))
     target_site_url: Mapped[str] = mapped_column(Text)
     target_api_base_url: Mapped[str] = mapped_column(Text)
-    target_author: Mapped[str] = mapped_column(String(255))
+    #: The name the user typed at confirmation, not a fact about the target.
+    author: Mapped[str] = mapped_column(String(255))
     post_type: Mapped[str] = mapped_column(String(32))
     requested_status: Mapped[str] = mapped_column(String(32))
     title: Mapped[str] = mapped_column(String(255))

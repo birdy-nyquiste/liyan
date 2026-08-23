@@ -94,7 +94,7 @@ def _claim(
             site_url=publish_task.target_site_url,
             title=publish_task.title,
             body_markdown=publish_task.body_markdown,
-            author=publish_task.target_author,
+            author=publish_task.author,
         )
 
 

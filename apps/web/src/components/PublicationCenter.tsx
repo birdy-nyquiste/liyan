@@ -85,6 +85,7 @@ export function PublicationCenter({
 
       {selected && draftHash ? (
         <PublicationConfirmation
+          userId={userId}
           accessToken={accessToken}
           article={publicationArticle(selected)}
           workingCopyHash={draftHash}

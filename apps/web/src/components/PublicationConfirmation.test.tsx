@@ -13,12 +13,11 @@ const ARTICLE: PublicationArticle = {
   bodyMarkdown: "工时只是生产方式的一部分。",
 };
 
-const target = (key: string, displayName: string, author: string) => ({
+const target = (key: string, displayName: string) => ({
   key,
   platform: "lsforum_blog",
   display_name: displayName,
   site_url: `https://${key}.example`,
-  author,
 });
 
 function publishTask(status: string, previewUrl: string | null = null) {
@@ -31,7 +30,8 @@ function publishTask(status: string, previewUrl: string | null = null) {
     revision_number: 2,
     title: ARTICLE.title,
     body_markdown: ARTICLE.bodyMarkdown,
-    target: target("lsforum", "LSForum Blog", "Zeng Zong"),
+    target: target("lsforum", "LSForum Blog"),
+    author: "Zeng Zong",
     post_type: "opinion",
     requested_status: "preview",
     preview_url: previewUrl,
@@ -67,18 +67,20 @@ function respondWith(routes: Array<[RegExp, unknown | unknown[]]>) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe("PublicationConfirmation", () => {
   it("preselects a sole authorized target and submits the locked snapshot", async () => {
     const requests = respondWith([
-      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog", "Zeng Zong")] }],
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
       [/\/publication\/publish-tasks$/, publishTask("pending")],
       [/\/publication\/publish-tasks\//, publishTask("succeeded", "https://lsforum.example/preview/abc")],
     ]);
     const user = userEvent.setup();
     render(
       <PublicationConfirmation
+        userId="user-1"
         accessToken="token"
         article={ARTICLE}
         workingCopyHash="hash-2"
@@ -88,8 +90,8 @@ describe("PublicationConfirmation", () => {
     );
 
     expect(await screen.findByText("LSForum Blog（https://lsforum.example）")).toBeInTheDocument();
-    expect(screen.getByText("Zeng Zong")).toBeInTheDocument();
     expect(screen.queryByLabelText("发布目标")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
     await user.click(screen.getByRole("button", { name: "确认发布" }));
 
     const posted = requests.find((request) => request.method === "POST");
@@ -97,6 +99,7 @@ describe("PublicationConfirmation", () => {
       task_id: "task-1",
       revision_id: "revision-2",
       target_key: "lsforum",
+      author: "Zeng Zong",
       working_copy_hash: "hash-2",
     });
   });
@@ -107,14 +110,15 @@ describe("PublicationConfirmation", () => {
         /\/publication\/targets$/,
         {
           items: [
-            target("lsforum", "LSForum Blog", "Zeng Zong"),
-            target("lsforum-cn", "LSForum 中文站", "曾总"),
+            target("lsforum", "LSForum Blog"),
+            target("lsforum-cn", "LSForum 中文站"),
           ],
         },
       ],
     ]);
     render(
       <PublicationConfirmation
+        userId="user-1"
         accessToken="token"
         article={ARTICLE}
         onClose={() => undefined}
@@ -127,7 +131,7 @@ describe("PublicationConfirmation", () => {
 
   it("shows the Preview URL as the terminal outcome and claims nothing beyond it", async () => {
     respondWith([
-      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog", "Zeng Zong")] }],
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
       [/\/publication\/publish-tasks$/, publishTask("pending")],
       [
         /\/publication\/publish-tasks\//,
@@ -137,6 +141,7 @@ describe("PublicationConfirmation", () => {
     const user = userEvent.setup();
     render(
       <PublicationConfirmation
+        userId="user-1"
         accessToken="token"
         article={ARTICLE}
         pollIntervalMs={1}
@@ -144,7 +149,8 @@ describe("PublicationConfirmation", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "确认发布" }));
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
 
     const link = await screen.findByRole("link", { name: "https://lsforum.example/preview/abc" });
     expect(link).toHaveAttribute("href", "https://lsforum.example/preview/abc");
@@ -155,13 +161,14 @@ describe("PublicationConfirmation", () => {
 
   it("never offers a resend once a submission's outcome is unknown", async () => {
     respondWith([
-      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog", "Zeng Zong")] }],
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
       [/\/publication\/publish-tasks$/, publishTask("pending")],
       [/\/publication\/publish-tasks\//, publishTask("outcome_unknown")],
     ]);
     const user = userEvent.setup();
     render(
       <PublicationConfirmation
+        userId="user-1"
         accessToken="token"
         article={ARTICLE}
         pollIntervalMs={1}
@@ -169,7 +176,8 @@ describe("PublicationConfirmation", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "确认发布" }));
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
 
     expect(await screen.findByText("本次提交结果未知。")).toBeInTheDocument();
     await waitFor(() =>
@@ -178,12 +186,13 @@ describe("PublicationConfirmation", () => {
     expect(screen.queryByRole("button", { name: /重试|重新/ })).not.toBeInTheDocument();
   });
 
-  it("offers no confirmation at all when the article cannot be edited here", async () => {
+  it("lets the author be typed while the article itself stays read-only", async () => {
     respondWith([
-      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog", "Zeng Zong")] }],
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
     ]);
     render(
       <PublicationConfirmation
+        userId="user-1"
         accessToken="token"
         article={ARTICLE}
         onClose={() => undefined}
@@ -193,6 +202,47 @@ describe("PublicationConfirmation", () => {
     expect(
       await screen.findByText("确认页只能预览。要修改标题或正文，请返回编辑并保存新的 Revision。"),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    // The author is the only thing this screen may change.
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(screen.getByLabelText("作者（显示在 Blog 上）")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue(ARTICLE.title)).not.toBeInTheDocument();
+  });
+
+  it("will not confirm until an author has been named", async () => {
+    respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+    ]);
+    const user = userEvent.setup();
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "确认发布" })).toBeDisabled();
+    await user.type(screen.getByLabelText("作者（显示在 Blog 上）"), "  ");
+    expect(screen.getByRole("button", { name: "确认发布" })).toBeDisabled();
+    await user.type(screen.getByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    expect(screen.getByRole("button", { name: "确认发布" })).toBeEnabled();
+  });
+
+  it("offers the name this browser published under last time", async () => {
+    localStorage.setItem("liyan:publication-author:v1:user-1", "Birdy Yao");
+    respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+    ]);
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue("Birdy Yao")).toBeInTheDocument();
   });
 });

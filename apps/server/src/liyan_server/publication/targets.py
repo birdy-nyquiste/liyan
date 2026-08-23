@@ -1,10 +1,10 @@
 """发布目标: server configuration, never user data.
 
-A target names a destination plus the 作者映射 that says, for each authorized
-user, the author name 立言阁 publishes under there. Author identity belongs to
-the user rather than to the destination: two people publishing to one Blog are
-two authors, not two targets. The mapping is therefore also the authorization —
-a user may publish to a target exactly when it names them.
+A target is a destination and the set of users allowed to reach it. It says
+nothing about who the article is by: the author name is the user's to type at
+confirmation, so the same Blog serves every writer without configuration
+changing. What stays configuration is access — a user may publish to a target
+exactly when it lists their address.
 
 The MVP gives the user no way to create, bind, or authorize one, so the whole
 set lives in server configuration. The ingest credential is deliberately absent
@@ -13,10 +13,8 @@ with a target.
 """
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
-from types import MappingProxyType
 
 from liyan_server.settings import Settings
 
@@ -30,15 +28,11 @@ class PublicationTarget:
     display_name: str
     site_url: str
     api_base_url: str
-    #: Verified email, folded for comparison, to the author name Blog displays.
-    authors: Mapping[str, str]
+    #: Verified addresses, folded for comparison, allowed to publish here.
+    emails: frozenset[str]
 
     def authorizes(self, email: str) -> bool:
-        return self.author_for(email) is not None
-
-    def author_for(self, email: str) -> str | None:
-        """The name this user publishes under here, or None if they may not."""
-        return self.authors.get(email.strip().casefold())
+        return email.strip().casefold() in self.emails
 
 
 @lru_cache(maxsize=8)
@@ -61,26 +55,22 @@ def _target(entry: object) -> PublicationTarget:
         display_name=str(entry["display_name"]),
         site_url=site_url,
         api_base_url=str(entry.get("api_base_url", site_url)).rstrip("/"),
-        authors=_authors(entry.get("authors")),
+        emails=_emails(entry.get("emails")),
     )
 
 
-def _authors(value: object) -> Mapping[str, str]:
-    """Read 作者映射 as {email: author name}, refusing an unusable entry.
+def _emails(value: object) -> frozenset[str]:
+    """Read the addresses allowed to publish, refusing a target nobody can use.
 
-    Blog requires a non-empty `author.name`, so a blank name here would only
-    fail at submission time. Rejecting it while reading configuration means an
-    operator learns about it at startup instead of from a user's failed 发布任务.
+    A target reaching nobody is always a configuration mistake, and finding out
+    at startup beats finding out from a user who cannot see their destination.
     """
-    if not isinstance(value, dict) or not value:
-        raise ValueError("A publication target must map at least one email to an author.")
-    authors: dict[str, str] = {}
-    for email, author in value.items():
-        name = str(author).strip()
-        if not name:
-            raise ValueError(f"Publication target author for {email!r} is empty.")
-        authors[str(email).strip().casefold()] = name
-    return MappingProxyType(authors)
+    if not isinstance(value, list) or not value:
+        raise ValueError("A publication target must authorize at least one email.")
+    emails = frozenset(str(email).strip().casefold() for email in value)
+    if "" in emails:
+        raise ValueError("A publication target email is empty.")
+    return emails
 
 
 def configured_targets(settings: Settings) -> tuple[PublicationTarget, ...]:

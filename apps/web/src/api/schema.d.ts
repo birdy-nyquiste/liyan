@@ -706,6 +706,8 @@ export interface components {
             revision_id: string;
             /** Target Key */
             target_key: string;
+            /** Author */
+            author: string;
             /** Working Copy Hash */
             working_copy_hash?: string | null;
         };
@@ -1175,8 +1177,6 @@ export interface components {
             display_name: string;
             /** Site Url */
             site_url: string;
-            /** Author */
-            author: string;
         };
         /** PublishTaskResponse */
         PublishTaskResponse: {
@@ -1196,6 +1196,8 @@ export interface components {
             /** Body Markdown */
             body_markdown: string;
             target: components["schemas"]["PublicationTargetResponse"];
+            /** Author */
+            author: string;
             /** Post Type */
             post_type: string;
             /** Requested Status */

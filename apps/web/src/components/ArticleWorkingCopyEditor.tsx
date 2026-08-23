@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import {
   canonicalMarkdownToTiptap,
+  isSafeArticleHref,
   tiptapToCanonicalMarkdown,
 } from "./articleMarkdown";
 import type { LiyanWorkingCopy } from "./workingCopyStorage";
@@ -22,15 +23,6 @@ const extensions = [StarterKit.configure({
     HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
   },
 })];
-
-const safeHref = (href: string): boolean => {
-  try {
-    const protocol = new URL(href).protocol;
-    return protocol === "http:" || protocol === "https:";
-  } catch {
-    return false;
-  }
-};
 
 export function ArticleWorkingCopyEditor({
   taskId,
@@ -106,7 +98,9 @@ export function ArticleWorkingCopyEditor({
     const href = window.prompt("请输入 http 或 https 链接", current);
     if (href === null) return;
     if (!href) editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    else if (safeHref(href)) editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    else if (isSafeArticleHref(href)) {
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    }
   };
 
   return (

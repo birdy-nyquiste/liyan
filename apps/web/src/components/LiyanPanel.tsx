@@ -11,6 +11,7 @@ import {
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
+import { canonicalizeArticleMarkdown } from "./articleMarkdown";
 import {
   loadWorkingCopy,
   saveWorkingCopy,
@@ -19,6 +20,13 @@ import {
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const TOO_MANY_REQUESTS = 429;
+
+const workingCopyFromResult = (
+  result: NonNullable<LiyanStateResponse["result"]>,
+): LiyanWorkingCopy => ({
+  title: result.title,
+  body_markdown: canonicalizeArticleMarkdown(result.body_markdown),
+});
 
 export function LiyanPanel({
   userId,
@@ -55,10 +63,7 @@ export function LiyanPanel({
       next.result.execution_id === startedExecutionIdRef.current &&
       next.result.id !== appliedResultIdRef.current
     ) {
-      updateWorkingCopy({
-        title: next.result.title,
-        body_markdown: next.result.body_markdown,
-      });
+      updateWorkingCopy(workingCopyFromResult(next.result));
       setInstruction(next.result.instruction);
       appliedResultIdRef.current = next.result.id;
     }
@@ -144,10 +149,7 @@ export function LiyanPanel({
 
   function recover() {
     if (!state?.result) return;
-    updateWorkingCopy({
-      title: state.result.title,
-      body_markdown: state.result.body_markdown,
-    });
+    updateWorkingCopy(workingCopyFromResult(state.result));
     setInstruction(state.result.instruction);
     appliedResultIdRef.current = state.result.id;
   }

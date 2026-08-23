@@ -221,6 +221,29 @@ describe("LiyanPanel", () => {
     });
   });
 
+  it("regenerates from the sanitized canonical form of an untouched Agent result", async () => {
+    const resultWithUnsupportedMarkdown = {
+      ...state("succeeded"),
+      result: {
+        ...state("succeeded").result!,
+        body_markdown: "<p>保留正文</p>\n\n![配图](https://example.com/a.png)",
+      },
+    };
+    const fetchMock = respondWith(resultWithUnsupportedMarkdown, state("running"));
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    expect(screen.getByRole("textbox", { name: "文章正文" })).toHaveTextContent("保留正文配图");
+    await user.click(screen.getByRole("button", { name: "生成立言" }));
+
+    const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
+    const request = JSON.parse(await post![0].clone().text()) as {
+      working_copy: { body_markdown: string };
+    };
+    expect(request.working_copy.body_markdown).toBe("保留正文\n\n配图");
+  });
+
   it("recovers a Working Copy after refresh in the same browser", async () => {
     respondWith(state("succeeded"));
     const user = userEvent.setup();

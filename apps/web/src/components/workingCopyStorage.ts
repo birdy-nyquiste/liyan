@@ -1,4 +1,5 @@
 import type { StartLiyanRunRequest } from "../api/client";
+import { canonicalizeArticleMarkdown } from "./articleMarkdown";
 
 export type LiyanWorkingCopy = NonNullable<StartLiyanRunRequest["working_copy"]>;
 
@@ -18,7 +19,10 @@ export function loadWorkingCopy(userId: string, taskId: string): LiyanWorkingCop
       || typeof value.title !== "string"
       || typeof value.body_markdown !== "string"
     ) return null;
-    return { title: value.title, body_markdown: value.body_markdown };
+    return {
+      title: value.title,
+      body_markdown: canonicalizeArticleMarkdown(value.body_markdown),
+    };
   } catch {
     return null;
   }

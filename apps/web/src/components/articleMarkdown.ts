@@ -3,7 +3,7 @@ import { marked, type Token, type Tokens } from "marked";
 
 type TiptapMark = NonNullable<JSONContent["marks"]>[number];
 
-const safeHref = (href: string): boolean => {
+export const isSafeArticleHref = (href: string): boolean => {
   try {
     const parsed = new URL(href);
     return parsed.protocol === "http:" || parsed.protocol === "https:";
@@ -40,7 +40,7 @@ function inlineContent(tokens: Token[], marks: TiptapMark[] = []): JSONContent[]
       case "link":
         return inlineContent(
           token.tokens ?? [],
-          safeHref(token.href)
+          isSafeArticleHref(token.href)
             ? [...marks, { type: "link", attrs: { href: token.href } }]
             : marks,
         );
@@ -155,7 +155,7 @@ function inlineMarkdown(nodes: JSONContent[] = []): string {
     if (marks.some((mark) => mark.type === "italic")) text = `*${text}*`;
     const link = marks.find((mark) => mark.type === "link");
     const href = typeof link?.attrs?.href === "string" ? link.attrs.href : "";
-    if (safeHref(href)) text = `[${text}](${href})`;
+    if (isSafeArticleHref(href)) text = `[${text}](${href})`;
     return text;
   }).join("");
 }
@@ -200,4 +200,8 @@ export function tiptapToCanonicalMarkdown(document: JSONContent): string {
     .filter(Boolean)
     .join("\n\n")
     .trim();
+}
+
+export function canonicalizeArticleMarkdown(markdown: string): string {
+  return tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap(markdown));
 }

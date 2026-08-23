@@ -51,13 +51,14 @@ class PublicationTargetResponse(BaseModel):
     author: str
 
     @classmethod
-    def of(cls, target: PublicationTarget) -> "PublicationTargetResponse":
+    def of(cls, target: PublicationTarget, author: str) -> "PublicationTargetResponse":
+        """One target as it looks to one user, under their own author name."""
         return cls(
             key=target.key,
             platform=target.platform,
             display_name=target.display_name,
             site_url=target.site_url,
-            author=target.author,
+            author=author,
         )
 
 
@@ -198,8 +199,9 @@ def publication_router(
     ) -> PublicationTargetListResponse:
         return PublicationTargetListResponse(
             items=[
-                PublicationTargetResponse.of(target)
+                PublicationTargetResponse.of(target, author)
                 for target in targets_for(settings, user.email)
+                if (author := target.author_for(user.email)) is not None
             ]
         )
 
@@ -268,7 +270,8 @@ def publication_router(
                 )
             return PublishTaskResponse.of(replay, latest_execution(session, replay))
         target = target_for(settings, user.email, request.target_key)
-        if target is None:
+        author = target.author_for(user.email) if target is not None else None
+        if target is None or author is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=TARGET_NOT_FOUND
             )
@@ -295,7 +298,7 @@ def publication_router(
             target_display_name=target.display_name,
             target_site_url=target.site_url,
             target_api_base_url=target.api_base_url,
-            target_author=target.author,
+            target_author=author,
             post_type=POST_TYPE,
             requested_status=PREVIEW_STATUS,
             title=revision.title,

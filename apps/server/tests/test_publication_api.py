@@ -41,7 +41,7 @@ def test_only_targets_the_server_authorized_for_this_user_are_selectable(
 
     assert mine.status_code == 200, mine.text
     assert [item["key"] for item in mine.json()["items"]] == ["lsforum"]
-    assert [item["key"] for item in theirs.json()["items"]] == ["lsforum-cn"]
+    assert [item["key"] for item in theirs.json()["items"]] == ["lsforum", "lsforum-cn"]
 
 
 def test_a_target_never_exposes_the_credential_the_server_publishes_with(
@@ -58,6 +58,35 @@ def test_a_target_never_exposes_the_credential_the_server_publishes_with(
         "display_name": "LSForum Blog",
         "site_url": SITE_URL,
         "author": "Zeng Zong",
+    }
+
+
+def test_one_shared_target_gives_each_user_their_own_author_name(
+    tmp_path: Path,
+) -> None:
+    client, headers, _ = publication_client(tmp_path)
+
+    mine = client.get("/publication/targets", headers=headers).json()["items"]
+    theirs = client.get(
+        "/publication/targets", headers={"Authorization": "Bearer second-token"}
+    ).json()["items"]
+
+    assert [(item["key"], item["author"]) for item in mine] == [("lsforum", "Zeng Zong")]
+    assert ("lsforum", "曾总") in [(item["key"], item["author"]) for item in theirs]
+
+
+def test_a_publication_is_sent_under_the_confirming_users_own_author_name(
+    tmp_path: Path,
+) -> None:
+    client, headers, dispatcher, task_id, revision = _ready(tmp_path)
+    publish(client, headers, task_id=task_id, revision_id=revision["id"])
+
+    dispatcher.run_all()
+
+    from liyan_server.publication.blog import submission_body
+
+    assert submission_body(_submitter(dispatcher).submissions[0])["author"] == {
+        "name": "Zeng Zong"
     }
 
 

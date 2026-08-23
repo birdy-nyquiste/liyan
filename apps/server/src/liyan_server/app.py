@@ -13,6 +13,7 @@ from liyan_server.identity_api import identity_router
 from liyan_server.liyan.api import liyan_router
 from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.publication.api import publication_router
+from liyan_server.publication.targets import configured_targets
 from liyan_server.settings import Settings
 from liyan_server.source_editing import source_editing_router
 from liyan_server.task_api import task_router
@@ -42,6 +43,9 @@ def create_app(
         database,
     )
     dispatcher = execution_dispatcher or CeleryExecutionDispatcher(current_settings.broker_url)
+    # Read the 发布目标 now so unusable configuration fails the boot rather
+    # than the first 发布任务.
+    configured_targets(current_settings)
     storage = object_storage or R2ObjectStorage(current_settings)
 
     @asynccontextmanager

@@ -27,6 +27,9 @@ SOURCES = ["四天工作制已经没有争议"]
 TITLE = "四天工作制的真问题"
 BODY = "工时只是生产方式的一部分。\n\n## 现实条件\n\n改变流程比压缩时间更重要。"
 
+# One shared Blog naming both writers, and a second site only one may use.
+# 作者映射 is what authorizes: a user publishes to a target exactly when it
+# names them, under the author name it gives them.
 TARGETS = json.dumps(
     [
         {
@@ -34,16 +37,17 @@ TARGETS = json.dumps(
             "display_name": "LSForum Blog",
             "site_url": SITE_URL,
             "api_base_url": "https://blog.lsforum.org",
-            "author": "Zeng Zong",
-            "emails": ["writer@example.com"],
+            "authors": {
+                "writer@example.com": "Zeng Zong",
+                "second@example.com": "曾总",
+            },
         },
         {
             "key": "lsforum-cn",
             "display_name": "LSForum 中文站",
             "site_url": "https://cn.blog.lsforum.org",
             "api_base_url": "https://cn.blog.lsforum.org",
-            "author": "曾总",
-            "emails": ["second@example.com"],
+            "authors": {"second@example.com": "曾总"},
         },
     ]
 )

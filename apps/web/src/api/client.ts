@@ -28,7 +28,10 @@ export type PublishTaskResponse = components["schemas"]["PublishTaskResponse"];
 export type ConfirmPublicationRequest = components["schemas"]["ConfirmPublicationRequest"];
 
 export class ApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string | null = null,
+  ) {
     super(`API request failed with status ${status}.`);
   }
 }
@@ -60,6 +63,12 @@ export async function loadTaskWorkspace(accessToken: string) {
     identity: identityResult.data,
     tasks: taskResult.data.items,
   };
+}
+
+export async function listTasks(accessToken: string): Promise<TaskSummaryResponse[]> {
+  const result = await authenticatedApi(accessToken).GET("/tasks");
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.items;
 }
 
 function authenticatedApi(accessToken: string) {
@@ -152,6 +161,20 @@ export async function renameTask(
   });
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
+}
+
+export async function deleteTask(accessToken: string, taskId: string): Promise<void> {
+  const result = await authenticatedApi(accessToken).DELETE("/tasks/{task_id}", {
+    params: { path: { task_id: taskId } },
+    body: { confirmed: true },
+  });
+  if (!result.response.ok) {
+    const error = result.error as { detail?: unknown } | undefined;
+    throw new ApiError(
+      result.response.status,
+      typeof error?.detail === "string" ? error.detail : null,
+    );
+  }
 }
 
 export async function createUrlSource(
@@ -513,3 +536,8 @@ export async function getPublishTask(
   return result.data;
 }
 
+export async function listPublishTasks(accessToken: string): Promise<PublishTaskResponse[]> {
+  const result = await authenticatedApi(accessToken).GET("/publication/publish-tasks");
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.items;
+}

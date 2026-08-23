@@ -103,6 +103,7 @@ def _target_is_current(session: Session, snapshot: LiyanRunSnapshot) -> bool:
             .where(
                 TaskVersion.id == snapshot.task_version_id,
                 Task.current_version_id == snapshot.task_version_id,
+                Task.deleted_at.is_(None),
             )
         )
         is not None
@@ -121,6 +122,14 @@ def _finish_failed(
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
+        try:
+            snapshot = LiyanRunSnapshot.from_json(execution.input_snapshot)
+        except InvalidRunSnapshot:
+            snapshot = None
+        task = _lock_task(session, snapshot) if snapshot is not None else None
+        session.refresh(execution)
+        if task is None or task.deleted_at is not None:
+            execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
         recovery = _automatic_attempt(session, execution)
         session.commit()
@@ -181,11 +190,17 @@ def _finish_succeeded(
     assert database.engine is not None
     now = datetime.now(UTC)
     with Session(database.engine) as session:
+        task = _lock_task(session, snapshot)
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
         execution.finished_at = now
-        if _cancelled(execution) or not _target_is_current(session, snapshot):
+        target_is_current = (
+            task is not None
+            and task.deleted_at is None
+            and task.current_version_id == snapshot.task_version_id
+        )
+        if _cancelled(execution) or not target_is_current:
             execution.status = "cancelled" if _cancelled(execution) else "stale"
             if _cancelled(execution):
                 execution.error_code = "cancelled"
@@ -216,6 +231,16 @@ def _finish_succeeded(
         execution.status = "succeeded"
         execution.result_id = run_result.id
         session.commit()
+
+
+def _lock_task(session: Session, snapshot: LiyanRunSnapshot) -> Task | None:
+    """Serialize result admission with deletion through the owning task row."""
+    return session.scalar(
+        select(Task)
+        .join(TaskVersion, TaskVersion.task_id == Task.id)
+        .where(TaskVersion.id == snapshot.task_version_id)
+        .with_for_update()
+    )
 
 
 def _stale_result(result: LiyanProviderResult) -> dict[str, object]:

@@ -166,6 +166,55 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Delete Task",
+        "operationId": "delete_task",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/tasks/{task_id}/current-version": {
@@ -1876,6 +1925,30 @@
       }
     },
     "/publication/publish-tasks": {
+      "get": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "List Publish Tasks",
+        "operationId": "list_publish_tasks",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTaskListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "publication"
@@ -2213,6 +2286,20 @@
           "email"
         ],
         "title": "CurrentUserResponse"
+      },
+      "DeleteTaskRequest": {
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirmed"
+        ],
+        "title": "DeleteTaskRequest"
       },
       "EditPastedSourceRequest": {
         "properties": {
@@ -3545,6 +3632,22 @@
         ],
         "title": "PublicationTargetResponse"
       },
+      "PublishTaskListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublishTaskResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PublishTaskListResponse"
+      },
       "PublishTaskResponse": {
         "properties": {
           "id": {
@@ -3675,6 +3778,13 @@
                 "type": "null"
               }
             ]
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionResponse"
+            },
+            "type": "array",
+            "title": "Attempts"
           }
         },
         "type": "object",
@@ -3698,7 +3808,8 @@
           "failure_message",
           "created_at",
           "completed_at",
-          "execution"
+          "execution",
+          "attempts"
         ],
         "title": "PublishTaskResponse"
       },
@@ -4378,6 +4489,21 @@
           "current_version_number": {
             "type": "integer",
             "title": "Current Version Number"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "title": "Can Delete"
+          },
+          "delete_disabled_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Disabled Reason"
           }
         },
         "type": "object",
@@ -4389,7 +4515,9 @@
           "additional_source_count",
           "created_at",
           "current_version_id",
-          "current_version_number"
+          "current_version_number",
+          "can_delete",
+          "delete_disabled_reason"
         ],
         "title": "TaskSummary"
       },

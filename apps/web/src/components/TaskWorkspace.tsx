@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
+import { listTasks } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
 import { TaskCard } from "./TaskCard";
 import { PublicationCenter } from "./PublicationCenter";
@@ -10,6 +11,8 @@ type TaskWorkspaceProps = {
   accessToken: string;
   tasks: TaskSummary[];
   onTaskCreated(task: TaskSummary): void;
+  onTaskDeleted?(taskId: string): void;
+  onTasksChanged?(tasks: TaskSummary[]): void;
   onSignOut(): Promise<void>;
 };
 
@@ -18,6 +21,8 @@ export function TaskWorkspace({
   accessToken,
   tasks,
   onTaskCreated,
+  onTaskDeleted,
+  onTasksChanged,
   onSignOut,
 }: TaskWorkspaceProps) {
   const [creating, setCreating] = useState(false);
@@ -25,6 +30,16 @@ export function TaskWorkspace({
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [publicationCenterOpen, setPublicationCenterOpen] = useState(false);
   const [sourceEditingTaskIds, setSourceEditingTaskIds] = useState<Set<string>>(new Set());
+
+  const refreshTasks = useCallback(async () => {
+    if (!onTasksChanged) return;
+    try {
+      onTasksChanged(await listTasks(accessToken));
+    } catch {
+      // The delete endpoint still rechecks this capability; a refresh failure
+      // cannot permit deletion while a publication is running.
+    }
+  }, [accessToken, onTasksChanged]);
 
   const taskCreated = (task: TaskSummary) => {
     setOpenedTaskId(task.id);
@@ -84,7 +99,11 @@ export function TaskWorkspace({
         <PublicationCenter
           userId={identity.id}
           accessToken={accessToken}
-          onClose={() => setPublicationCenterOpen(false)}
+          onPublicationChanged={() => void refreshTasks()}
+          onClose={() => {
+            setPublicationCenterOpen(false);
+            void refreshTasks();
+          }}
         />
       ) : null}
       {creating ? (
@@ -104,6 +123,16 @@ export function TaskWorkspace({
             accessToken={accessToken}
             opened={task.id === openedTaskId}
             onOpen={openTask}
+            onDelete={(taskId) => {
+              setOpenedTaskId((current) => current === taskId ? null : current);
+              setSourceEditingTaskIds((current) => {
+                const next = new Set(current);
+                next.delete(taskId);
+                return next;
+              });
+              onTaskDeleted?.(taskId);
+            }}
+            onPublicationChanged={() => void refreshTasks()}
             onSourceEditingChange={(taskId, editing) => setSourceEditingTaskIds((current) => {
               const next = new Set(current);
               if (editing) next.add(taskId);

@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import (
     Database,
+    Execution,
+    LiyanArticle,
+    PublishTask,
+    Source,
     SourceRevision,
     Task,
     TaskVersion,
@@ -17,6 +21,9 @@ from liyan_server.database import (
     User,
     aware_utc,
 )
+from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
+from liyan_server.liyan.runs import LIYAN_TARGET_TYPE
+from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
 
 class TaskSummary(BaseModel):
@@ -28,6 +35,8 @@ class TaskSummary(BaseModel):
     created_at: datetime
     current_version_id: str
     current_version_number: int
+    can_delete: bool
+    delete_disabled_reason: str | None
 
 
 class TaskListResponse(BaseModel):
@@ -36,6 +45,10 @@ class TaskListResponse(BaseModel):
 
 class RenameTaskRequest(BaseModel):
     display_name: str
+
+
+class DeleteTaskRequest(BaseModel):
+    confirmed: Literal[True]
 
 
 class SourceRevisionSummary(BaseModel):
@@ -76,6 +89,12 @@ def task_summary(session: Session, task: Task) -> TaskSummary:
         raise ValueError("A formal task version must contain at least one source revision.")
     if task.number is None or task.display_name is None or task.created_at is None:
         raise ValueError("A formal task must contain its recognition fields.")
+    publication_pending = session.scalar(
+        select(PublishTask.id).where(
+            PublishTask.task_id == task.id,
+            PublishTask.status == "pending",
+        )
+    )
     return TaskSummary(
         id=str(task.id),
         number=task.number,
@@ -85,6 +104,12 @@ def task_summary(session: Session, task: Task) -> TaskSummary:
         created_at=aware_utc(task.created_at),
         current_version_id=str(task.current_version_id),
         current_version_number=version.number,
+        can_delete=publication_pending is None,
+        delete_disabled_reason=(
+            None
+            if publication_pending is None
+            else "关联的发布任务仍在执行，结束后才能删除立言任务。"
+        ),
     )
 
 
@@ -97,6 +122,7 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
                 Task.id == task_id,
                 Task.owner_id == owner_id,
                 Task.number.is_not(None),
+                Task.deleted_at.is_(None),
             )
         )
         if task is None:
@@ -115,7 +141,11 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
     ) -> TaskListResponse:
         tasks = session.scalars(
             select(Task)
-            .where(Task.owner_id == user.id, Task.number.is_not(None))
+            .where(
+                Task.owner_id == user.id,
+                Task.number.is_not(None),
+                Task.deleted_at.is_(None),
+            )
             .order_by(Task.number.desc())
         ).all()
         return TaskListResponse(items=[task_summary(session, task) for task in tasks])
@@ -178,5 +208,83 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
                 for revision in version_source_revisions(session, version.id)
             ],
         )
+
+    @router.delete(
+        "/tasks/{task_id}",
+        operation_id="delete_task",
+        status_code=status.HTTP_204_NO_CONTENT,
+        tags=["tasks"],
+    )
+    def delete_task(
+        task_id: UUID,
+        _: DeleteTaskRequest,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> None:
+        task = session.scalar(
+            select(Task)
+            .where(
+                Task.id == task_id,
+                Task.owner_id == user.id,
+                Task.number.is_not(None),
+                Task.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if task is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+        pending_publication = session.scalar(
+            select(PublishTask.id).where(
+                PublishTask.task_id == task.id,
+                PublishTask.status == "pending",
+            )
+        )
+        if pending_publication is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="关联的发布任务仍在执行，结束后才能删除立言任务。",
+            )
+
+        now = datetime.now(UTC)
+        source_revision_ids = list(
+            session.scalars(
+                select(SourceRevision.id)
+                .join(Source, Source.id == SourceRevision.source_id)
+                .where(Source.task_id == task.id)
+            )
+        )
+        article_ids = list(
+            session.scalars(
+                select(LiyanArticle.id)
+                .join(TaskVersion, TaskVersion.id == LiyanArticle.task_version_id)
+                .where(TaskVersion.task_id == task.id)
+            )
+        )
+        unfinished = list(
+            session.scalars(
+                select(Execution).where(
+                    Execution.status.in_(ACTIVE_EXECUTION_STATUSES),
+                    (
+                        (Execution.target_type == ZHIYAN_TARGET_TYPE)
+                        & Execution.target_id.in_(source_revision_ids)
+                    )
+                    | (
+                        (Execution.target_type == LIYAN_TARGET_TYPE)
+                        & Execution.target_id.in_(article_ids)
+                    ),
+                )
+            )
+        )
+        for execution in unfinished:
+            execution.cancellation_requested_at = now
+            if execution.status == "queued":
+                execution.status = "cancelled"
+                execution.error_code = "task_deleted"
+                execution.error_message = "所属立言任务已删除。"
+                execution.finished_at = now
+            else:
+                execution.status = "cancel_requested"
+        task.deleted_at = now
+        session.commit()
 
     return router

@@ -206,6 +206,7 @@ def task_creation_router(
             select(Task).where(
                 Task.owner_id == locked_user.id,
                 Task.creation_idempotency_key == idempotency_key,
+                Task.deleted_at.is_(None),
             )
         )
         if existing is not None:

@@ -38,6 +38,9 @@ function respondWith() {
     if (path.endsWith("/publication/eligible-articles")) {
       return Response.json({ items: [eligible] });
     }
+    if (request.method === "GET" && path.endsWith("/publication/publish-tasks")) {
+      return Response.json({ items: [] });
+    }
     return Response.json({ detail: "有未保存的修改，请先保存后再发布。" }, { status: 409 });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -92,5 +95,46 @@ describe("PublicationCenter", () => {
     expect(JSON.parse(await posted!.text())).toMatchObject({
       working_copy_hash: "saved-hash",
     });
+  });
+
+  it("shows retained Preview evidence without needing the original task", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/publication/eligible-articles")) return Response.json({ items: [] });
+      if (path.endsWith("/publication/publish-tasks")) {
+        return Response.json({ items: [{
+          id: "publish-1",
+          status: "succeeded",
+          task_id: "deleted-task",
+          task_version_id: "version-1",
+          revision_id: "revision-2",
+          revision_number: 2,
+          title: "仍可追溯的文章",
+          body_markdown: "锁定正文",
+          target,
+          author: "Birdy Yao",
+          post_type: "opinion",
+          requested_status: "preview",
+          preview_url: "https://lsforum.example/preview/kept",
+          external_slug: "kept",
+          external_version: "1",
+          response_evidence: { previewPath: "/preview/kept" },
+          failure_message: null,
+          created_at: "2026-08-23T10:00:00Z",
+          completed_at: "2026-08-23T10:01:00Z",
+          execution: null,
+        }] });
+      }
+      return new Response(null, { status: 404 });
+    }));
+
+    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+
+    expect(await screen.findByText("仍可追溯的文章")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "打开 Blog Preview" })).toHaveAttribute(
+      "href",
+      "https://lsforum.example/preview/kept",
+    );
+    expect(screen.getByText(/Revision 2/)).toBeInTheDocument();
   });
 });

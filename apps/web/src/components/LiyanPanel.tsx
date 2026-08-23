@@ -49,6 +49,7 @@ export function LiyanPanel({
   taskLabel = "",
   capsuleSelection = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  onPublicationChanged,
 }: {
   userId: string;
   accessToken: string;
@@ -56,6 +57,7 @@ export function LiyanPanel({
   taskLabel?: string;
   capsuleSelection?: CapsuleSelection | null;
   pollIntervalMs?: number;
+  onPublicationChanged?(): void;
 }) {
   const [state, setState] = useState<LiyanStateResponse | null>(null);
   const [instruction, setInstruction] = useState<InstructionDocument>({ content: [] });
@@ -367,6 +369,7 @@ export function LiyanPanel({
           // The server re-checks the draft against the Revision it is asked to
           // publish, so an edit made in another tab cannot slip through.
           workingCopyHash={workingCopyHash}
+          onStatusChange={onPublicationChanged}
           onClose={() => setPublishing(false)}
         />
       ) : null}

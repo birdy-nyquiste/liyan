@@ -94,7 +94,10 @@ def _owned_task(
     session: Session, task_id: UUID, owner_id: UUID, *, for_update: bool = False
 ) -> Task:
     statement = select(Task).where(
-        Task.id == task_id, Task.owner_id == owner_id, Task.number.is_not(None)
+        Task.id == task_id,
+        Task.owner_id == owner_id,
+        Task.number.is_not(None),
+        Task.deleted_at.is_(None),
     )
     if for_update:
         statement = statement.with_for_update()
@@ -191,8 +194,12 @@ def source_editing_router(
 
     def owned_edit(session: Session, edit_id: UUID, owner_id: UUID) -> SourceEditSession:
         edit = session.scalar(
-            select(SourceEditSession).where(
-                SourceEditSession.id == edit_id, SourceEditSession.owner_id == owner_id
+            select(SourceEditSession)
+            .join(Task, Task.id == SourceEditSession.task_id)
+            .where(
+                SourceEditSession.id == edit_id,
+                SourceEditSession.owner_id == owner_id,
+                Task.deleted_at.is_(None),
             )
         )
         if edit is None:

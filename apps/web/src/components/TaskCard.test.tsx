@@ -13,6 +13,8 @@ const task = {
   created_at: "2026-08-23T16:52:00Z",
   current_version_id: "version-1",
   current_version_number: 1,
+  can_delete: true,
+  delete_disabled_reason: null,
 };
 
 const versionSnapshot = {
@@ -130,6 +132,44 @@ afterEach(() => {
 });
 
 describe("TaskCard", () => {
+  it("adopts refreshed server deletion capability after publication starts", () => {
+    const { rerender } = render(
+      <TaskCard task={task} userId="user-1" accessToken="token" />,
+    );
+    expect(screen.getByRole("button", { name: "删除 Test Header" })).toBeEnabled();
+
+    rerender(
+      <TaskCard
+        task={{
+          ...task,
+          can_delete: false,
+          delete_disabled_reason: "关联的发布任务仍在执行，结束后才能删除立言任务。",
+        }}
+        userId="user-1"
+        accessToken="token"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "删除 Test Header" })).toBeDisabled();
+    expect(screen.getByText("关联的发布任务仍在执行，结束后才能删除立言任务。")).toBeInTheDocument();
+  });
+
+  it("shows the server reason when deletion is rejected", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
+      { detail: "关联的发布任务仍在执行，结束后才能删除立言任务。" },
+      { status: 409 },
+    )));
+    const user = userEvent.setup();
+    render(<TaskCard task={task} userId="user-1" accessToken="token" />);
+
+    await user.click(screen.getByRole("button", { name: "删除 Test Header" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "关联的发布任务仍在执行，结束后才能删除立言任务。",
+    );
+  });
+
   it("opens 立言 once every report has succeeded, whatever order the reads settle in", async () => {
     respondWithVersionListLast();
 

@@ -82,7 +82,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Task */
+        delete: operations["delete_task"];
         options?: never;
         head?: never;
         /** Rename Task */
@@ -645,7 +646,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Publish Tasks */
+        get: operations["list_publish_tasks"];
         put?: never;
         /** Confirm Publication */
         post: operations["confirm_publication"];
@@ -760,6 +762,14 @@ export interface components {
             id: string;
             /** Email */
             email: string;
+        };
+        /** DeleteTaskRequest */
+        DeleteTaskRequest: {
+            /**
+             * Confirmed
+             * @constant
+             */
+            confirmed: true;
         };
         /** EditPastedSourceRequest */
         EditPastedSourceRequest: {
@@ -1180,6 +1190,11 @@ export interface components {
             /** Site Url */
             site_url: string;
         };
+        /** PublishTaskListResponse */
+        PublishTaskListResponse: {
+            /** Items */
+            items: components["schemas"]["PublishTaskResponse"][];
+        };
         /** PublishTaskResponse */
         PublishTaskResponse: {
             /** Id */
@@ -1224,6 +1239,8 @@ export interface components {
             /** Completed At */
             completed_at: string | null;
             execution: components["schemas"]["ExecutionResponse"] | null;
+            /** Attempts */
+            attempts: components["schemas"]["ExecutionResponse"][];
         };
         /** @enum {string} */
         PublishTaskStatus: "pending" | "succeeded" | "failed" | "outcome_unknown";
@@ -1448,6 +1465,10 @@ export interface components {
             current_version_id: string;
             /** Current Version Number */
             current_version_number: number;
+            /** Can Delete */
+            can_delete: boolean;
+            /** Delete Disabled Reason */
+            delete_disabled_reason: string | null;
         };
         /** TaskVersionDetail */
         TaskVersionDetail: {
@@ -1752,6 +1773,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+        };
+    };
+    delete_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2870,6 +2924,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EligibleArticleListResponse"];
+                };
+            };
+        };
+    };
+    list_publish_tasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTaskListResponse"];
                 };
             };
         };

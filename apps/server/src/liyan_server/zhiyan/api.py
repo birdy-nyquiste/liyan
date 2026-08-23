@@ -199,13 +199,21 @@ def zhiyan_router(
         *,
         source_revision_id: UUID,
         owner_id: UUID,
+        for_update: bool = False,
     ) -> SourceRevision:
-        revision = session.scalar(
+        statement = (
             select(SourceRevision)
             .join(Source, Source.id == SourceRevision.source_id)
             .join(Task, Task.id == Source.task_id)
-            .where(SourceRevision.id == source_revision_id, Task.owner_id == owner_id)
+            .where(
+                SourceRevision.id == source_revision_id,
+                Task.owner_id == owner_id,
+                Task.deleted_at.is_(None),
+            )
         )
+        if for_update:
+            statement = statement.with_for_update(of=Task)
+        revision = session.scalar(statement)
         if revision is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -237,6 +245,7 @@ def zhiyan_router(
             .where(
                 TaskVersionSource.source_revision_id == revision.id,
                 Source.id == revision.source_id,
+                Task.deleted_at.is_(None),
             )
         )
         return current is not None
@@ -290,6 +299,7 @@ def zhiyan_router(
             session,
             source_revision_id=source_revision_id,
             owner_id=user.id,
+            for_update=True,
         )
         require_current_revision(session, revision)
         if accepted_report(session, revision.id) is not None:
@@ -372,6 +382,7 @@ def zhiyan_router(
                 Task.id == task_id,
                 Task.owner_id == user.id,
                 Task.number.is_not(None),
+                Task.deleted_at.is_(None),
             )
         )
         version = session.scalar(
@@ -401,6 +412,7 @@ def zhiyan_router(
                 Task.id == task_id,
                 Task.owner_id == user.id,
                 Task.number.is_not(None),
+                Task.deleted_at.is_(None),
             )
         )
         version = (

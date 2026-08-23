@@ -32,7 +32,7 @@ from liyan_server.execution_states import PublishTaskStatus
 from liyan_server.liyan.revisions import UNSAVED_EDITS, load_history
 from liyan_server.publication.blog import POST_TYPE, PREVIEW_STATUS
 from liyan_server.publication.orchestration import dispatch_publication
-from liyan_server.publication.runs import new_publish_execution
+from liyan_server.publication.runs import PUBLISH_TARGET_TYPE, new_publish_execution
 from liyan_server.publication.targets import PublicationTarget, target_for, targets_for
 from liyan_server.settings import Settings
 from liyan_server.task_creation.contracts import ExecutionResponse, execution_response
@@ -81,6 +81,10 @@ class EligibleArticleListResponse(BaseModel):
     items: list[EligibleArticleResponse]
 
 
+class PublishTaskListResponse(BaseModel):
+    items: list["PublishTaskResponse"]
+
+
 class ConfirmPublicationRequest(BaseModel):
     idempotency_key: str
     task_id: UUID
@@ -123,11 +127,11 @@ class PublishTaskResponse(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     execution: ExecutionResponse | None
+    attempts: list[ExecutionResponse]
 
     @classmethod
-    def of(
-        cls, publish_task: PublishTask, execution: Execution | None
-    ) -> "PublishTaskResponse":
+    def of(cls, publish_task: PublishTask, executions: list[Execution]) -> "PublishTaskResponse":
+        execution = executions[-1] if executions else None
         return cls(
             id=str(publish_task.id),
             status=publish_task.status,
@@ -158,6 +162,7 @@ class PublishTaskResponse(BaseModel):
                 else None
             ),
             execution=execution_response(execution) if execution is not None else None,
+            attempts=[execution_response(attempt) for attempt in executions],
         )
 
 
@@ -169,17 +174,19 @@ def publication_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/publication", tags=["publication"])
 
-    def latest_execution(session: Session, publish_task: PublishTask) -> Execution | None:
-        return session.scalar(
-            select(Execution)
-            .where(Execution.target_id == publish_task.id)
-            .order_by(Execution.attempt.desc())
-            .limit(1)
+    def publish_executions(session: Session, publish_task: PublishTask) -> list[Execution]:
+        return list(
+            session.scalars(
+                select(Execution)
+                .where(
+                    Execution.target_type == PUBLISH_TARGET_TYPE,
+                    Execution.target_id == publish_task.id,
+                )
+                .order_by(Execution.attempt)
+            ).all()
         )
 
-    def owned_publish_task(
-        session: Session, publish_task_id: UUID, owner_id: UUID
-    ) -> PublishTask:
+    def owned_publish_task(session: Session, publish_task_id: UUID, owner_id: UUID) -> PublishTask:
         publish_task = session.scalar(
             select(PublishTask).where(
                 PublishTask.id == publish_task_id, PublishTask.owner_id == owner_id
@@ -209,8 +216,7 @@ def publication_router(
     ) -> PublicationTargetListResponse:
         return PublicationTargetListResponse(
             items=[
-                PublicationTargetResponse.of(target)
-                for target in targets_for(settings, user.email)
+                PublicationTargetResponse.of(target) for target in targets_for(settings, user.email)
             ]
         )
 
@@ -225,7 +231,11 @@ def publication_router(
     ) -> EligibleArticleListResponse:
         tasks = session.scalars(
             select(Task)
-            .where(Task.owner_id == user.id, Task.number.is_not(None))
+            .where(
+                Task.owner_id == user.id,
+                Task.number.is_not(None),
+                Task.deleted_at.is_(None),
+            )
             .order_by(Task.number.desc())
         ).all()
         items: list[EligibleArticleResponse] = []
@@ -278,18 +288,14 @@ def publication_router(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
                 )
-            return PublishTaskResponse.of(replay, latest_execution(session, replay))
+            return PublishTaskResponse.of(replay, publish_executions(session, replay))
         target = target_for(settings, user.email, request.target_key)
         if target is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=TARGET_NOT_FOUND
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TARGET_NOT_FOUND)
         task, version = _owned_current(session, request.task_id, user.id)
         revision = newest_saved(session, version.id)
         if revision is None or revision.id != request.revision_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=SUPERSEDED_REVISION
-            )
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=SUPERSEDED_REVISION)
         if (
             request.working_copy_hash is not None
             and request.working_copy_hash != revision.content_hash
@@ -335,12 +341,33 @@ def publication_router(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
                 ) from error
-            return PublishTaskResponse.of(replay, latest_execution(session, replay))
+            return PublishTaskResponse.of(replay, publish_executions(session, replay))
         dispatch_publication(database, dispatcher, execution.id, publish_task.id)
         session.expire_all()
         return PublishTaskResponse.of(
             session.get(PublishTask, publish_task.id) or publish_task,
-            session.get(Execution, execution.id),
+            publish_executions(session, publish_task),
+        )
+
+    @router.get(
+        "/publish-tasks",
+        operation_id="list_publish_tasks",
+        response_model=PublishTaskListResponse,
+    )
+    def list_publish_tasks(
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> PublishTaskListResponse:
+        publish_tasks = session.scalars(
+            select(PublishTask)
+            .where(PublishTask.owner_id == user.id)
+            .order_by(PublishTask.created_at.desc())
+        ).all()
+        return PublishTaskListResponse(
+            items=[
+                PublishTaskResponse.of(publish_task, publish_executions(session, publish_task))
+                for publish_task in publish_tasks
+            ]
         )
 
     @router.get(
@@ -354,16 +381,21 @@ def publication_router(
         session: Annotated[Session, Depends(database.session)],
     ) -> PublishTaskResponse:
         publish_task = owned_publish_task(session, publish_task_id, user.id)
-        return PublishTaskResponse.of(publish_task, latest_execution(session, publish_task))
+        return PublishTaskResponse.of(publish_task, publish_executions(session, publish_task))
 
     return router
 
 
 def _owned_current(session: Session, task_id: UUID, owner_id: UUID) -> tuple[Task, TaskVersion]:
     task = session.scalar(
-        select(Task).where(
-            Task.id == task_id, Task.owner_id == owner_id, Task.number.is_not(None)
+        select(Task)
+        .where(
+            Task.id == task_id,
+            Task.owner_id == owner_id,
+            Task.number.is_not(None),
+            Task.deleted_at.is_(None),
         )
+        .with_for_update()
     )
     version = (
         session.get(TaskVersion, task.current_version_id)

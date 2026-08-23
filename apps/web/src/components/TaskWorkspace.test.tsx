@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TaskWorkspace } from "./TaskWorkspace";
+import type { TaskSummary } from "../auth/state";
 
 const formalTask = {
   id: "task-1",
@@ -14,6 +15,8 @@ const formalTask = {
   created_at: "2026-08-22T18:00:00Z",
   current_version_id: "version-1",
   current_version_number: 1,
+  can_delete: true,
+  delete_disabled_reason: null,
 };
 
 type TestSource = {
@@ -59,7 +62,7 @@ function sessionResponse(sources: TestSource[]) {
 
 function renderWorkspace(onTaskCreated = vi.fn()) {
   function StatefulWorkspace() {
-    const [tasks, setTasks] = useState<typeof formalTask[]>([]);
+    const [tasks, setTasks] = useState<TaskSummary[]>([]);
     return (
       <TaskWorkspace
         identity={{ id: "user-1", email: "writer@example.com" }}
@@ -286,5 +289,56 @@ describe("立言任务 list", () => {
 
     expect(await screen.findByRole("heading", { name: "Renamed" })).toBeInTheDocument();
     expect(screen.getByText("First source", { selector: ".task-card__source" })).toBeInTheDocument();
+  });
+
+  it("requires confirmation and removes a deliberately deleted task", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+
+    function DeletableWorkspace() {
+      const [tasks, setTasks] = useState<TaskSummary[]>([formalTask]);
+      return (
+        <TaskWorkspace
+          identity={{ id: "user-1", email: "writer@example.com" }}
+          accessToken="access-token"
+          tasks={tasks}
+          onTaskCreated={vi.fn()}
+          onTaskDeleted={(taskId) => setTasks((items) => items.filter((item) => item.id !== taskId))}
+          onSignOut={vi.fn()}
+        />
+      );
+    }
+    render(<DeletableWorkspace />);
+
+    await user.click(screen.getByRole("button", { name: "删除 First source" }));
+
+    expect(confirm).toHaveBeenCalledWith("删除任务后将立即消失且无法恢复，确定删除吗？");
+    expect(fetch).toHaveBeenCalledOnce();
+    const request = fetch.mock.calls[0]![0] as Request;
+    expect(request.method).toBe("DELETE");
+    expect(JSON.parse(await request.text())).toEqual({ confirmed: true });
+    expect(await screen.findByText("还没有立言任务")).toBeInTheDocument();
+  });
+
+  it("explains why a task with an unfinished publication cannot be deleted", () => {
+    render(
+      <TaskWorkspace
+        identity={{ id: "user-1", email: "writer@example.com" }}
+        accessToken="access-token"
+        tasks={[{
+          ...formalTask,
+          can_delete: false,
+          delete_disabled_reason: "关联的发布任务仍在执行，结束后才能删除立言任务。",
+        }]}
+        onTaskCreated={vi.fn()}
+        onTaskDeleted={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "删除 First source" })).toBeDisabled();
+    expect(screen.getByText("关联的发布任务仍在执行，结束后才能删除立言任务。")).toBeInTheDocument();
   });
 });

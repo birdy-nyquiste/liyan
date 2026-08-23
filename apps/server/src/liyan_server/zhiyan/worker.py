@@ -17,7 +17,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from liyan_server.database import Database, Execution, SourceRevision, ZhiyanReport
+from liyan_server.database import (
+    Database,
+    Execution,
+    Source,
+    SourceRevision,
+    Task,
+    ZhiyanReport,
+)
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message
 from liyan_server.zhiyan.acceptance import accept_report_text
@@ -94,7 +101,15 @@ def _claim(
             )
             session.commit()
             return None
-        revision = session.get(SourceRevision, snapshot.source_revision_id)
+        revision = session.scalar(
+            select(SourceRevision)
+            .join(Source, Source.id == SourceRevision.source_id)
+            .join(Task, Task.id == Source.task_id)
+            .where(
+                SourceRevision.id == snapshot.source_revision_id,
+                Task.deleted_at.is_(None),
+            )
+        )
         if revision is None or revision.content_hash != snapshot.content_hash:
             _fail_within(
                 execution,
@@ -126,6 +141,14 @@ def _finish_failed(
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
+        try:
+            snapshot = ZhiyanRunSnapshot.from_json(execution.input_snapshot)
+        except InvalidRunSnapshot:
+            snapshot = None
+        task = _lock_task(session, snapshot) if snapshot is not None else None
+        session.refresh(execution)
+        if task is None or task.deleted_at is not None:
+            execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
         recovery = _automatic_attempt(session, execution)
         session.commit()
@@ -183,11 +206,12 @@ def _finish_succeeded(
         raise RuntimeError("Database is not configured.")
     now = datetime.now(UTC)
     with Session(database.engine) as session:
+        task = _lock_task(session, snapshot)
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
         execution.finished_at = now
-        if _cancelled(execution):
+        if task is None or task.deleted_at is not None or _cancelled(execution):
             execution.status = "cancelled"
             execution.error_code = "cancelled"
             execution.error_message = CANCELLED_MESSAGE
@@ -220,6 +244,17 @@ def _finish_succeeded(
         execution.status = "succeeded"
         execution.result_id = report.id
         session.commit()
+
+
+def _lock_task(session: Session, snapshot: ZhiyanRunSnapshot) -> Task | None:
+    """Serialize result admission with deletion through the owning task row."""
+    return session.scalar(
+        select(Task)
+        .join(Source, Source.task_id == Task.id)
+        .join(SourceRevision, SourceRevision.source_id == Source.id)
+        .where(SourceRevision.id == snapshot.source_revision_id)
+        .with_for_update()
+    )
 
 
 def _stale_result(result: ZhiyanProviderResult) -> dict[str, object]:

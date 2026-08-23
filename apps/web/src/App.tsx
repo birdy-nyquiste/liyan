@@ -143,6 +143,18 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
                 : current,
             )
           }
+          onTaskDeleted={(taskId) =>
+            setAuth((current) =>
+              current.screen === "workspace"
+                ? { ...current, tasks: current.tasks.filter((task) => task.id !== taskId) }
+                : current,
+            )
+          }
+          onTasksChanged={(tasks) =>
+            setAuth((current) =>
+              current.screen === "workspace" ? { ...current, tasks } : current,
+            )
+          }
           onSignOut={async () => {
             await authProvider.signOut();
             setAuth(signedOut());

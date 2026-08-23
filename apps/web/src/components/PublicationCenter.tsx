@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { listEligibleArticles, type EligibleArticleResponse } from "../api/client";
+import {
+  listEligibleArticles,
+  listPublishTasks,
+  type EligibleArticleResponse,
+  type PublishTaskResponse,
+} from "../api/client";
 import { articleContentHash } from "./articleContentHash";
 import {
   PublicationConfirmation,
@@ -27,19 +32,27 @@ export function PublicationCenter({
   userId,
   accessToken,
   onClose,
+  onPublicationChanged,
 }: {
   userId: string;
   accessToken: string;
   onClose(): void;
+  onPublicationChanged?(): void;
 }) {
   const [articles, setArticles] = useState<EligibleArticleResponse[] | null>(null);
+  const [records, setRecords] = useState<PublishTaskResponse[] | null>(null);
   const [selected, setSelected] = useState<EligibleArticleResponse | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setArticles(await listEligibleArticles(accessToken));
+      const [eligible, publications] = await Promise.all([
+        listEligibleArticles(accessToken),
+        listPublishTasks(accessToken),
+      ]);
+      setArticles(eligible);
+      setRecords(publications);
       setError(null);
     } catch {
       setError("发布中心加载失败，请稍后重试。");
@@ -89,6 +102,7 @@ export function PublicationCenter({
           accessToken={accessToken}
           article={publicationArticle(selected)}
           workingCopyHash={draftHash}
+          onStatusChange={onPublicationChanged}
           onClose={() => {
             setSelected(null);
             void load();
@@ -123,6 +137,28 @@ export function PublicationCenter({
           </ul>
         </>
       )}
+
+      <p className="section-kicker">发布记录</p>
+      {records && records.length === 0 ? (
+        <p className="form-hint">还没有发布记录。</p>
+      ) : null}
+      <ul className="publication-candidates">
+        {(records ?? []).map((record) => (
+          <li key={record.id}>
+            <div>
+              <p className="liyan-revision__title">{record.title}</p>
+              <p className="form-hint">
+                Revision {record.revision_number} · {record.target.display_name} · {record.status}
+              </p>
+            </div>
+            {record.preview_url ? (
+              <a href={record.preview_url} target="_blank" rel="noreferrer">
+                打开 Blog Preview
+              </a>
+            ) : null}
+          </li>
+        ))}
+      </ul>
 
     </section>
   );

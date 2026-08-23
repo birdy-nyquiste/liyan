@@ -104,6 +104,29 @@ describe("PublicationConfirmation", () => {
     });
   });
 
+  it("reports a pending publication so task deletion capability can refresh", async () => {
+    respondWith([
+      [/\/publication\/targets$/, { items: [target("lsforum", "LSForum Blog")] }],
+      [/\/publication\/publish-tasks$/, publishTask("pending")],
+    ]);
+    const onStatusChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PublicationConfirmation
+        userId="user-1"
+        accessToken="token"
+        article={ARTICLE}
+        onStatusChange={onStatusChange}
+        onClose={() => undefined}
+      />,
+    );
+
+    await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Zeng Zong");
+    await user.click(screen.getByRole("button", { name: "确认发布" }));
+
+    expect(onStatusChange).toHaveBeenCalledOnce();
+  });
+
   it("asks which destination to use when more than one is authorized", async () => {
     respondWith([
       [

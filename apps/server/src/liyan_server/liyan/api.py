@@ -203,15 +203,17 @@ def liyan_router(
     router = APIRouter()
 
     def owned_current(
-        session: Session, task_id: UUID, owner_id: UUID
+        session: Session, task_id: UUID, owner_id: UUID, *, for_update: bool = False
     ) -> tuple[Task, TaskVersion]:
-        task = session.scalar(
-            select(Task).where(
-                Task.id == task_id,
-                Task.owner_id == owner_id,
-                Task.number.is_not(None),
-            )
+        statement = select(Task).where(
+            Task.id == task_id,
+            Task.owner_id == owner_id,
+            Task.number.is_not(None),
+            Task.deleted_at.is_(None),
         )
+        if for_update:
+            statement = statement.with_for_update()
+        task = session.scalar(statement)
         version = (
             session.get(TaskVersion, task.current_version_id)
             if task is not None and task.current_version_id is not None
@@ -456,7 +458,7 @@ def liyan_router(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
     ) -> LiyanStateResponse:
-        task, version = owned_current(session, task_id, user.id)
+        task, version = owned_current(session, task_id, user.id, for_update=True)
         context = complete_context(session, version)
         resolved_context, model_instruction = resolve_instruction(
             session, version, request.instruction

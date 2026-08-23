@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { renameTask } from "../api/client";
+import { ApiError, deleteTask, renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { TaskArea } from "./TaskArea";
 import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
@@ -15,6 +15,8 @@ export function TaskCard({
   opened = false,
   onOpen,
   onSourceEditingChange,
+  onDelete,
+  onPublicationChanged,
 }: {
   task: TaskSummary;
   userId: string;
@@ -22,11 +24,14 @@ export function TaskCard({
   opened?: boolean;
   onOpen?(taskId: string): void;
   onSourceEditingChange?(taskId: string, editing: boolean): void;
+  onDelete?(taskId: string): void;
+  onPublicationChanged?(): void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const [zhiyan, setZhiyan] = useState<ZhiyanAreaState | null>(null);
   const [focus, setFocus] = useState<"work" | "sources">("work");
@@ -37,6 +42,14 @@ export function TaskCard({
     if (opened) cardRef.current?.focus();
   }, [opened]);
 
+  useEffect(() => {
+    setTask((current) => ({
+      ...current,
+      can_delete: initialTask.can_delete,
+      delete_disabled_reason: initialTask.delete_disabled_reason,
+    }));
+  }, [initialTask.can_delete, initialTask.delete_disabled_reason]);
+
   async function saveName(event: FormEvent) {
     event.preventDefault();
     try {
@@ -45,6 +58,22 @@ export function TaskCard({
       setError(null);
     } catch {
       setError("重命名失败，请重试。");
+    }
+  }
+
+  async function removeTask() {
+    if (!window.confirm("删除任务后将立即消失且无法恢复，确定删除吗？")) return;
+    setDeleting(true);
+    try {
+      await deleteTask(accessToken, task.id);
+      onDelete?.(task.id);
+    } catch (thrown) {
+      setError(
+        thrown instanceof ApiError && thrown.detail
+          ? thrown.detail
+          : "删除失败，请稍后重试。",
+      );
+      setDeleting(false);
     }
   }
 
@@ -120,7 +149,20 @@ export function TaskCard({
             >
               重命名
             </button>
+            <button
+              className="button button--quiet"
+              type="button"
+              aria-label={`删除 ${task.display_name}`}
+              disabled={!task.can_delete || deleting}
+              onClick={() => void removeTask()}
+            >
+              {deleting ? "删除中" : "删除"}
+            </button>
           </div>
+          {task.delete_disabled_reason ? (
+            <p className="form-hint">{task.delete_disabled_reason}</p>
+          ) : null}
+          {error ? <p role="alert" className="form-error">{error}</p> : null}
         </div>
       )}
       {opened ? (
@@ -194,6 +236,7 @@ export function TaskCard({
                   taskId={task.id}
                   taskLabel={task.display_name}
                   capsuleSelection={capsuleSelection}
+                  onPublicationChanged={onPublicationChanged}
                 />
               ) : (
                 <p className="form-hint" role="status">

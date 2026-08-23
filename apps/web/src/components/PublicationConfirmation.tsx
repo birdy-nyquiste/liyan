@@ -67,6 +67,7 @@ export function PublicationConfirmation({
   article,
   workingCopyHash = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  onStatusChange,
   onClose,
 }: {
   userId: string;
@@ -74,6 +75,7 @@ export function PublicationConfirmation({
   article: PublicationArticle;
   workingCopyHash?: string | null;
   pollIntervalMs?: number;
+  onStatusChange?(): void;
   onClose(): void;
 }) {
   const [targets, setTargets] = useState<PublicationTargetResponse[] | null>(null);
@@ -105,12 +107,13 @@ export function PublicationConfirmation({
   const refresh = useCallback(async (publishTaskId: string) => {
     try {
       setPublishTask(await getPublishTask(accessToken, publishTaskId));
+      onStatusChange?.();
     } catch {
       setError("发布任务加载失败，请稍后重试。");
     } finally {
       setPolls((count) => count + 1);
     }
-  }, [accessToken]);
+  }, [accessToken, onStatusChange]);
 
   const pending = publishTask?.status === "pending";
   useEffect(() => {
@@ -124,16 +127,16 @@ export function PublicationConfirmation({
     if (!targetKey || !name) return;
     setBusy(true);
     try {
-      setPublishTask(
-        await confirmPublication(accessToken, {
+      const confirmedTask = await confirmPublication(accessToken, {
           idempotency_key: idempotencyKey.current,
           task_id: article.taskId,
           revision_id: article.revisionId,
           target_key: targetKey,
           author: name,
           working_copy_hash: workingCopyHash,
-        }),
-      );
+        });
+      setPublishTask(confirmedTask);
+      onStatusChange?.();
       rememberAuthor(userId, name);
       setError(null);
     } catch (thrown) {

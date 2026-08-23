@@ -13,6 +13,7 @@ from typing import Self
 from uuid import UUID
 
 from liyan_server.database import Execution, SourceRevision
+from liyan_server.execution_states import RunOrigin
 from liyan_server.zhiyan.prompt import ZHIYAN_PROMPT_VERSION, AcceptedSourceRevision
 from liyan_server.zhiyan.provider import ToolPolicy
 
@@ -84,6 +85,7 @@ def new_zhiyan_execution(
     model: str,
     tool_policy: ToolPolicy,
     attempt: int,
+    origin: RunOrigin,
     created_at: datetime,
     prompt_version: str = ZHIYAN_PROMPT_VERSION,
 ) -> Execution:
@@ -107,6 +109,7 @@ def new_zhiyan_execution(
         input_identity=hashlib.sha256(identity.encode()).hexdigest(),
         input_snapshot=snapshot.as_json(),
         attempt=attempt,
+        origin=origin,
         status="queued",
         created_at=created_at,
     )

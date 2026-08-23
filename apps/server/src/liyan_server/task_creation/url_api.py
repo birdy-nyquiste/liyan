@@ -18,6 +18,7 @@ from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import (
     ACTIVE_EXECUTION_STATUSES,
     SourcePreparationStatus,
+    cancelled_message,
 )
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
@@ -36,6 +37,9 @@ from liyan_server.task_creation.sessions import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Operations whose target is a DraftSource, and so carry a preparation to update.
+SOURCE_PREPARATION_OPERATIONS = frozenset({"fetch_url", "parse_file"})
 
 
 class CreateUrlSourceRequest(BaseModel):
@@ -513,15 +517,20 @@ def url_source_router(
             )
         now = datetime.now(UTC)
         execution.cancellation_requested_at = execution.cancellation_requested_at or now
-        source = session.get(SourcePreparation, execution.target_id)
-        cancelled_message = (
-            "Parsing was cancelled. Retry it or replace this source."
-            if execution.operation == "parse_file"
-            else "Fetching was cancelled. Retry it or replace this source."
+        # An Execution's target_id has no foreign key, so only an intake operation
+        # may be read back as a DraftSource.
+        source = (
+            session.get(SourcePreparation, execution.target_id)
+            if execution.operation in SOURCE_PREPARATION_OPERATIONS
+            else None
         )
+        message = cancelled_message(execution.operation)
         if execution.status == "queued":
             execution.status = "cancelled"
             execution.finished_at = now
+            # A cancellation is why this run ended, whatever kind of work it was.
+            execution.error_code = "cancelled"
+            execution.error_message = message
             if (
                 source is not None
                 and source.active_execution_id == execution.id
@@ -529,7 +538,7 @@ def url_source_router(
             ):
                 source.status = "failure"
                 source.failure_code = "cancelled"
-                source.failure_message = cancelled_message
+                source.failure_message = message
                 source.updated_at = now
         else:
             execution.status = "cancel_requested"

@@ -1,6 +1,11 @@
-"""The 知言 boundary for exactly one accepted source Revision."""
+"""The 知言 boundary for one accepted source Revision and for a whole 任务版本.
 
-import logging
+A 任务版本 holds one to three source Revisions, each with its own independent run,
+so this boundary answers two different questions. Per Revision: what happened to
+its run, and what may the user do next. Per 任务版本: are all of its reports in,
+because that — and only that — is what opens 立言.
+"""
+
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -18,6 +23,7 @@ from liyan_server.database import (
     Source,
     SourceRevision,
     Task,
+    TaskVersion,
     User,
     ZhiyanReport,
     aware_utc,
@@ -25,23 +31,52 @@ from liyan_server.database import (
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
 from liyan_server.settings import Settings
-from liyan_server.task_creation.contracts import ExecutionResponse, execution_response
-from liyan_server.zhiyan.provider import ToolPolicy
+from liyan_server.task_api import version_source_revisions
+from liyan_server.task_creation.contracts import (
+    ExecutionError,
+    ExecutionResponse,
+    execution_response,
+)
+from liyan_server.zhiyan.orchestration import (
+    accepted_report,
+    dispatch_or_fail,
+    load_runs,
+    queue_run,
+)
+from liyan_server.zhiyan.recovery import RetryState
 from liyan_server.zhiyan.report import ZhiyanReportDocument
-from liyan_server.zhiyan.runs import ZHIYAN_OPERATION, new_zhiyan_execution
-
-logger = logging.getLogger(__name__)
 
 type ZhiyanStatus = Literal["absent", "running", "cancelled", "failed", "succeeded"]
 
 IMMUTABLE_MESSAGE = "该来源的知言报告已生成，不能修改或重新生成。"
 ACTIVE_MESSAGE = "该来源的知言分析正在进行中。"
-DISPATCH_FAILED_MESSAGE = "分析未能启动，请重试。"
+RATE_LIMITED_MESSAGE = "重试次数已用完，请稍后再试。"
+#: The only thing a user is told about a failed run, whatever really went wrong.
+BUSY_MESSAGE = "服务繁忙，请重试。"
+WAITING_MESSAGE = "知言分析尚未全部完成，全部报告成功后才能生成立言。"
+INCOMPLETE_MESSAGE = "仍有来源没有成功的知言报告，全部成功后才能生成立言。"
+
+
+class ZhiyanRetryState(BaseModel):
+    """Retry timing the server owns; the client only counts down to it."""
+
+    allowed: bool
+    remaining: int
+    allowed_at: datetime | None
+
+    @classmethod
+    def of(cls, retry: RetryState) -> "ZhiyanRetryState":
+        return cls(
+            allowed=retry.allowed,
+            remaining=retry.remaining,
+            allowed_at=retry.allowed_at,
+        )
 
 
 class ZhiyanCapabilities(BaseModel):
     can_start: bool
     can_cancel: bool
+    retry: ZhiyanRetryState
 
 
 class ZhiyanReportResponse(BaseModel):
@@ -62,6 +97,19 @@ class ZhiyanStateResponse(BaseModel):
     capabilities: ZhiyanCapabilities
 
 
+class LiyanCapabilities(BaseModel):
+    can_generate: bool
+    unavailable_reason: str | None
+
+
+class TaskVersionZhiyanResponse(BaseModel):
+    task_id: str
+    task_version_id: str
+    task_version_number: int
+    sources: list[ZhiyanStateResponse]
+    liyan: LiyanCapabilities
+
+
 def report_response(report: ZhiyanReport) -> ZhiyanReportResponse:
     return ZhiyanReportResponse(
         id=str(report.id),
@@ -73,10 +121,26 @@ def report_response(report: ZhiyanReport) -> ZhiyanReportResponse:
     )
 
 
+def zhiyan_execution_response(execution: Execution) -> ExecutionResponse:
+    """The run as a browser may see it, never carrying why it really failed.
+
+    Function Spec §5.4 gives the user one sentence for every failure, so the real
+    error code stays in the Execution for operators. A cancellation is the user's
+    own act, so it keeps its own wording.
+    """
+    response = execution_response(execution)
+    if execution.status not in {"failed", "stale"}:
+        return response
+    return response.model_copy(
+        update={"error": ExecutionError(code="busy", message=BUSY_MESSAGE)}
+    )
+
+
 def zhiyan_state_response(
     revision: SourceRevision,
     report: ZhiyanReport | None,
     execution: Execution | None,
+    retry: RetryState,
 ) -> ZhiyanStateResponse:
     active = execution is not None and execution.status in ACTIVE_EXECUTION_STATUSES
     return ZhiyanStateResponse(
@@ -84,11 +148,25 @@ def zhiyan_state_response(
         source_title=revision.title,
         status=_status(report, execution, active=active),
         report=report_response(report) if report else None,
-        execution=execution_response(execution) if execution else None,
+        execution=zhiyan_execution_response(execution) if execution else None,
         capabilities=ZhiyanCapabilities(
-            can_start=report is None and not active,
+            can_start=(
+                report is None and not active and (execution is None or retry.allowed)
+            ),
             can_cancel=active,
+            retry=ZhiyanRetryState.of(retry),
         ),
+    )
+
+
+def liyan_capabilities(sources: list[ZhiyanStateResponse]) -> LiyanCapabilities:
+    """立言 opens only once every source Revision of this version has its report."""
+    if sources and all(source.status == "succeeded" for source in sources):
+        return LiyanCapabilities(can_generate=True, unavailable_reason=None)
+    waiting = any(source.status == "running" for source in sources)
+    return LiyanCapabilities(
+        can_generate=False,
+        unavailable_reason=WAITING_MESSAGE if waiting else INCOMPLETE_MESSAGE,
     )
 
 
@@ -134,42 +212,14 @@ def zhiyan_router(
             )
         return revision
 
-    def accepted_report(session: Session, revision_id: UUID) -> ZhiyanReport | None:
-        return session.scalar(
-            select(ZhiyanReport).where(ZhiyanReport.source_revision_id == revision_id)
+    def state_of(session: Session, revision: SourceRevision, now: datetime) -> ZhiyanStateResponse:
+        runs = load_runs(session, revision.id)
+        return zhiyan_state_response(
+            revision,
+            accepted_report(session, revision.id),
+            runs.latest,
+            runs.retry_state(now),
         )
-
-    def latest_run(session: Session, revision_id: UUID) -> Execution | None:
-        return session.scalar(
-            select(Execution)
-            .where(
-                Execution.target_id == revision_id,
-                Execution.operation == ZHIYAN_OPERATION,
-            )
-            .order_by(Execution.attempt.desc(), Execution.created_at.desc())
-            .limit(1)
-        )
-
-    def dispatch(execution_id: UUID) -> None:
-        try:
-            dispatcher.dispatch(execution_id)
-        except Exception as error:
-            logger.exception(
-                "zhiyan_dispatch_failed",
-                extra={"execution_id": str(execution_id)},
-            )
-            if database.engine is None:
-                return
-            with Session(database.engine) as recovery_session:
-                execution = recovery_session.get(Execution, execution_id)
-                if execution is None or execution.status != "queued":
-                    return
-                execution.status = "failed"
-                execution.error_code = "dispatch_failed"
-                execution.error_message = DISPATCH_FAILED_MESSAGE
-                execution.internal_error = repr(error)
-                execution.finished_at = datetime.now(UTC)
-                recovery_session.commit()
 
     @router.post(
         "/source-revisions/{source_revision_id}/zhiyan-runs",
@@ -193,18 +243,28 @@ def zhiyan_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=IMMUTABLE_MESSAGE,
             )
-        previous = latest_run(session, revision.id)
+        runs = load_runs(session, revision.id)
+        previous = runs.latest
         if previous is not None and previous.status in ACTIVE_EXECUTION_STATUSES:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ACTIVE_MESSAGE)
-        execution = new_zhiyan_execution(
+        now = datetime.now(UTC)
+        retry = runs.retry_state(now)
+        if previous is not None and not retry.allowed:
+            # The server owns retry timing; the client may only count down to it.
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=RATE_LIMITED_MESSAGE,
+                headers=_retry_after(retry, now),
+            )
+        execution = queue_run(
+            session,
             revision,
             owner_id=user.id,
             model=settings.zhiyan_model,
-            tool_policy=ToolPolicy(),
+            origin="manual" if previous is not None else "initial",
             attempt=previous.attempt + 1 if previous else 1,
-            created_at=datetime.now(UTC),
+            now=now,
         )
-        session.add(execution)
         try:
             session.commit()
         except IntegrityError as error:
@@ -214,9 +274,9 @@ def zhiyan_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=ACTIVE_MESSAGE,
             ) from error
-        dispatch(execution.id)
-        session.refresh(execution)
-        return zhiyan_state_response(revision, accepted_report(session, revision.id), execution)
+        dispatch_or_fail(database, dispatcher, execution.id)
+        session.expire_all()
+        return state_of(session, revision, now)
 
     @router.get(
         "/source-revisions/{source_revision_id}/zhiyan",
@@ -234,10 +294,52 @@ def zhiyan_router(
             source_revision_id=source_revision_id,
             owner_id=user.id,
         )
-        return zhiyan_state_response(
-            revision,
-            accepted_report(session, revision.id),
-            latest_run(session, revision.id),
+        return state_of(session, revision, datetime.now(UTC))
+
+    @router.get(
+        "/tasks/{task_id}/zhiyan",
+        operation_id="get_task_zhiyan",
+        response_model=TaskVersionZhiyanResponse,
+        tags=["zhiyan"],
+    )
+    def get_task_zhiyan(
+        task_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> TaskVersionZhiyanResponse:
+        """Every 知言 run of the task's current 任务版本, and whether 立言 may open."""
+        task = session.scalar(
+            select(Task).where(
+                Task.id == task_id,
+                Task.owner_id == user.id,
+                Task.number.is_not(None),
+            )
+        )
+        version = (
+            session.get(TaskVersion, task.current_version_id)
+            if task is not None and task.current_version_id is not None
+            else None
+        )
+        if task is None or version is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+        now = datetime.now(UTC)
+        sources = [
+            state_of(session, revision, now)
+            for revision in version_source_revisions(session, version.id)
+        ]
+        return TaskVersionZhiyanResponse(
+            task_id=str(task.id),
+            task_version_id=str(version.id),
+            task_version_number=version.number,
+            sources=sources,
+            liyan=liyan_capabilities(sources),
         )
 
     return router
+
+
+def _retry_after(retry: RetryState, now: datetime) -> dict[str, str]:
+    if retry.allowed_at is None:
+        return {}
+    seconds = max(1, int((retry.allowed_at - now).total_seconds()))
+    return {"Retry-After": str(seconds)}

@@ -62,7 +62,9 @@ def create_app(
     application.include_router(health_router(database))
     application.include_router(identity_router(current_user))
     application.include_router(task_router(database, current_user))
-    application.include_router(task_creation_router(current_settings, database, current_user))
+    application.include_router(
+        task_creation_router(current_settings, database, current_user, dispatcher)
+    )
     application.include_router(
         task_creation_session_router(current_settings, database, current_user, storage)
     )

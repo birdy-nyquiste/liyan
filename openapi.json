@@ -1203,6 +1203,55 @@
           }
         }
       }
+    },
+    "/tasks/{task_id}/zhiyan": {
+      "get": {
+        "tags": [
+          "zhiyan"
+        ],
+        "summary": "Get Task Zhiyan",
+        "description": "Every 知言 run of the task's current 任务版本, and whether 立言 may open.",
+        "operationId": "get_task_zhiyan",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionZhiyanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1981,6 +2030,31 @@
         ],
         "title": "LivenessResponse"
       },
+      "LiyanCapabilities": {
+        "properties": {
+          "can_generate": {
+            "type": "boolean",
+            "title": "Can Generate"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_generate",
+          "unavailable_reason"
+        ],
+        "title": "LiyanCapabilities"
+      },
       "LogicItem": {
         "properties": {
           "id": {
@@ -2673,6 +2747,41 @@
         ],
         "title": "TaskVersionDetail"
       },
+      "TaskVersionZhiyanResponse": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "task_version_number": {
+            "type": "integer",
+            "title": "Task Version Number"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ZhiyanStateResponse"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "liyan": {
+            "$ref": "#/components/schemas/LiyanCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_version_id",
+          "task_version_number",
+          "sources",
+          "liyan"
+        ],
+        "title": "TaskVersionZhiyanResponse"
+      },
       "UrlSourceCapabilities": {
         "properties": {
           "can_retry": {
@@ -2913,12 +3022,16 @@
           "can_cancel": {
             "type": "boolean",
             "title": "Can Cancel"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/ZhiyanRetryState"
           }
         },
         "type": "object",
         "required": [
           "can_start",
-          "can_cancel"
+          "can_cancel",
+          "retry"
         ],
         "title": "ZhiyanCapabilities"
       },
@@ -2996,6 +3109,38 @@
           "document"
         ],
         "title": "ZhiyanReportResponse"
+      },
+      "ZhiyanRetryState": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "allowed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed",
+          "remaining",
+          "allowed_at"
+        ],
+        "title": "ZhiyanRetryState",
+        "description": "Retry timing the server owns; the client only counts down to it."
       },
       "ZhiyanStateResponse": {
         "properties": {

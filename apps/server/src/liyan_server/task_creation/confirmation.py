@@ -20,9 +20,11 @@ from liyan_server.database import (
     TaskVersionSource,
     User,
 )
+from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_api import TaskSummary, task_summary
+from liyan_server.zhiyan.orchestration import queue_initial_runs
 
 
 class SourceInput(BaseModel):
@@ -121,8 +123,18 @@ def task_creation_router(
     settings: Settings,
     database: Database,
     current_user: CurrentUserDependency,
+    dispatcher: ExecutionDispatcher,
 ) -> APIRouter:
     router = APIRouter()
+
+    def start_zhiyan(owner_id: UUID, revision_ids: list[UUID]) -> None:
+        queue_initial_runs(
+            database,
+            dispatcher,
+            source_revision_ids=revision_ids,
+            owner_id=owner_id,
+            model=settings.zhiyan_model,
+        )
 
     @router.post(
         "/task-creation/prepare",
@@ -203,6 +215,11 @@ def task_creation_router(
                     detail="This creation request was already used with different content.",
                 )
             existing_revisions = _revision_responses(session, existing)
+            session.commit()  # Release the number lock before queueing outside this transaction.
+            start_zhiyan(
+                locked_user.id,
+                [UUID(revision.id) for revision in existing_revisions],
+            )
             return ConfirmTaskResponse(
                 task=task_summary(session, existing),
                 source_revision=existing_revisions[0],
@@ -302,6 +319,7 @@ def task_creation_router(
             )
             for revision in created_revisions
         ]
+        start_zhiyan(locked_user.id, [revision.id for revision in created_revisions])
         return ConfirmTaskResponse(
             task=task_summary(session, task),
             source_revision=revision_responses[0],

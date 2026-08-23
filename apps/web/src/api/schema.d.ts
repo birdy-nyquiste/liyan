@@ -414,6 +414,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{task_id}/zhiyan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Zhiyan
+         * @description Every 知言 run of the task's current 任务版本, and whether 立言 may open.
+         */
+        get: operations["get_task_zhiyan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -648,6 +668,13 @@ export interface components {
              * @constant
              */
             status: "alive";
+        };
+        /** LiyanCapabilities */
+        LiyanCapabilities: {
+            /** Can Generate */
+            can_generate: boolean;
+            /** Unavailable Reason */
+            unavailable_reason: string | null;
         };
         /** LogicItem */
         LogicItem: {
@@ -886,6 +913,18 @@ export interface components {
             /** Source Revisions */
             source_revisions: components["schemas"]["SourceRevisionSummary"][];
         };
+        /** TaskVersionZhiyanResponse */
+        TaskVersionZhiyanResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Task Version Id */
+            task_version_id: string;
+            /** Task Version Number */
+            task_version_number: number;
+            /** Sources */
+            sources: components["schemas"]["ZhiyanStateResponse"][];
+            liyan: components["schemas"]["LiyanCapabilities"];
+        };
         /** UrlSourceCapabilities */
         UrlSourceCapabilities: {
             /** Can Retry */
@@ -956,6 +995,7 @@ export interface components {
             can_start: boolean;
             /** Can Cancel */
             can_cancel: boolean;
+            retry: components["schemas"]["ZhiyanRetryState"];
         };
         /**
          * ZhiyanReportDocument
@@ -986,6 +1026,18 @@ export interface components {
              */
             created_at: string;
             document: components["schemas"]["ZhiyanReportDocument"];
+        };
+        /**
+         * ZhiyanRetryState
+         * @description Retry timing the server owns; the client only counts down to it.
+         */
+        ZhiyanRetryState: {
+            /** Allowed */
+            allowed: boolean;
+            /** Remaining */
+            remaining: number;
+            /** Allowed At */
+            allowed_at: string | null;
         };
         /** ZhiyanStateResponse */
         ZhiyanStateResponse: {
@@ -1799,6 +1851,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ZhiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_zhiyan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionZhiyanResponse"];
                 };
             };
             /** @description Validation Error */

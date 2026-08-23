@@ -9,8 +9,8 @@ export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
 export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
-export type TaskVersionDetail = components["schemas"]["TaskVersionDetail"];
 export type ZhiyanStateResponse = components["schemas"]["ZhiyanStateResponse"];
+export type TaskVersionZhiyanResponse = components["schemas"]["TaskVersionZhiyanResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -295,25 +295,13 @@ export async function editFileSourceContent(
   return result.data;
 }
 
-export async function getCurrentTaskVersion(
+export async function getTaskZhiyan(
   accessToken: string,
   taskId: string,
-): Promise<TaskVersionDetail> {
-  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/current-version", {
+): Promise<TaskVersionZhiyanResponse> {
+  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/zhiyan", {
     params: { path: { task_id: taskId } },
   });
-  if (!result.data) throw new ApiError(result.response.status);
-  return result.data;
-}
-
-export async function getZhiyanState(
-  accessToken: string,
-  sourceRevisionId: string,
-): Promise<ZhiyanStateResponse> {
-  const result = await authenticatedApi(accessToken).GET(
-    "/source-revisions/{source_revision_id}/zhiyan",
-    { params: { path: { source_revision_id: sourceRevisionId } } },
-  );
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
 }

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher
 from liyan_server.database import Database, Execution
+from liyan_server.execution_dispatch import CeleryExecutionDispatcher
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
 from liyan_server.object_storage import R2ObjectStorage
@@ -59,6 +60,7 @@ def analyze_source_execution(execution_id: str) -> None:
             base_url=settings.deepseek_base_url,
             timeout_seconds=settings.zhiyan_timeout_seconds,
         ),
+        CeleryExecutionDispatcher(settings.broker_url),
     )
 
 

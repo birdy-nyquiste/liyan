@@ -19,7 +19,11 @@ from sqlalchemy import (
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
-from liyan_server.execution_states import ExecutionStatus, SourcePreparationStatus
+from liyan_server.execution_states import (
+    ExecutionStatus,
+    RunOrigin,
+    SourcePreparationStatus,
+)
 
 
 def aware_utc(moment: datetime) -> datetime:
@@ -212,18 +216,23 @@ class Execution(Base):
     input_identity: Mapped[str] = mapped_column(String(64))
     input_snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
     attempt: Mapped[int] = mapped_column(Integer)
+    origin: Mapped[RunOrigin] = mapped_column(String(16), default="initial")
     status: Mapped[ExecutionStatus] = mapped_column(String(32))
     trace_id: Mapped[UUID] = mapped_column(Uuid, default=uuid4)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
     internal_error: Mapped[str | None] = mapped_column(Text)
     cancellation_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retry_allowed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
     )
+    #: Provider output that arrived too late to become business content, kept for
+    #: tracing only (Technical Spec §6.4). Never returned to a client.
+    stale_result: Mapped[dict[str, object] | None] = mapped_column(JSON)
 
 
 class UrlFetchResult(Base):

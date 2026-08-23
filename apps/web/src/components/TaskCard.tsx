@@ -1,8 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { getCurrentTaskVersion, renameTask, type TaskVersionDetail } from "../api/client";
+import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
-import { ZhiyanPanel } from "./ZhiyanPanel";
+import { TaskZhiyanArea } from "./TaskZhiyanArea";
 
 export function TaskCard({
   task: initialTask,
@@ -19,27 +19,11 @@ export function TaskCard({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState<TaskVersionDetail | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (opened) cardRef.current?.focus();
   }, [opened]);
-
-  useEffect(() => {
-    if (!opened || version) return;
-    let current = true;
-    void getCurrentTaskVersion(accessToken, task.id)
-      .then((loaded) => {
-        if (current) setVersion(loaded);
-      })
-      .catch(() => {
-        if (current) setError("任务版本加载失败，请稍后重试。");
-      });
-    return () => {
-      current = false;
-    };
-  }, [opened, version, accessToken, task.id]);
 
   async function saveName(event: FormEvent) {
     event.preventDefault();
@@ -104,18 +88,7 @@ export function TaskCard({
           </div>
         </div>
       )}
-      {opened && version ? (
-        <div className="task-card__zhiyan">
-          {version.source_revisions.map((revision) => (
-            <ZhiyanPanel
-              key={revision.id}
-              accessToken={accessToken}
-              sourceRevisionId={revision.id}
-              sourceTitle={revision.title}
-            />
-          ))}
-        </div>
-      ) : null}
+      {opened ? <TaskZhiyanArea accessToken={accessToken} taskId={task.id} /> : null}
     </article>
   );
 }

@@ -1,14 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import {
-  cancelExecution,
-  getZhiyanState,
-  startZhiyanRun,
-  type ZhiyanStateResponse,
-} from "../api/client";
+import type { ZhiyanStateResponse } from "../api/client";
 import { ZhiyanReportView } from "./ZhiyanReportView";
-
-const POLL_INTERVAL_MS = 2000;
 
 const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
   absent: "尚未分析",
@@ -18,114 +11,109 @@ const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
   succeeded: "分析已完成",
 };
 
+function secondsUntil(allowedAt: string | null, nowMs: number): number {
+  if (!allowedAt) return 0;
+  return Math.max(0, Math.ceil((new Date(allowedAt).getTime() - nowMs) / 1000));
+}
+
+/**
+ * The countdown the server dictates. The client only renders time it was given,
+ * so a reload or a second tab cannot shorten it.
+ */
+function useRetryCountdown(allowedAt: string | null, onElapsed: () => void): number {
+  const [seconds, setSeconds] = useState(() => secondsUntil(allowedAt, Date.now()));
+
+  useEffect(() => {
+    setSeconds(secondsUntil(allowedAt, Date.now()));
+    if (!allowedAt) return;
+    const ticker = setInterval(() => {
+      const left = secondsUntil(allowedAt, Date.now());
+      setSeconds(left);
+      if (left === 0) {
+        clearInterval(ticker);
+        onElapsed();
+      }
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [allowedAt, onElapsed]);
+
+  return seconds;
+}
+
 export function ZhiyanPanel({
-  accessToken,
-  sourceRevisionId,
-  sourceTitle,
-  pollIntervalMs = POLL_INTERVAL_MS,
+  state,
+  busy = false,
+  onStart,
+  onCancel,
+  onRetryAllowed,
 }: {
-  accessToken: string;
-  sourceRevisionId: string;
-  sourceTitle: string;
-  pollIntervalMs?: number;
+  state: ZhiyanStateResponse;
+  busy?: boolean;
+  onStart(sourceRevisionId: string): void;
+  onCancel(executionId: string): void;
+  onRetryAllowed(): void;
 }) {
-  const [state, setState] = useState<ZhiyanStateResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setState(await getZhiyanState(accessToken, sourceRevisionId));
-      setError(null);
-    } catch {
-      setError("知言状态加载失败，请稍后重试。");
-    }
-  }, [accessToken, sourceRevisionId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Poll only while an Execution is active, and stop at its terminal state.
-  useEffect(() => {
-    if (state?.status !== "running") return;
-    timer.current = setTimeout(() => void load(), pollIntervalMs);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [state, load, pollIntervalMs]);
-
-  async function start() {
-    setBusy(true);
-    try {
-      setState(await startZhiyanRun(accessToken, sourceRevisionId));
-      setError(null);
-    } catch {
-      setError("知言分析未能启动，请稍后重试。");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function cancel(executionId: string) {
-    setBusy(true);
-    try {
-      await cancelExecution(accessToken, executionId);
-      await load();
-    } catch {
-      setError("取消知言分析失败，请稍后重试。");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const execution = state?.execution ?? null;
-  const failure = execution?.error ?? null;
+  const { source_revision_id: revisionId, source_title: title, capabilities } = state;
+  const countdown = useRetryCountdown(capabilities.retry.allowed_at, onRetryAllowed);
+  const execution = state.execution;
+  const unfinished = state.status === "failed" || state.status === "cancelled";
+  const exhausted = capabilities.retry.remaining === 0;
+  const retryHint = !unfinished
+    ? null
+    : countdown > 0
+      ? exhausted
+        ? `重试次数已用完，${countdown} 秒后可再试。`
+        : `${countdown} 秒后可重试，还可重试 ${capabilities.retry.remaining} 次。`
+      : exhausted
+        ? "重试次数已用完，请稍后再试。"
+        : null;
 
   return (
-    <section className="zhiyan-panel" aria-labelledby={`zhiyan-${sourceRevisionId}`}>
+    <section className="zhiyan-panel" aria-labelledby={`zhiyan-${revisionId}`}>
       <div className="zhiyan-panel__heading">
         <div>
           <p className="section-kicker">知言报告</p>
-          <h3 id={`zhiyan-${sourceRevisionId}`}>{sourceTitle}</h3>
+          <h3 id={`zhiyan-${revisionId}`}>{title}</h3>
         </div>
         <span className="source-operation__status">
-          <span>{state ? STATUS_LABELS[state.status] : "加载中"}</span>
+          <span>{STATUS_LABELS[state.status]}</span>
         </span>
       </div>
 
-      {error ? (
+      {unfinished && execution?.error ? (
         <p role="alert" className="form-error">
-          {error}
-        </p>
-      ) : null}
-
-      {(state?.status === "failed" || state?.status === "cancelled") && failure ? (
-        <p role="alert" className="form-error">
-          {failure.message}
+          {execution.error.message}
         </p>
       ) : null}
 
       <div className="button-row">
-        {state?.capabilities.can_start ? (
-          <button className="button" type="button" disabled={busy} onClick={() => void start()}>
-            {state.status === "absent" ? "开始知言分析" : "重新分析"}
+        {state.status === "succeeded" ? null : (
+          <button
+            className="button"
+            type="button"
+            disabled={busy || !capabilities.can_start}
+            onClick={() => onStart(revisionId)}
+          >
+            {state.status === "absent" ? "开始知言分析" : "重试"}
           </button>
-        ) : null}
-        {state?.capabilities.can_cancel && execution ? (
+        )}
+        {capabilities.can_cancel && execution ? (
           <button
             className="button button--quiet"
             type="button"
             disabled={busy}
-            onClick={() => void cancel(execution.id)}
+            onClick={() => onCancel(execution.id)}
           >
-            取消分析
+            终止分析
           </button>
         ) : null}
       </div>
 
-      {state?.report ? (
+      {retryHint ? (
+        <p className="form-hint" role="status">{retryHint}</p>
+      ) : null}
+
+      {state.report ? (
         <>
           <p className="form-hint">
             成功的知言报告不可编辑或重新生成。生成于{" "}
@@ -133,8 +121,8 @@ export function ZhiyanPanel({
           </p>
           <ZhiyanReportView
             document={state.report.document}
-            sourceTitle={sourceTitle}
-            idPrefix={`zhiyan-${sourceRevisionId}`}
+            sourceTitle={title}
+            idPrefix={`zhiyan-${revisionId}`}
           />
         </>
       ) : null}

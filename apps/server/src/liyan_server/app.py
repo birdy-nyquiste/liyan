@@ -10,6 +10,7 @@ from liyan_server.database import Database
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher, ExecutionDispatcher
 from liyan_server.health import health_router
 from liyan_server.identity_api import identity_router
+from liyan_server.liyan.api import liyan_router
 from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.source_editing import source_editing_router
@@ -80,6 +81,9 @@ def create_app(
     )
     application.include_router(
         source_editing_router(current_settings, database, current_user, dispatcher)
+    )
+    application.include_router(
+        liyan_router(current_settings, database, current_user, dispatcher)
     )
     return application
 

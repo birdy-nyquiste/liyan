@@ -32,11 +32,15 @@ export function TaskZhiyanArea({
   taskId,
   versionId,
   pollIntervalMs = POLL_INTERVAL_MS,
+  showLiyanGate = true,
+  onLiyanAvailabilityChange,
 }: {
   accessToken: string;
   taskId: string;
   versionId?: string | null;
   pollIntervalMs?: number;
+  showLiyanGate?: boolean;
+  onLiyanAvailabilityChange?(available: boolean): void;
 }) {
   const [overview, setOverview] = useState<TaskVersionZhiyanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +70,10 @@ export function TaskZhiyanArea({
   const active = overview?.sources.some((source) => source.status === "running") ?? false;
   const open = overview?.liyan.can_generate ?? false;
   const zhiyanHeading = useFocusWhen<HTMLHeadingElement>(overview !== null && !open);
+
+  useEffect(() => {
+    onLiyanAvailabilityChange?.(open);
+  }, [onLiyanAvailabilityChange, open]);
 
   // Poll only while a run is unfinished, and stop at its terminal state.
   useEffect(() => {
@@ -134,7 +142,9 @@ export function TaskZhiyanArea({
           onRetryAllowed={() => void load()}
         />
       ))}
-      <LiyanGate liyan={overview.liyan} headingId={`liyan-${taskId}`} />
+      {showLiyanGate ? (
+        <LiyanGate liyan={overview.liyan} headingId={`liyan-${taskId}`} />
+      ) : null}
     </div>
   );
 }

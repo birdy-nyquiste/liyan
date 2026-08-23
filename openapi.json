@@ -1573,6 +1573,112 @@
           }
         }
       }
+    },
+    "/tasks/{task_id}/liyan": {
+      "get": {
+        "tags": [
+          "liyan"
+        ],
+        "summary": "Get Task Liyan",
+        "operationId": "get_task_liyan",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/liyan-runs": {
+      "post": {
+        "tags": [
+          "liyan"
+        ],
+        "summary": "Start Liyan Run",
+        "operationId": "start_liyan_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartLiyanRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1910,7 +2016,8 @@
             "enum": [
               "fetch_url",
               "parse_file",
-              "analyze_source"
+              "analyze_source",
+              "generate_article"
             ],
             "title": "Operation"
           },
@@ -2375,6 +2482,218 @@
           "unavailable_reason"
         ],
         "title": "LiyanCapabilities"
+      },
+      "LiyanResultResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "execution_id": {
+            "type": "string",
+            "title": "Execution Id"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "title": "Body Markdown"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "execution_id",
+          "task_version_id",
+          "title",
+          "body_markdown",
+          "instruction",
+          "prompt_version",
+          "model",
+          "created_at"
+        ],
+        "title": "LiyanResultResponse"
+      },
+      "LiyanRetryState": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "allowed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed",
+          "remaining",
+          "allowed_at"
+        ],
+        "title": "LiyanRetryState"
+      },
+      "LiyanRunCapabilities": {
+        "properties": {
+          "can_generate": {
+            "type": "boolean",
+            "title": "Can Generate"
+          },
+          "can_cancel": {
+            "type": "boolean",
+            "title": "Can Cancel"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/LiyanRetryState"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_generate",
+          "can_cancel",
+          "retry",
+          "unavailable_reason"
+        ],
+        "title": "LiyanRunCapabilities"
+      },
+      "LiyanRunRequestResponse": {
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "title": "Instruction"
+          },
+          "working_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkingCopyInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "instruction",
+          "working_copy"
+        ],
+        "title": "LiyanRunRequestResponse"
+      },
+      "LiyanStateResponse": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LiyanStatus"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiyanResultResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiyanRunRequestResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/LiyanRunCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_version_id",
+          "status",
+          "execution",
+          "result",
+          "request",
+          "capabilities"
+        ],
+        "title": "LiyanStateResponse"
+      },
+      "LiyanStatus": {
+        "type": "string",
+        "enum": [
+          "absent",
+          "running",
+          "cancelled",
+          "failed",
+          "succeeded"
+        ]
       },
       "LogicItem": {
         "properties": {
@@ -3032,6 +3351,34 @@
         ],
         "title": "SourceWarning"
       },
+      "StartLiyanRunRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction",
+            "default": ""
+          },
+          "working_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkingCopyInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "StartLiyanRunRequest"
+      },
       "TaskCreationSessionResponse": {
         "properties": {
           "client_session_id": {
@@ -3580,6 +3927,24 @@
           "empty_state"
         ],
         "title": "ViewpointSection"
+      },
+      "WorkingCopyInput": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "title": "Body Markdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "body_markdown"
+        ],
+        "title": "WorkingCopyInput"
       },
       "ZhiyanCapabilities": {
         "properties": {

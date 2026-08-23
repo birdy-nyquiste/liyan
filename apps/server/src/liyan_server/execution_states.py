@@ -23,6 +23,7 @@ _CANCELLED_MESSAGES: dict[str, str] = {
     "fetch_url": "Fetching was cancelled. Retry it or replace this source.",
     "parse_file": "Parsing was cancelled. Retry it or replace this source.",
     "analyze_source": "知言分析已取消，可重新发起。",
+    "generate_article": "立言生成已取消，可重新发起。",
 }
 
 GENERIC_CANCELLED_MESSAGE = "The work was cancelled. Start it again when you are ready."

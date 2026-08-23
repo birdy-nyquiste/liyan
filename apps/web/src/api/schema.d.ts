@@ -536,6 +536,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{task_id}/liyan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task Liyan */
+        get: operations["get_task_liyan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}/liyan-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Liyan Run */
+        post: operations["start_liyan_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -651,7 +685,7 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "fetch_url" | "parse_file" | "analyze_source";
+            operation: "fetch_url" | "parse_file" | "analyze_source" | "generate_article";
             status: components["schemas"]["ExecutionStatus"];
             /** Attempt */
             attempt: number;
@@ -778,6 +812,69 @@ export interface components {
             /** Unavailable Reason */
             unavailable_reason: string | null;
         };
+        /** LiyanResultResponse */
+        LiyanResultResponse: {
+            /** Id */
+            id: string;
+            /** Execution Id */
+            execution_id: string;
+            /** Task Version Id */
+            task_version_id: string;
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
+            /** Instruction */
+            instruction: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Model */
+            model: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** LiyanRetryState */
+        LiyanRetryState: {
+            /** Allowed */
+            allowed: boolean;
+            /** Remaining */
+            remaining: number;
+            /** Allowed At */
+            allowed_at: string | null;
+        };
+        /** LiyanRunCapabilities */
+        LiyanRunCapabilities: {
+            /** Can Generate */
+            can_generate: boolean;
+            /** Can Cancel */
+            can_cancel: boolean;
+            retry: components["schemas"]["LiyanRetryState"];
+            /** Unavailable Reason */
+            unavailable_reason: string | null;
+        };
+        /** LiyanRunRequestResponse */
+        LiyanRunRequestResponse: {
+            /** Instruction */
+            instruction: string;
+            working_copy: components["schemas"]["WorkingCopyInput"] | null;
+        };
+        /** LiyanStateResponse */
+        LiyanStateResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Task Version Id */
+            task_version_id: string;
+            status: components["schemas"]["LiyanStatus"];
+            execution: components["schemas"]["ExecutionResponse"] | null;
+            result: components["schemas"]["LiyanResultResponse"] | null;
+            request: components["schemas"]["LiyanRunRequestResponse"] | null;
+            capabilities: components["schemas"]["LiyanRunCapabilities"];
+        };
+        /** @enum {string} */
+        LiyanStatus: "absent" | "running" | "cancelled" | "failed" | "succeeded";
         /** LogicItem */
         LogicItem: {
             id: components["schemas"]["Narrative"];
@@ -985,6 +1082,17 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** StartLiyanRunRequest */
+        StartLiyanRunRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
+            working_copy?: components["schemas"]["WorkingCopyInput"] | null;
+        };
         /** TaskCreationSessionResponse */
         TaskCreationSessionResponse: {
             /** Client Session Id */
@@ -1171,6 +1279,13 @@ export interface components {
             items: components["schemas"]["ViewpointItem"][];
             /** Empty State */
             empty_state: string | null;
+        };
+        /** WorkingCopyInput */
+        WorkingCopyInput: {
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
         };
         /** ZhiyanCapabilities */
         ZhiyanCapabilities: {
@@ -2259,6 +2374,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskVersionSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_liyan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_liyan_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLiyanRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiyanStateResponse"];
                 };
             };
             /** @description Validation Error */

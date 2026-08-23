@@ -21,6 +21,13 @@ from sqlalchemy.orm import Session
 from liyan_server.app import create_app
 from liyan_server.auth import InvalidAccessToken, VerifiedIdentity
 from liyan_server.database import Database, Execution
+from liyan_server.liyan.provider import (
+    LiyanProviderFailure,
+    LiyanProviderResult,
+    LiyanRequest,
+)
+from liyan_server.liyan.runs import LIYAN_OPERATION
+from liyan_server.liyan.worker import process_liyan_run
 from liyan_server.settings import Settings
 from liyan_server.zhiyan.provider import (
     SearchAction,
@@ -145,6 +152,32 @@ class DeterministicZhiyanProvider:
         return outcome
 
 
+class DeterministicLiyanProvider:
+    def __init__(self) -> None:
+        self.outcomes: list[LiyanProviderResult | LiyanProviderFailure] = []
+        self.requests: list[LiyanRequest] = []
+
+    def generate(self, request: LiyanRequest) -> LiyanProviderResult:
+        self.requests.append(request)
+        outcome = self.outcomes.pop(0) if self.outcomes else LiyanProviderResult(
+            article_text=json.dumps(
+                {
+                    "title": "四天工作制真正考验的是什么",
+                    "body_markdown": (
+                        "工时只是生产方式的一部分。\n\n"
+                        "## 现实条件\n\n改变流程比压缩时间更重要。"
+                    ),
+                },
+                ensure_ascii=False,
+            ),
+            model="deepseek-v4-flash",
+            response_id="liyan_resp_1",
+        )
+        if isinstance(outcome, LiyanProviderFailure):
+            raise outcome
+        return outcome
+
+
 class RecordingDispatcher:
     """Holds queued Executions so a test chooses when each one runs."""
 
@@ -152,12 +185,28 @@ class RecordingDispatcher:
         self.database_url = database_url
         self.execution_ids: list[UUID] = []
         self.provider = DeterministicZhiyanProvider()
+        self.liyan_provider = DeterministicLiyanProvider()
 
     def dispatch(self, execution_id: UUID) -> None:
         self.execution_ids.append(execution_id)
 
     def run_next(self) -> None:
-        process_zhiyan_run(self.database_url, self.execution_ids.pop(0), self.provider, self)
+        execution_id = self.execution_ids.pop(0)
+        database = Database(self.database_url)
+        assert database.engine is not None
+        with Session(database.engine) as session:
+            execution = session.get(Execution, execution_id)
+            operation = execution.operation if execution else None
+        database.dispose()
+        if operation == LIYAN_OPERATION:
+            process_liyan_run(
+                self.database_url,
+                execution_id,
+                self.liyan_provider,
+                self,
+            )
+        else:
+            process_zhiyan_run(self.database_url, execution_id, self.provider, self)
 
     def run_all(self) -> None:
         while self.execution_ids:

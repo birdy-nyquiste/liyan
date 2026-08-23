@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { TaskZhiyanArea } from "./TaskZhiyanArea";
+import { LiyanPanel } from "./LiyanPanel";
 import { TaskSourceVersions } from "./TaskSourceVersions";
 
 export function TaskCard({
@@ -23,6 +24,7 @@ export function TaskCard({
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
+  const [liyanReady, setLiyanReady] = useState(false);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -97,7 +99,10 @@ export function TaskCard({
           <TaskSourceVersions
             accessToken={accessToken}
             taskId={task.id}
-            onVersionSelected={setSelectedVersionId}
+            onVersionSelected={(versionId) => {
+              setSelectedVersionId(versionId);
+              setLiyanReady(false);
+            }}
             onCurrentVersionChanged={(version) => {
               setSelectedVersionId(version.id);
               setTask((current) => ({
@@ -114,7 +119,12 @@ export function TaskCard({
             accessToken={accessToken}
             taskId={task.id}
             versionId={selectedVersionId}
+            showLiyanGate={!liyanReady}
+            onLiyanAvailabilityChange={setLiyanReady}
           />
+          {selectedVersionId === task.current_version_id && liyanReady ? (
+            <LiyanPanel accessToken={accessToken} taskId={task.id} />
+          ) : null}
         </div>
       ) : null}
     </article>

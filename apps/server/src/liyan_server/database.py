@@ -222,6 +222,12 @@ class Execution(Base):
             "attempt",
             name="uq_executions_target_input_attempt",
         ),
+        UniqueConstraint(
+            "owner_id",
+            "operation",
+            "idempotency_key",
+            name="uq_executions_owner_operation_idempotency",
+        ),
         Index("ix_executions_owner_id", "owner_id"),
         Index("ix_executions_target_id", "target_id"),
         Index(
@@ -262,6 +268,8 @@ class Execution(Base):
     #: Provider output that arrived too late to become business content, kept for
     #: tracing only (Technical Spec §6.4). Never returned to a client.
     stale_result: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    request_hash: Mapped[str | None] = mapped_column(String(64))
 
 
 class UrlFetchResult(Base):
@@ -326,6 +334,50 @@ class ZhiyanReport(Base):
     provider_response_id: Mapped[str | None] = mapped_column(String(128))
     document: Mapped[dict[str, object]] = mapped_column(JSON)
     search_actions: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LiyanArticle(Base):
+    """The stable generation target for one immutable 任务版本."""
+
+    __tablename__ = "liyan_articles"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    task_version_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("task_versions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LiyanRunResult(Base):
+    """One immutable complete article returned by a successful AgentRun."""
+
+    __tablename__ = "liyan_run_results"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    execution_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("executions.id", ondelete="CASCADE"), unique=True
+    )
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    article_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("liyan_articles.id", ondelete="CASCADE"), index=True
+    )
+    task_version_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("task_versions.id", ondelete="CASCADE")
+    )
+    prompt_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    provider_response_id: Mapped[str | None] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(255))
+    body_markdown: Mapped[str] = mapped_column(Text)
+    instruction: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

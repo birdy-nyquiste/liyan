@@ -16,6 +16,8 @@ export type TaskVersionSnapshot = components["schemas"]["TaskVersionSnapshot"];
 export type VersionSource = components["schemas"]["VersionSource"];
 export type SourceEditSessionResponse = components["schemas"]["SourceEditSessionResponse"];
 export type SaveSourceEditRequest = components["schemas"]["SaveSourceEditRequest"];
+export type LiyanStateResponse = components["schemas"]["LiyanStateResponse"];
+export type StartLiyanRunRequest = components["schemas"]["StartLiyanRunRequest"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -402,6 +404,30 @@ export async function startZhiyanRun(
     "/source-revisions/{source_revision_id}/zhiyan-runs",
     { params: { path: { source_revision_id: sourceRevisionId } } },
   );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getTaskLiyan(
+  accessToken: string,
+  taskId: string,
+): Promise<LiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/liyan", {
+    params: { path: { task_id: taskId } },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function startLiyanRun(
+  accessToken: string,
+  taskId: string,
+  request: StartLiyanRunRequest,
+): Promise<LiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).POST("/tasks/{task_id}/liyan-runs", {
+    params: { path: { task_id: taskId } },
+    body: request,
+  });
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
 }

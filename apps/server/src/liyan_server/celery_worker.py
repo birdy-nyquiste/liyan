@@ -8,6 +8,8 @@ from liyan_server.database import Database, Execution
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
+from liyan_server.liyan.deepseek import DeepSeekLiyanProvider
+from liyan_server.liyan.worker import process_liyan_run
 from liyan_server.object_storage import R2ObjectStorage
 from liyan_server.settings import Settings
 from liyan_server.url_fetch_worker import process_url_fetch
@@ -48,6 +50,8 @@ def process_execution(execution_id: str) -> None:
         )
     elif operation == "analyze_source":
         analyze_source_execution(execution_id)
+    elif operation == "generate_article":
+        generate_article_execution(execution_id)
 
 
 @celery_app.task(name="liyan.analyze_source")  # type: ignore[untyped-decorator]
@@ -59,6 +63,20 @@ def analyze_source_execution(execution_id: str) -> None:
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             timeout_seconds=settings.zhiyan_timeout_seconds,
+        ),
+        CeleryExecutionDispatcher(settings.broker_url),
+    )
+
+
+@celery_app.task(name="liyan.generate_article")  # type: ignore[untyped-decorator]
+def generate_article_execution(execution_id: str) -> None:
+    process_liyan_run(
+        settings.database_url,
+        UUID(execution_id),
+        DeepSeekLiyanProvider(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            timeout_seconds=settings.liyan_timeout_seconds,
         ),
         CeleryExecutionDispatcher(settings.broker_url),
     )

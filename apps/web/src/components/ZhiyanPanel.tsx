@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-
 import type { ZhiyanStateResponse } from "../api/client";
+import { useRetryCountdown } from "./useRetryCountdown";
 import { ZhiyanReportView } from "./ZhiyanReportView";
 
 const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
@@ -10,35 +9,6 @@ const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
   failed: "分析未完成",
   succeeded: "分析已完成",
 };
-
-function secondsUntil(allowedAt: string | null, nowMs: number): number {
-  if (!allowedAt) return 0;
-  return Math.max(0, Math.ceil((new Date(allowedAt).getTime() - nowMs) / 1000));
-}
-
-/**
- * The countdown the server dictates. The client only renders time it was given,
- * so a reload or a second tab cannot shorten it.
- */
-function useRetryCountdown(allowedAt: string | null, onElapsed: () => void): number {
-  const [seconds, setSeconds] = useState(() => secondsUntil(allowedAt, Date.now()));
-
-  useEffect(() => {
-    setSeconds(secondsUntil(allowedAt, Date.now()));
-    if (!allowedAt) return;
-    const ticker = setInterval(() => {
-      const left = secondsUntil(allowedAt, Date.now());
-      setSeconds(left);
-      if (left === 0) {
-        clearInterval(ticker);
-        onElapsed();
-      }
-    }, 1000);
-    return () => clearInterval(ticker);
-  }, [allowedAt, onElapsed]);
-
-  return seconds;
-}
 
 export function ZhiyanPanel({
   state,

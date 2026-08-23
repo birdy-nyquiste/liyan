@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     zhiyan_model: str = "deepseek-v4-flash"
     zhiyan_timeout_seconds: int = 300
+    liyan_model: str = "deepseek-v4-flash"
+    liyan_timeout_seconds: int = 300
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

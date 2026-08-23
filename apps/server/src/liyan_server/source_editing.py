@@ -9,13 +9,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import (
     Database,
     Execution,
+    LiyanArticle,
     Source,
     SourceEditSession,
     SourcePreparation,
@@ -28,6 +29,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
+from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content
 from liyan_server.task_api import version_source_revisions
@@ -112,13 +114,22 @@ def _has_active_runs(session: Session, version_id: UUID) -> bool:
     revision_ids = select(TaskVersionSource.source_revision_id).where(
         TaskVersionSource.task_version_id == version_id
     )
+    article_ids = select(LiyanArticle.id).where(LiyanArticle.task_version_id == version_id)
     return (
         session.scalar(
             select(func.count())
             .select_from(Execution)
             .where(
-                Execution.operation == ZHIYAN_OPERATION,
-                Execution.target_id.in_(revision_ids),
+                or_(
+                    and_(
+                        Execution.operation == ZHIYAN_OPERATION,
+                        Execution.target_id.in_(revision_ids),
+                    ),
+                    and_(
+                        Execution.operation == LIYAN_OPERATION,
+                        Execution.target_id.in_(article_ids),
+                    ),
+                ),
                 Execution.status.in_(ACTIVE_EXECUTION_STATUSES),
             )
         )

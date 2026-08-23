@@ -94,11 +94,16 @@ def submission_url(submission: BlogPreviewSubmission) -> str:
 
 
 def submission_body(submission: BlogPreviewSubmission) -> dict[str, object]:
-    """The minimal v0.11 payload; optional Blog metadata stays out of the MVP."""
+    """The minimal v0.11 payload; optional Blog metadata stays out of the MVP.
+
+    `author` is an object, and Blog treats one `name` as one author across
+    submissions. `slug`, `excerpt`, `category`, `tags`, `image`, and the
+    bilingual fields are all optional and stay out of the MVP.
+    """
     return {
         "title": submission.title,
         "content": submission.body_markdown,
-        "author": submission.author,
+        "author": {"name": submission.author},
         "postType": POST_TYPE,
         "status": PREVIEW_STATUS,
     }

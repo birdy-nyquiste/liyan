@@ -216,7 +216,7 @@ def test_the_blog_request_carries_only_the_fields_the_mvp_contract_requires(
     assert submission_body(submission) == {
         "title": revision["title"],
         "content": revision["body_markdown"],
-        "author": "Zeng Zong",
+        "author": {"name": "Zeng Zong"},
         "postType": "opinion",
         "status": "preview",
     }

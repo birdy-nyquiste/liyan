@@ -55,7 +55,7 @@ def test_the_upload_only_endpoint_receives_the_bearer_credential_and_the_minimal
     assert body == {
         "title": "四天工作制的真问题",
         "content": "工时只是生产方式的一部分。",
-        "author": "Zeng Zong",
+        "author": {"name": "Zeng Zong"},
         "postType": "opinion",
         "status": "preview",
     }

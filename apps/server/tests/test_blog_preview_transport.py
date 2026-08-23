@@ -87,7 +87,7 @@ def test_a_real_request_carries_the_bearer_token_and_the_minimal_json_body(
     assert received["body"] == {
         "title": "四天工作制的真问题",
         "content": "工时只是生产方式的一部分。\n\n## 现实条件\n\n改变流程比压缩时间更重要。",
-        "author": "Zeng Zong",
+        "author": {"name": "Zeng Zong"},
         "postType": "opinion",
         "status": "preview",
     }

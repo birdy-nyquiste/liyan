@@ -18,7 +18,11 @@ from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES, SourcePreparationStatus
-from liyan_server.object_storage import ObjectStorage
+from liyan_server.object_storage import (
+    UNCONFIGURED_MESSAGE,
+    ObjectStorage,
+    ObjectStorageUnconfigured,
+)
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_creation.contracts import (
@@ -189,6 +193,17 @@ def _store_upload(
 ) -> None:
     try:
         storage.put(object_key, upload.stream, content_type=upload.content_type)
+    except ObjectStorageUnconfigured as error:
+        # Permanent until an operator acts. Telling the user to retry would be
+        # advice that cannot ever work.
+        logger.error(
+            "file_upload_storage_unconfigured",
+            extra={"source_id": str(source_id), "reason": str(error)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=UNCONFIGURED_MESSAGE,
+        ) from error
     except Exception as error:
         logger.exception("file_upload_failed", extra={"source_id": str(source_id)})
         raise HTTPException(

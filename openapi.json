@@ -3387,6 +3387,14 @@
         "type": "string",
         "minLength": 1
       },
+      "ObjectStorageState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "unconfigured",
+          "unreachable"
+        ]
+      },
       "OverviewSection": {
         "properties": {
           "content_summary": {
@@ -3712,11 +3720,15 @@
               "unavailable"
             ],
             "title": "Database"
+          },
+          "object_storage": {
+            "$ref": "#/components/schemas/ObjectStorageState"
           }
         },
         "type": "object",
         "required": [
-          "database"
+          "database",
+          "object_storage"
         ],
         "title": "ReadinessChecks"
       },

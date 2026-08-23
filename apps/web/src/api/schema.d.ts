@@ -1123,6 +1123,8 @@ export interface components {
             empty_state: string | null;
         };
         Narrative: string;
+        /** @enum {string} */
+        ObjectStorageState: "ready" | "unconfigured" | "unreachable";
         /** OverviewSection */
         OverviewSection: {
             content_summary: components["schemas"]["Narrative"];
@@ -1232,6 +1234,7 @@ export interface components {
              * @enum {string}
              */
             database: "available" | "unavailable";
+            object_storage: components["schemas"]["ObjectStorageState"];
         };
         /** ReadinessResponse */
         ReadinessResponse: {

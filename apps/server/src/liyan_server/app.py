@@ -46,16 +46,23 @@ def create_app(
         database,
     )
     dispatcher = execution_dispatcher or CeleryExecutionDispatcher(current_settings.broker_url)
-    # Read the 发布目标 now so unusable configuration fails the boot rather
-    # than the first 发布任务.
-    configured_targets(current_settings)
-    stranded = unreachable_targets(current_settings)
-    if stranded:
-        logger.warning(
-            "publication_target_unreachable",
-            extra={"targets": list(stranded)},
-        )
     storage = object_storage or R2ObjectStorage(current_settings)
+
+    # Configuration is checked once, here, so an operator learns about a gap at
+    # startup instead of from the first user who trips over it.
+    #
+    # Read the 发布目标 now so unusable configuration fails the boot rather than
+    # the first 发布任务.
+    configured_targets(current_settings)
+    if stranded := unreachable_targets(current_settings):
+        logger.warning("publication_target_unreachable", extra={"targets": list(stranded)})
+    # An empty LIYAN_R2_* stays invisible until somebody uploads a file, which
+    # is far too late to learn it.
+    if missing_storage := storage.missing_settings():
+        logger.warning(
+            "object_storage_unconfigured",
+            extra={"missing": list(missing_storage), "affects": "file source intake"},
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -75,7 +82,7 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    application.include_router(health_router(database))
+    application.include_router(health_router(database, storage))
     application.include_router(identity_router(current_user))
     application.include_router(task_router(database, current_user))
     application.include_router(

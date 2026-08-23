@@ -4,7 +4,7 @@ import sys
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 from uuid import UUID
 from zipfile import ZipFile
 
@@ -16,7 +16,11 @@ from liyan_server.app import create_app
 from liyan_server.auth import InvalidAccessToken, VerifiedIdentity
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
-from liyan_server.object_storage import ObjectStorage
+from liyan_server.object_storage import (
+    ObjectStorage,
+    ObjectStorageState,
+    ObjectStorageUnconfigured,
+)
 from liyan_server.settings import Settings
 
 
@@ -447,3 +451,70 @@ def test_prepared_file_can_be_replaced_without_losing_its_session_identity(
     assert ready["status"] == "ready"
     assert ready["title"] == "new"
     assert ready["body"] == "# New\n\nReplacement body."
+
+
+class UnconfiguredStorage(MemoryObjectStorage):
+    """An operator never filled in LIYAN_R2_*."""
+
+    def missing_settings(self) -> tuple[str, ...]:
+        return ("LIYAN_R2_BUCKET",)
+
+    def put(self, key: str, stream: BinaryIO, *, content_type: str) -> None:
+        raise ObjectStorageUnconfigured("Object storage is not configured: LIYAN_R2_BUCKET.")
+
+    def state(self) -> ObjectStorageState:
+        return "unconfigured"
+
+
+class UnreachableStorage(MemoryObjectStorage):
+    """A configured bucket having a bad minute."""
+
+    def put(self, key: str, stream: BinaryIO, *, content_type: str) -> None:
+        raise OSError("Connection reset by peer.")
+
+
+def _upload_to(tmp_path: Path, storage: MemoryObjectStorage) -> Any:
+    database_url = migrated_database(tmp_path)
+    dispatcher = RecordingExecutionDispatcher(database_url, storage)
+    client = TestClient(
+        create_app(
+            Settings(database_url=database_url, allowed_emails="writer@example.com"),
+            jwt_verifier=DeterministicJwtVerifier(),
+            execution_dispatcher=dispatcher,
+            object_storage=storage,
+        )
+    )
+    return client.post(
+        "/task-creation/file-sources",
+        headers={"Authorization": "Bearer allowed-token"},
+        data={"client_session_id": "session-1", "client_source_id": "source-1"},
+        files={"file": ("notes.md", b"# Heading\n\nUseful body.", "text/markdown")},
+    )
+
+
+def test_an_upload_without_configured_storage_does_not_advise_a_pointless_retry(
+    tmp_path: Path,
+) -> None:
+    response = _upload_to(tmp_path, UnconfiguredStorage())
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert "not configured" in detail
+    assert "Retrying will not help" in detail
+    # The two working intake routes never touch object storage, so the answer
+    # can honestly point at them.
+    assert "Paste the text or submit a URL instead" in detail
+
+
+def test_a_transient_storage_fault_still_reads_as_worth_retrying(tmp_path: Path) -> None:
+    response = _upload_to(tmp_path, UnreachableStorage())
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The file could not be stored. Try again later."
+
+
+def test_the_two_storage_failures_never_give_the_same_answer(tmp_path: Path) -> None:
+    unconfigured = _upload_to(tmp_path, UnconfiguredStorage())
+    unreachable = _upload_to(tmp_path, UnreachableStorage())
+
+    assert unconfigured.json()["detail"] != unreachable.json()["detail"]

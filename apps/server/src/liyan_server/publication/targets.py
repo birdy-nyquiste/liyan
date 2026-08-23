@@ -84,6 +84,24 @@ def targets_for(settings: Settings, email: str) -> tuple[PublicationTarget, ...]
     )
 
 
+def unreachable_targets(settings: Settings) -> tuple[str, ...]:
+    """Keys of targets no one who can sign in is authorized to use.
+
+    Authorization and the sign-in allowlist are separate settings, so an
+    address that is named here but cannot log in makes a target invisible with
+    nothing to see anywhere. That is always a configuration mistake, and it is
+    quiet enough to be worth saying out loud at startup.
+    """
+    allowed = settings.normalized_allowed_emails
+    if not allowed:
+        return ()
+    return tuple(
+        target.key
+        for target in configured_targets(settings)
+        if not (target.emails & allowed)
+    )
+
+
 def target_for(settings: Settings, email: str, key: str) -> PublicationTarget | None:
     """The one target this user may publish to under `key`, if any.
 

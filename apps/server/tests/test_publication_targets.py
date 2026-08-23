@@ -72,3 +72,27 @@ def test_a_target_nobody_can_reach_is_refused_while_reading_config(
     # at startup rather than from a user who cannot see their destination.
     with pytest.raises(ValueError):
         configured_targets(_settings({**ENTRY, "emails": emails}))
+
+
+def test_a_target_no_signed_in_user_can_reach_is_named_out_loud() -> None:
+    from liyan_server.publication.targets import unreachable_targets
+
+    # The address is authorized on the target but cannot sign in, so the target
+    # would simply never appear for anyone.
+    settings = Settings(
+        publication_targets=json.dumps([{**ENTRY, "emails": ["nobody@example.com"]}]),
+        allowed_emails="writer@example.com",
+    )
+
+    assert unreachable_targets(settings) == ("lsforum",)
+
+
+def test_a_target_someone_can_actually_use_is_not_reported() -> None:
+    from liyan_server.publication.targets import unreachable_targets
+
+    settings = Settings(
+        publication_targets=json.dumps(ENTRY and [ENTRY]),
+        allowed_emails="Writer@Example.com",
+    )
+
+    assert unreachable_targets(settings) == ()

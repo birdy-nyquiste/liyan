@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -13,7 +14,7 @@ from liyan_server.identity_api import identity_router
 from liyan_server.liyan.api import liyan_router
 from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
 from liyan_server.publication.api import publication_router
-from liyan_server.publication.targets import configured_targets
+from liyan_server.publication.targets import configured_targets, unreachable_targets
 from liyan_server.settings import Settings
 from liyan_server.source_editing import source_editing_router
 from liyan_server.task_api import task_router
@@ -22,6 +23,8 @@ from liyan_server.task_creation.file_api import file_source_router
 from liyan_server.task_creation.session_api import task_creation_session_router
 from liyan_server.task_creation.url_api import url_source_router
 from liyan_server.zhiyan.api import zhiyan_router
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -46,6 +49,12 @@ def create_app(
     # Read the 发布目标 now so unusable configuration fails the boot rather
     # than the first 发布任务.
     configured_targets(current_settings)
+    stranded = unreachable_targets(current_settings)
+    if stranded:
+        logger.warning(
+            "publication_target_unreachable",
+            extra={"targets": list(stranded)},
+        )
     storage = object_storage or R2ObjectStorage(current_settings)
 
     @asynccontextmanager

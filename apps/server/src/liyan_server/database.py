@@ -381,6 +381,44 @@ class LiyanRunResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LiyanRevision(Base):
+    """One immutable article Revision created only by an explicit user Save."""
+
+    __tablename__ = "liyan_revisions"
+    __table_args__ = (
+        UniqueConstraint("article_id", "number", name="uq_liyan_revisions_article_number"),
+        UniqueConstraint(
+            "owner_id",
+            "idempotency_key",
+            name="uq_liyan_revisions_owner_idempotency_key",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    article_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("liyan_articles.id", ondelete="CASCADE"), index=True
+    )
+    task_version_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("task_versions.id", ondelete="CASCADE")
+    )
+    number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(255))
+    body_markdown: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    base_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("liyan_revisions.id", name="fk_liyan_revisions_base_revision_id")
+    )
+    restored_from_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("liyan_revisions.id", name="fk_liyan_revisions_restored_from_revision_id"),
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Database:
     def __init__(self, database_url: str) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}

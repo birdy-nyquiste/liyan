@@ -1596,6 +1596,23 @@
               "format": "uuid",
               "title": "Task Id"
             }
+          },
+          {
+            "name": "working_copy_hash",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Working Copy Hash"
+            }
           }
         ],
         "responses": {
@@ -1658,6 +1675,132 @@
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/liyan-revisions": {
+      "post": {
+        "tags": [
+          "liyan"
+        ],
+        "summary": "Save Liyan Revision",
+        "operationId": "save_liyan_revision",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveLiyanRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/liyan-revisions/{revision_id}/restore": {
+      "post": {
+        "tags": [
+          "liyan"
+        ],
+        "summary": "Restore Liyan Revision",
+        "operationId": "restore_liyan_revision",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Revision Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreLiyanRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -2647,6 +2790,106 @@
         ],
         "title": "LiyanRetryState"
       },
+      "LiyanRevisionHistoryResponse": {
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiyanRevisionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "historical": {
+            "items": {
+              "$ref": "#/components/schemas/LiyanRevisionResponse"
+            },
+            "type": "array",
+            "title": "Historical"
+          },
+          "historical_limit": {
+            "type": "integer",
+            "title": "Historical Limit",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "historical"
+        ],
+        "title": "LiyanRevisionHistoryResponse"
+      },
+      "LiyanRevisionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "title": "Body Markdown"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "base_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision Id"
+          },
+          "restored_from_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From Revision Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "task_version_id",
+          "title",
+          "body_markdown",
+          "content_hash",
+          "base_revision_id",
+          "restored_from_revision_id",
+          "created_at"
+        ],
+        "title": "LiyanRevisionResponse"
+      },
       "LiyanRunCapabilities": {
         "properties": {
           "can_generate": {
@@ -2656,6 +2899,32 @@
           "can_cancel": {
             "type": "boolean",
             "title": "Can Cancel"
+          },
+          "can_save": {
+            "type": "boolean",
+            "title": "Can Save"
+          },
+          "publishable_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publishable Revision Id"
+          },
+          "publication_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Unavailable Reason"
           },
           "retry": {
             "$ref": "#/components/schemas/LiyanRetryState"
@@ -2676,6 +2945,9 @@
         "required": [
           "can_generate",
           "can_cancel",
+          "can_save",
+          "publishable_revision_id",
+          "publication_unavailable_reason",
           "retry",
           "unavailable_reason"
         ],
@@ -2747,6 +3019,9 @@
               }
             ]
           },
+          "revisions": {
+            "$ref": "#/components/schemas/LiyanRevisionHistoryResponse"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/LiyanRunCapabilities"
           }
@@ -2759,6 +3034,7 @@
           "execution",
           "result",
           "request",
+          "revisions",
           "capabilities"
         ],
         "title": "LiyanStateResponse"
@@ -3011,6 +3287,19 @@
         ],
         "title": "ReplaceUrlSourceRequest"
       },
+      "RestoreLiyanRevisionRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "RestoreLiyanRevisionRequest"
+      },
       "RestoreVersionRequest": {
         "properties": {
           "idempotency_key": {
@@ -3023,6 +3312,44 @@
           "idempotency_key"
         ],
         "title": "RestoreVersionRequest"
+      },
+      "SaveLiyanRevisionRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "base_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Body Markdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "title",
+          "body_markdown"
+        ],
+        "title": "SaveLiyanRevisionRequest"
       },
       "SaveSourceEditRequest": {
         "properties": {

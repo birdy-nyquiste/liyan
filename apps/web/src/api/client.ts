@@ -18,6 +18,8 @@ export type SourceEditSessionResponse = components["schemas"]["SourceEditSession
 export type SaveSourceEditRequest = components["schemas"]["SaveSourceEditRequest"];
 export type LiyanStateResponse = components["schemas"]["LiyanStateResponse"];
 export type StartLiyanRunRequest = components["schemas"]["StartLiyanRunRequest"];
+export type LiyanRevisionResponse = components["schemas"]["LiyanRevisionResponse"];
+export type SaveLiyanRevisionRequest = components["schemas"]["SaveLiyanRevisionRequest"];
 export type InstructionDocument = components["schemas"]["InstructionDocument"];
 export type InstructionCapsule = components["schemas"]["InstructionCapsule"];
 
@@ -413,10 +415,44 @@ export async function startZhiyanRun(
 export async function getTaskLiyan(
   accessToken: string,
   taskId: string,
+  workingCopyHash: string | null = null,
 ): Promise<LiyanStateResponse> {
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/liyan", {
-    params: { path: { task_id: taskId } },
+    params: {
+      path: { task_id: taskId },
+      query: workingCopyHash ? { working_copy_hash: workingCopyHash } : {},
+    },
   });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function saveLiyanRevision(
+  accessToken: string,
+  taskId: string,
+  request: SaveLiyanRevisionRequest,
+): Promise<LiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).POST("/tasks/{task_id}/liyan-revisions", {
+    params: { path: { task_id: taskId } },
+    body: request,
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function restoreLiyanRevision(
+  accessToken: string,
+  taskId: string,
+  revisionId: string,
+  idempotencyKey: string,
+): Promise<LiyanStateResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/tasks/{task_id}/liyan-revisions/{revision_id}/restore",
+    {
+      params: { path: { task_id: taskId, revision_id: revisionId } },
+      body: { idempotency_key: idempotencyKey },
+    },
+  );
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
 }

@@ -1,7 +1,5 @@
 """来源编辑会话, immutable 任务版本 history, and restoration."""
 
-import hashlib
-import json
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated
@@ -29,6 +27,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
+from liyan_server.hashing import canonical_hash as _hash
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content
@@ -89,11 +88,6 @@ class SaveSourceEditRequest(BaseModel):
 
 class RestoreVersionRequest(BaseModel):
     idempotency_key: str
-
-
-def _hash(value: object) -> str:
-    canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def _owned_task(

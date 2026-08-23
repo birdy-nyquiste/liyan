@@ -570,6 +570,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{task_id}/liyan-revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Liyan Revision */
+        post: operations["save_liyan_revision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}/liyan-revisions/{revision_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Liyan Revision */
+        post: operations["restore_liyan_revision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -880,12 +914,53 @@ export interface components {
             /** Allowed At */
             allowed_at: string | null;
         };
+        /** LiyanRevisionHistoryResponse */
+        LiyanRevisionHistoryResponse: {
+            current: components["schemas"]["LiyanRevisionResponse"] | null;
+            /** Historical */
+            historical: components["schemas"]["LiyanRevisionResponse"][];
+            /**
+             * Historical Limit
+             * @default 3
+             */
+            historical_limit: number;
+        };
+        /** LiyanRevisionResponse */
+        LiyanRevisionResponse: {
+            /** Id */
+            id: string;
+            /** Number */
+            number: number;
+            /** Task Version Id */
+            task_version_id: string;
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Base Revision Id */
+            base_revision_id: string | null;
+            /** Restored From Revision Id */
+            restored_from_revision_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** LiyanRunCapabilities */
         LiyanRunCapabilities: {
             /** Can Generate */
             can_generate: boolean;
             /** Can Cancel */
             can_cancel: boolean;
+            /** Can Save */
+            can_save: boolean;
+            /** Publishable Revision Id */
+            publishable_revision_id: string | null;
+            /** Publication Unavailable Reason */
+            publication_unavailable_reason: string | null;
             retry: components["schemas"]["LiyanRetryState"];
             /** Unavailable Reason */
             unavailable_reason: string | null;
@@ -905,6 +980,7 @@ export interface components {
             execution: components["schemas"]["ExecutionResponse"] | null;
             result: components["schemas"]["LiyanResultResponse"] | null;
             request: components["schemas"]["LiyanRunRequestResponse"] | null;
+            revisions: components["schemas"]["LiyanRevisionHistoryResponse"];
             capabilities: components["schemas"]["LiyanRunCapabilities"];
         };
         /** @enum {string} */
@@ -993,10 +1069,26 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** RestoreLiyanRevisionRequest */
+        RestoreLiyanRevisionRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
         /** RestoreVersionRequest */
         RestoreVersionRequest: {
             /** Idempotency Key */
             idempotency_key: string;
+        };
+        /** SaveLiyanRevisionRequest */
+        SaveLiyanRevisionRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Base Revision Id */
+            base_revision_id?: string | null;
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
         };
         /** SaveSourceEditRequest */
         SaveSourceEditRequest: {
@@ -2419,7 +2511,9 @@ export interface operations {
     };
     get_task_liyan: {
         parameters: {
-            query?: never;
+            query?: {
+                working_copy_hash?: string | null;
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -2465,6 +2559,77 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_liyan_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveLiyanRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_liyan_revision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreLiyanRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

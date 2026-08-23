@@ -39,11 +39,46 @@ function state(status: "absent" | "running" | "succeeded" | "failed" = "absent")
       model: "deepseek-v4-flash",
       created_at: "2026-08-22T18:00:04Z",
     } : null,
+    revisions: { current: null, historical: [], historical_limit: 3 },
     capabilities: {
       can_generate: !active,
       can_cancel: active,
+      can_save: !active,
+      publishable_revision_id: null,
+      publication_unavailable_reason: "保存文章后才能发布。",
       retry: { allowed: true, remaining: 2, allowed_at: null },
       unavailable_reason: active ? "立言文章正在生成中。" : null,
+    },
+  };
+}
+
+function revision(number: number, title: string, contentHash = `hash-${number}`) {
+  return {
+    id: `revision-${number}`,
+    number,
+    task_version_id: "version-1",
+    title,
+    body_markdown: `第${number}版正文。`,
+    content_hash: contentHash,
+    base_revision_id: number > 1 ? `revision-${number - 1}` : null,
+    restored_from_revision_id: null,
+    created_at: "2026-08-22T18:10:00Z",
+  };
+}
+
+function stateWithRevisions(
+  current: ReturnType<typeof revision>,
+  historical: ReturnType<typeof revision>[] = [],
+  publishable: string | null = current.id,
+) {
+  const base = state("succeeded");
+  return {
+    ...base,
+    revisions: { current, historical, historical_limit: 3 },
+    capabilities: {
+      ...base.capabilities,
+      publishable_revision_id: publishable,
+      publication_unavailable_reason: publishable ? null : "有未保存的修改，请先保存后再发布。",
     },
   };
 }
@@ -293,5 +328,119 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-2" />);
     expect(await screen.findByText("有一份已完成的立言结果可载入。")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("用户一的内容")).not.toBeInTheDocument();
+  });
+  it("creates an immutable Revision only from an explicit Save", async () => {
+    const saved = stateWithRevisions(revision(1, "完整文章"));
+    const fetchMock = respondWith(state("succeeded"), saved);
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "保存 Revision" }));
+
+    const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
+    expect(post![0].url).toContain("/liyan-revisions");
+    const body = JSON.parse(await post![0].clone().text()) as {
+      base_revision_id: string | null;
+      title: string;
+      body_markdown: string;
+    };
+    expect(body.base_revision_id).toBeNull();
+    expect(body.title).toBe("完整文章");
+    expect(body.body_markdown).toBe("第一段。\n\n## 继续讨论\n\n第二段。");
+    expect(await screen.findByText("Revision 1")).toBeInTheDocument();
+  });
+
+  it("keeps the local draft when a newer Revision already exists", async () => {
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (request.method === "POST") {
+        return Response.json({ detail: "文章已有更新的 Revision，请先查看最新内容。" }, { status: 409 });
+      }
+      return Response.json(stateWithRevisions(revision(1, "完整文章")));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await user.clear(screen.getByRole("textbox", { name: "文章标题" }));
+    await user.type(screen.getByRole("textbox", { name: "文章标题" }), "本地草稿标题");
+    await user.click(screen.getByRole("button", { name: "保存 Revision" }));
+
+    expect(await screen.findByText("文章已有更新的 Revision，请先查看最新内容。")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("本地草稿标题")).toBeInTheDocument();
+    expect(screen.getByText("Revision 1")).toBeInTheDocument();
+  });
+
+  it("lists the current Revision and at most three historical ones", async () => {
+    respondWith(stateWithRevisions(revision(6, "第六版"), [
+      revision(5, "第五版"),
+      revision(4, "第四版"),
+      revision(3, "第三版"),
+    ]));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    expect(await screen.findByText("Revision 6")).toBeInTheDocument();
+    expect(screen.getByText("Revision 5：第五版")).toBeInTheDocument();
+    expect(screen.getByText("Revision 3：第三版")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "恢复为当前 Revision" })).toHaveLength(3);
+    expect(screen.getByRole("document", { name: "Revision 6 正文" }))
+      .toHaveTextContent("第6版正文。");
+    expect(screen.getByRole("document", { name: "Revision 5 正文" }))
+      .toHaveTextContent("第5版正文。");
+  });
+
+  it("restores a historical Revision as a new current Revision", async () => {
+    const restored = stateWithRevisions(revision(3, "第一版"), [
+      revision(2, "第二版"),
+      revision(1, "第一版"),
+    ]);
+    const fetchMock = respondWith(
+      stateWithRevisions(revision(2, "第二版"), [revision(1, "第一版")]),
+      restored,
+    );
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "恢复为当前 Revision" }));
+
+    const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
+    expect(post![0].url).toContain("/liyan-revisions/revision-1/restore");
+    expect(await screen.findByText("Revision 3")).toBeInTheDocument();
+  });
+
+  it("reports the server's publication eligibility for the newest Revision", async () => {
+    respondWith(stateWithRevisions(revision(1, "完整文章")));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    expect(await screen.findByText("Revision 1 可用于发布。")).toBeInTheDocument();
+  });
+
+  it("withdraws publication eligibility while the draft carries unsaved edits", async () => {
+    respondWith(stateWithRevisions(revision(1, "完整文章")));
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+
+    expect(await screen.findByText("有未保存的修改，请先保存后再发布。")).toBeInTheDocument();
+    expect(screen.queryByText("Revision 1 可用于发布。")).not.toBeInTheDocument();
+  });
+  it("confirms before a restore overwrites unsaved local edits", async () => {
+    const fetchMock = respondWith(
+      stateWithRevisions(revision(2, "第二版"), [revision(1, "第一版")]),
+    );
+    const confirmed = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmed);
+    const user = userEvent.setup();
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await screen.findByText("有未保存的修改，请先保存后再发布。");
+    await user.click(screen.getByRole("button", { name: "恢复为当前 Revision" }));
+
+    expect(confirmed).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
   });
 });

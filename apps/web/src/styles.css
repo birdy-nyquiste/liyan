@@ -536,6 +536,48 @@ h1 {
   border-top: 1px solid #d9cfb8;
 }
 
+.liyan-revisions {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}
+
+.liyan-revision {
+  padding: 10px 0;
+}
+
+.liyan-revision--current {
+  padding-top: 4px;
+}
+
+.liyan-revision__identity {
+  margin: 0;
+  color: #856b37;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.liyan-revision__title {
+  margin: 2px 0 4px;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.liyan-revision-history summary {
+  cursor: pointer;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.liyan-revision-history {
+  margin: 8px 0 0;
+  padding: 0;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+  list-style: none;
+}
+
+.liyan-revision-history li + li {
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}
+
 .zhiyan-section {
   margin-top: 18px;
   padding-top: 14px;

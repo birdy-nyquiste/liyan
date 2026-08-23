@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from liyan_server.database import (
     Database,
     Execution,
     LiyanArticle,
+    LiyanRevision,
     LiyanRunResult,
     Task,
     TaskVersion,
@@ -25,6 +26,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
+from liyan_server.liyan.acceptance import unsupported_article_markdown
 from liyan_server.liyan.instruction import (
     InstructionDocument,
     InstructionText,
@@ -32,6 +34,14 @@ from liyan_server.liyan.instruction import (
 from liyan_server.liyan.orchestration import dispatch_or_fail, load_runs, queue_run
 from liyan_server.liyan.prompt import liyan_input_text
 from liyan_server.liyan.recovery import RetryState
+from liyan_server.liyan.revisions import (
+    HISTORICAL_REVISION_LIMIT,
+    STALE_BASE,
+    RevisionHistory,
+    article_content_hash,
+    load_history,
+    new_revision,
+)
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.task_api import version_source_revisions
@@ -50,6 +60,9 @@ BUSY_MESSAGE = "服务繁忙，请重试。"
 IDEMPOTENCY_MISMATCH = "相同幂等键不能用于不同的立言请求。"
 RETRY_INPUT_MISMATCH = "失败重试必须使用原来的 Working Copy 和立言指令。"
 INVALID_CAPSULE = "立言指令包含无效或过期的知言引用。"
+UNSUPPORTED_SAVE = "文章内容超出了可保存的 Markdown 范围。"
+RESTORE_CURRENT = "该 Revision 已经是当前版本。"
+REVISION_NOT_FOUND = "Article revision not found."
 DUPLICATE_CAPSULE = "立言指令包含重复的知言引用。"
 
 
@@ -86,8 +99,71 @@ class LiyanRetryState(BaseModel):
 class LiyanRunCapabilities(BaseModel):
     can_generate: bool
     can_cancel: bool
+    can_save: bool
+    publishable_revision_id: str | None
+    publication_unavailable_reason: str | None
     retry: LiyanRetryState
     unavailable_reason: str | None
+
+
+class LiyanRevisionResponse(BaseModel):
+    id: str
+    number: int
+    task_version_id: str
+    title: str
+    body_markdown: str
+    content_hash: str
+    base_revision_id: str | None
+    restored_from_revision_id: str | None
+    created_at: datetime
+
+    @classmethod
+    def of(cls, revision: LiyanRevision) -> "LiyanRevisionResponse":
+        return cls(
+            id=str(revision.id),
+            number=revision.number,
+            task_version_id=str(revision.task_version_id),
+            title=revision.title,
+            body_markdown=revision.body_markdown,
+            content_hash=revision.content_hash,
+            base_revision_id=(
+                str(revision.base_revision_id) if revision.base_revision_id else None
+            ),
+            restored_from_revision_id=(
+                str(revision.restored_from_revision_id)
+                if revision.restored_from_revision_id
+                else None
+            ),
+            created_at=aware_utc(revision.created_at),
+        )
+
+
+class LiyanRevisionHistoryResponse(BaseModel):
+    current: LiyanRevisionResponse | None
+    historical: list[LiyanRevisionResponse]
+    historical_limit: int = HISTORICAL_REVISION_LIMIT
+
+    @classmethod
+    def of(cls, history: RevisionHistory) -> "LiyanRevisionHistoryResponse":
+        return cls(
+            current=(
+                LiyanRevisionResponse.of(history.current)
+                if history.current is not None
+                else None
+            ),
+            historical=[LiyanRevisionResponse.of(item) for item in history.historical],
+        )
+
+
+class SaveLiyanRevisionRequest(BaseModel):
+    idempotency_key: str
+    base_revision_id: UUID | None = None
+    title: str = Field(min_length=1, max_length=255)
+    body_markdown: str = Field(min_length=1)
+
+
+class RestoreLiyanRevisionRequest(BaseModel):
+    idempotency_key: str
 
 
 class LiyanResultResponse(BaseModel):
@@ -114,6 +190,7 @@ class LiyanStateResponse(BaseModel):
     execution: ExecutionResponse | None
     result: LiyanResultResponse | None
     request: LiyanRunRequestResponse | None
+    revisions: LiyanRevisionHistoryResponse
     capabilities: LiyanRunCapabilities
 
 
@@ -235,6 +312,17 @@ def liyan_router(
             session.flush()
         return article
 
+    def revision_view(
+        session: Session, article: LiyanArticle | None, working_copy_hash: str | None
+    ) -> tuple[LiyanRevisionHistoryResponse, str | None, str | None]:
+        history = load_history(session, article.id if article is not None else None)
+        publishable, reason = history.publishable(working_copy_hash)
+        return (
+            LiyanRevisionHistoryResponse.of(history),
+            str(publishable) if publishable else None,
+            reason,
+        )
+
     def response_of(
         session: Session,
         task: Task,
@@ -243,6 +331,7 @@ def liyan_router(
         *,
         now: datetime,
         execution: Execution | None = None,
+        working_copy_hash: str | None = None,
     ) -> LiyanStateResponse:
         runs = load_runs(session, article.id) if article is not None else None
         latest = execution or (runs.latest if runs is not None else None)
@@ -275,6 +364,9 @@ def liyan_router(
         unavailable = ACTIVE_MESSAGE if active else None
         execution_payload = _safe_execution(latest) if latest is not None else None
         request_payload = _request_response(latest)
+        revisions, publishable, publication_reason = revision_view(
+            session, article, working_copy_hash
+        )
         return LiyanStateResponse(
             task_id=str(task.id),
             task_version_id=str(version.id),
@@ -286,12 +378,16 @@ def liyan_router(
                 else None
             ),
             request=request_payload,
+            revisions=revisions,
             capabilities=LiyanRunCapabilities(
                 can_generate=(
                     not active
                     and (latest is None or latest.status != "failed" or retry.allowed)
                 ),
                 can_cancel=active,
+                can_save=True,
+                publishable_revision_id=publishable,
+                publication_unavailable_reason=publication_reason,
                 retry=LiyanRetryState.of(retry),
                 unavailable_reason=unavailable,
             ),
@@ -307,6 +403,7 @@ def liyan_router(
         task_id: UUID,
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
+        working_copy_hash: Annotated[str | None, Query(max_length=64)] = None,
     ) -> LiyanStateResponse:
         task, version = owned_current(session, task_id, user.id)
         article = session.scalar(
@@ -316,6 +413,9 @@ def liyan_router(
         try:
             complete_context(session, version)
         except HTTPException:
+            revisions, publishable, publication_reason = revision_view(
+                session, article, working_copy_hash
+            )
             return LiyanStateResponse(
                 task_id=str(task.id),
                 task_version_id=str(version.id),
@@ -323,14 +423,25 @@ def liyan_router(
                 execution=None,
                 result=None,
                 request=None,
+                revisions=revisions,
                 capabilities=LiyanRunCapabilities(
                     can_generate=False,
                     can_cancel=False,
+                    can_save=False,
+                    publishable_revision_id=publishable,
+                    publication_unavailable_reason=publication_reason,
                     retry=LiyanRetryState(allowed=True, remaining=2, allowed_at=None),
                     unavailable_reason=INCOMPLETE_MESSAGE,
                 ),
             )
-        return response_of(session, task, version, article, now=datetime.now(UTC))
+        return response_of(
+            session,
+            task,
+            version,
+            article,
+            now=datetime.now(UTC),
+            working_copy_hash=working_copy_hash,
+        )
 
     @router.post(
         "/tasks/{task_id}/liyan-runs",
@@ -443,6 +554,173 @@ def liyan_router(
         session.expire_all()
         return response_of(
             session, task, version, article, now=now, execution=execution
+        )
+
+    def replayed_save(
+        session: Session, owner_id: UUID, article_id: UUID, key: str
+    ) -> LiyanRevision | None:
+        replay = session.scalar(
+            select(LiyanRevision).where(
+                LiyanRevision.owner_id == owner_id,
+                LiyanRevision.idempotency_key == key,
+            )
+        )
+        if replay is None:
+            return None
+        if replay.article_id != article_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
+            )
+        return replay
+
+    def commit_revision(
+        session: Session,
+        task: Task,
+        version: TaskVersion,
+        article: LiyanArticle,
+        revision: LiyanRevision,
+        now: datetime,
+    ) -> LiyanStateResponse:
+        session.add(revision)
+        try:
+            session.commit()
+        except IntegrityError as error:
+            session.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=STALE_BASE) from error
+        return response_of(
+            session,
+            task,
+            version,
+            article,
+            now=now,
+            working_copy_hash=revision.content_hash,
+        )
+
+    def savable_article(
+        session: Session, task_id: UUID, owner_id: UUID
+    ) -> tuple[Task, TaskVersion, LiyanArticle]:
+        task, version = owned_current(session, task_id, owner_id)
+        complete_context(session, version)
+        return task, version, article_for(session, version, owner_id)
+
+    @router.post(
+        "/tasks/{task_id}/liyan-revisions",
+        operation_id="save_liyan_revision",
+        response_model=LiyanStateResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["liyan"],
+    )
+    def save_liyan_revision(
+        task_id: UUID,
+        request: SaveLiyanRevisionRequest,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> LiyanStateResponse:
+        task, version, article = savable_article(session, task_id, user.id)
+        title = request.title.strip()
+        body = request.body_markdown.strip()
+        if not title or not body or unsupported_article_markdown(title, body):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=UNSUPPORTED_SAVE
+            )
+        now = datetime.now(UTC)
+        replay = replayed_save(session, user.id, article.id, request.idempotency_key)
+        if replay is not None:
+            if replay.content_hash != article_content_hash(title, body):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
+                )
+            return response_of(
+                session,
+                task,
+                version,
+                article,
+                now=now,
+                working_copy_hash=replay.content_hash,
+            )
+        current = load_history(session, article.id).current
+        base_id = current.id if current is not None else None
+        if request.base_revision_id != base_id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=STALE_BASE)
+        return commit_revision(
+            session,
+            task,
+            version,
+            article,
+            new_revision(
+                article,
+                owner_id=user.id,
+                previous=current,
+                title=title,
+                body_markdown=body,
+                restored_from=None,
+                idempotency_key=request.idempotency_key,
+                created_at=now,
+            ),
+            now,
+        )
+
+    @router.post(
+        "/tasks/{task_id}/liyan-revisions/{revision_id}/restore",
+        operation_id="restore_liyan_revision",
+        response_model=LiyanStateResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["liyan"],
+    )
+    def restore_liyan_revision(
+        task_id: UUID,
+        revision_id: UUID,
+        request: RestoreLiyanRevisionRequest,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> LiyanStateResponse:
+        task, version, article = savable_article(session, task_id, user.id)
+        now = datetime.now(UTC)
+        replay = replayed_save(session, user.id, article.id, request.idempotency_key)
+        if replay is not None:
+            if replay.restored_from_revision_id != revision_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail=IDEMPOTENCY_MISMATCH
+                )
+            return response_of(
+                session,
+                task,
+                version,
+                article,
+                now=now,
+                working_copy_hash=replay.content_hash,
+            )
+        restored = session.scalar(
+            select(LiyanRevision).where(
+                LiyanRevision.id == revision_id,
+                LiyanRevision.article_id == article.id,
+            )
+        )
+        if restored is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=REVISION_NOT_FOUND
+            )
+        current = load_history(session, article.id).current
+        if current is not None and current.id == restored.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=RESTORE_CURRENT
+            )
+        return commit_revision(
+            session,
+            task,
+            version,
+            article,
+            new_revision(
+                article,
+                owner_id=user.id,
+                previous=current,
+                title=restored.title,
+                body_markdown=restored.body_markdown,
+                restored_from=restored,
+                idempotency_key=request.idempotency_key,
+                created_at=now,
+            ),
+            now,
         )
 
     return router

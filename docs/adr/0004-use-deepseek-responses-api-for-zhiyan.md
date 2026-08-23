@@ -10,6 +10,8 @@ The confirmed MVP model is `deepseek-v4-flash`, matching the 服务端 模块总
 
 Strict structured output accepts only a subset of JSON Schema, so the provider-facing report schema omits string-tightening keywords such as `minLength`. Those constraints are still enforced, but by deterministic application acceptance rather than by the provider.
 
+Three live runs against `deepseek-v4-flash` on 2026-08-22 established what the adapter must absorb. Strict `json_schema` does not enforce `additionalProperties`, so the model may add keys the schema never declared; the adapter and report models must drop them rather than fail. Structured output arrives inside a ```json fence intermittently — raw JSON on one call and fenced on the next for the identical request — so the adapter unwraps a fence before the domain sees the text. `web_search_call` `open_page` actions report their URL with a `#ws_call_id=…` fragment appended while the model cites the clean URL, so evidence matching must compare URLs with the fragment removed. A run took 78–96 seconds and consumed roughly 140k input tokens, most of it opened page content, which is what the 300-second default timeout is sized for.
+
 References, verified 2026-08-22:
 
 - [DeepSeek Responses API reference](https://api-docs.deepseek.com/api/create-response)

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from blog_support import DeterministicBlogSubmitter
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,6 +29,8 @@ from liyan_server.liyan.provider import (
 )
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.liyan.worker import process_liyan_run
+from liyan_server.publication.runs import PUBLISH_OPERATION
+from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
 from liyan_server.zhiyan.provider import (
     SearchAction,
@@ -186,6 +189,7 @@ class RecordingDispatcher:
         self.execution_ids: list[UUID] = []
         self.provider = DeterministicZhiyanProvider()
         self.liyan_provider = DeterministicLiyanProvider()
+        self.blog = DeterministicBlogSubmitter()
 
     def dispatch(self, execution_id: UUID) -> None:
         self.execution_ids.append(execution_id)
@@ -198,7 +202,11 @@ class RecordingDispatcher:
             execution = session.get(Execution, execution_id)
             operation = execution.operation if execution else None
         database.dispose()
-        if operation == LIYAN_OPERATION:
+        if operation == PUBLISH_OPERATION:
+            process_publication_run(
+                self.database_url, execution_id, self.blog, "ingest-secret"
+            )
+        elif operation == LIYAN_OPERATION:
             process_liyan_run(
                 self.database_url,
                 execution_id,

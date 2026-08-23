@@ -30,7 +30,13 @@ class ExecutionError(BaseModel):
 
 class ExecutionResponse(BaseModel):
     id: str
-    operation: Literal["fetch_url", "parse_file", "analyze_source", "generate_article"]
+    operation: Literal[
+        "fetch_url",
+        "parse_file",
+        "analyze_source",
+        "generate_article",
+        "publish_preview",
+    ]
     status: ExecutionStatus
     attempt: int
     input_version: int

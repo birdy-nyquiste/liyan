@@ -120,6 +120,25 @@ describe("LiyanPanel", () => {
     });
   });
 
+  it("offers publishing from the article only while the saved Revision is eligible", async () => {
+    const current = revision(1, "已保存文章");
+    respondWith(stateWithRevisions(current));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" taskLabel="四天工作制" />);
+
+    expect(await screen.findByRole("button", { name: "发布" })).toBeInTheDocument();
+  });
+
+  it("withholds publishing while the browser draft differs from the saved Revision", async () => {
+    const current = revision(1, "已保存文章");
+    respondWith(stateWithRevisions(current, [], null));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    expect(
+      await screen.findByText("有未保存的修改，请先保存后再发布。"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+  });
+
   it("offers a completed background result after navigation before loading it locally", async () => {
     respondWith(state("succeeded"));
     const user = userEvent.setup();

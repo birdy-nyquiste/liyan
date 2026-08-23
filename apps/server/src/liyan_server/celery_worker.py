@@ -11,6 +11,8 @@ from liyan_server.file_parsing import FileParseLimits
 from liyan_server.liyan.deepseek import DeepSeekLiyanProvider
 from liyan_server.liyan.worker import process_liyan_run
 from liyan_server.object_storage import R2ObjectStorage
+from liyan_server.publication.blog import LsforumBlogSubmitter
+from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
 from liyan_server.url_fetch_worker import process_url_fetch
 from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
@@ -52,6 +54,8 @@ def process_execution(execution_id: str) -> None:
         analyze_source_execution(execution_id)
     elif operation == "generate_article":
         generate_article_execution(execution_id)
+    elif operation == "publish_preview":
+        publish_preview_execution(execution_id)
 
 
 @celery_app.task(name="liyan.analyze_source")  # type: ignore[untyped-decorator]
@@ -79,6 +83,16 @@ def generate_article_execution(execution_id: str) -> None:
             timeout_seconds=settings.liyan_timeout_seconds,
         ),
         CeleryExecutionDispatcher(settings.broker_url),
+    )
+
+
+@celery_app.task(name="liyan.publish_preview")  # type: ignore[untyped-decorator]
+def publish_preview_execution(execution_id: str) -> None:
+    process_publication_run(
+        settings.database_url,
+        UUID(execution_id),
+        LsforumBlogSubmitter(timeout_seconds=settings.blog_timeout_seconds),
+        settings.blog_ingest_token,
     )
 
 

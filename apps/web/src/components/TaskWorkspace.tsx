@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { Identity, TaskSummary } from "../auth/state";
 import { TaskCard } from "./TaskCard";
+import { PublicationCenter } from "./PublicationCenter";
 import { TaskCreationSession } from "./TaskCreationSession";
 
 type TaskWorkspaceProps = {
@@ -22,6 +23,7 @@ export function TaskWorkspace({
   const [creating, setCreating] = useState(false);
   const [creationDirty, setCreationDirty] = useState(false);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
+  const [publicationCenterOpen, setPublicationCenterOpen] = useState(false);
   const [sourceEditingTaskIds, setSourceEditingTaskIds] = useState<Set<string>>(new Set());
 
   const taskCreated = (task: TaskSummary) => {
@@ -66,11 +68,25 @@ export function TaskWorkspace({
           >
             新建立言任务
           </button>
+          <button
+            className="button button--quiet"
+            type="button"
+            onClick={() => setPublicationCenterOpen((open) => !open)}
+          >
+            发布中心
+          </button>
           <button className="button button--quiet" type="button" onClick={attemptSignOut}>
             退出登录
           </button>
         </div>
       </div>
+      {publicationCenterOpen ? (
+        <PublicationCenter
+          userId={identity.id}
+          accessToken={accessToken}
+          onClose={() => setPublicationCenterOpen(false)}
+        />
+      ) : null}
       {creating ? (
         <TaskCreationSession
           accessToken={accessToken}

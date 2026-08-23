@@ -902,3 +902,69 @@ h1 {
   align-items: baseline;
   gap: 8px;
 }
+
+/*
+ * 发布: a confirmation surface, not an editor. Locked facts are set as a
+ * definition list so the reader can check destination and author at a glance,
+ * and the Preview URL is the one element the page leads to.
+ */
+.publication-confirmation,
+.publication-center {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid rgb(66 57 39 / 14%);
+  border-radius: 12px;
+  background: #fbf7ee;
+}
+
+.publication-confirmation h3 {
+  margin: 0 0 12px;
+}
+
+.publication-locked {
+  display: grid;
+  gap: 8px 18px;
+  margin: 0 0 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.publication-locked dt {
+  color: #856b37;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.publication-locked dd {
+  margin: 2px 0 0;
+  color: var(--ink);
+}
+
+.publication-result {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f6f1e5;
+}
+
+.publication-preview-link {
+  display: inline-block;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+.publication-candidates,
+.publication-history {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.publication-candidates li,
+.publication-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}

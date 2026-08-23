@@ -22,6 +22,9 @@ export type LiyanRevisionResponse = components["schemas"]["LiyanRevisionResponse
 export type SaveLiyanRevisionRequest = components["schemas"]["SaveLiyanRevisionRequest"];
 export type InstructionDocument = components["schemas"]["InstructionDocument"];
 export type InstructionCapsule = components["schemas"]["InstructionCapsule"];
+export type PublicationTargetResponse = components["schemas"]["PublicationTargetResponse"];
+export type EligibleArticleResponse = components["schemas"]["EligibleArticleResponse"];
+export type PublishTaskResponse = components["schemas"]["PublishTaskResponse"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -469,3 +472,49 @@ export async function startLiyanRun(
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
 }
+
+export async function listPublicationTargets(
+  accessToken: string,
+): Promise<PublicationTargetResponse[]> {
+  const result = await authenticatedApi(accessToken).GET("/publication/targets");
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.items;
+}
+
+export async function listEligibleArticles(
+  accessToken: string,
+): Promise<EligibleArticleResponse[]> {
+  const result = await authenticatedApi(accessToken).GET("/publication/eligible-articles");
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data.items;
+}
+
+export async function confirmPublication(
+  accessToken: string,
+  request: {
+    idempotency_key: string;
+    task_id: string;
+    revision_id: string;
+    target_key: string;
+    working_copy_hash: string | null;
+  },
+): Promise<PublishTaskResponse> {
+  const result = await authenticatedApi(accessToken).POST("/publication/publish-tasks", {
+    body: request,
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getPublishTask(
+  accessToken: string,
+  publishTaskId: string,
+): Promise<PublishTaskResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/publication/publish-tasks/{publish_task_id}",
+    { params: { path: { publish_task_id: publishTaskId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+

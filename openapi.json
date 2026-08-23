@@ -1822,6 +1822,152 @@
           }
         }
       }
+    },
+    "/publication/targets": {
+      "get": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "List Publication Targets",
+        "operationId": "list_publication_targets",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationTargetListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/publication/eligible-articles": {
+      "get": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "List Eligible Articles",
+        "operationId": "list_eligible_articles",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibleArticleListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/publication/publish-tasks": {
+      "post": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "Confirm Publication",
+        "operationId": "confirm_publication",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPublicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/publication/publish-tasks/{publish_task_id}": {
+      "get": {
+        "tags": [
+          "publication"
+        ],
+        "summary": "Get Publish Task",
+        "operationId": "get_publish_task",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publish_task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Publish Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1863,6 +2009,47 @@
           "file"
         ],
         "title": "Body_replace_file_source"
+      },
+      "ConfirmPublicationRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "target_key": {
+            "type": "string",
+            "title": "Target Key"
+          },
+          "working_copy_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Copy Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "task_id",
+          "revision_id",
+          "target_key"
+        ],
+        "title": "ConfirmPublicationRequest"
       },
       "ConfirmTaskRequest": {
         "properties": {
@@ -2078,6 +2265,81 @@
         ],
         "title": "EditSourceContentRequest"
       },
+      "EligibleArticleListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EligibleArticleResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "EligibleArticleListResponse"
+      },
+      "EligibleArticleResponse": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_number": {
+            "type": "integer",
+            "title": "Task Number"
+          },
+          "task_display_name": {
+            "type": "string",
+            "title": "Task Display Name"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "revision_id": {
+            "type": "string",
+            "title": "Revision Id"
+          },
+          "revision_number": {
+            "type": "integer",
+            "title": "Revision Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "title": "Body Markdown"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Saved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_number",
+          "task_display_name",
+          "task_version_id",
+          "revision_id",
+          "revision_number",
+          "title",
+          "body_markdown",
+          "content_hash",
+          "saved_at"
+        ],
+        "title": "EligibleArticleResponse"
+      },
       "EvidenceItem": {
         "properties": {
           "id": {
@@ -2160,7 +2422,8 @@
               "fetch_url",
               "parse_file",
               "analyze_source",
-              "generate_article"
+              "generate_article",
+              "publish_preview"
             ],
             "title": "Operation"
           },
@@ -3222,6 +3485,216 @@
           "provenance"
         ],
         "title": "PreparedSource"
+      },
+      "PublicationTargetListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTargetResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PublicationTargetListResponse"
+      },
+      "PublicationTargetResponse": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "site_url": {
+            "type": "string",
+            "title": "Site Url"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "platform",
+          "display_name",
+          "site_url",
+          "author"
+        ],
+        "title": "PublicationTargetResponse"
+      },
+      "PublishTaskResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PublishTaskStatus"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_version_id": {
+            "type": "string",
+            "title": "Task Version Id"
+          },
+          "revision_id": {
+            "type": "string",
+            "title": "Revision Id"
+          },
+          "revision_number": {
+            "type": "integer",
+            "title": "Revision Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body_markdown": {
+            "type": "string",
+            "title": "Body Markdown"
+          },
+          "target": {
+            "$ref": "#/components/schemas/PublicationTargetResponse"
+          },
+          "post_type": {
+            "type": "string",
+            "title": "Post Type"
+          },
+          "requested_status": {
+            "type": "string",
+            "title": "Requested Status"
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Url"
+          },
+          "external_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Slug"
+          },
+          "external_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Version"
+          },
+          "response_evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Evidence"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "task_id",
+          "task_version_id",
+          "revision_id",
+          "revision_number",
+          "title",
+          "body_markdown",
+          "target",
+          "post_type",
+          "requested_status",
+          "preview_url",
+          "external_slug",
+          "external_version",
+          "response_evidence",
+          "failure_message",
+          "created_at",
+          "completed_at",
+          "execution"
+        ],
+        "title": "PublishTaskResponse"
+      },
+      "PublishTaskStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "succeeded",
+          "failed",
+          "outcome_unknown"
+        ]
       },
       "ReadinessChecks": {
         "properties": {

@@ -604,6 +604,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/publication/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Publication Targets */
+        get: operations["list_publication_targets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publication/eligible-articles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Eligible Articles */
+        get: operations["list_eligible_articles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publication/publish-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Publication */
+        post: operations["confirm_publication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/publication/publish-tasks/{publish_task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Publish Task */
+        get: operations["get_publish_task"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -621,6 +689,25 @@ export interface components {
         Body_replace_file_source: {
             /** File */
             file: string;
+        };
+        /** ConfirmPublicationRequest */
+        ConfirmPublicationRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /**
+             * Revision Id
+             * Format: uuid
+             */
+            revision_id: string;
+            /** Target Key */
+            target_key: string;
+            /** Working Copy Hash */
+            working_copy_hash?: string | null;
         };
         /** ConfirmTaskRequest */
         ConfirmTaskRequest: {
@@ -690,6 +777,37 @@ export interface components {
             /** Provenance */
             provenance?: string | null;
         };
+        /** EligibleArticleListResponse */
+        EligibleArticleListResponse: {
+            /** Items */
+            items: components["schemas"]["EligibleArticleResponse"][];
+        };
+        /** EligibleArticleResponse */
+        EligibleArticleResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Task Number */
+            task_number: number;
+            /** Task Display Name */
+            task_display_name: string;
+            /** Task Version Id */
+            task_version_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Revision Number */
+            revision_number: number;
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+        };
         /** EvidenceItem */
         EvidenceItem: {
             id: components["schemas"]["Narrative"];
@@ -719,7 +837,7 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "fetch_url" | "parse_file" | "analyze_source" | "generate_article";
+            operation: "fetch_url" | "parse_file" | "analyze_source" | "generate_article" | "publish_preview";
             status: components["schemas"]["ExecutionStatus"];
             /** Attempt */
             attempt: number;
@@ -1042,6 +1160,69 @@ export interface components {
             /** Provenance */
             provenance: string | null;
         };
+        /** PublicationTargetListResponse */
+        PublicationTargetListResponse: {
+            /** Items */
+            items: components["schemas"]["PublicationTargetResponse"][];
+        };
+        /** PublicationTargetResponse */
+        PublicationTargetResponse: {
+            /** Key */
+            key: string;
+            /** Platform */
+            platform: string;
+            /** Display Name */
+            display_name: string;
+            /** Site Url */
+            site_url: string;
+            /** Author */
+            author: string;
+        };
+        /** PublishTaskResponse */
+        PublishTaskResponse: {
+            /** Id */
+            id: string;
+            status: components["schemas"]["PublishTaskStatus"];
+            /** Task Id */
+            task_id: string;
+            /** Task Version Id */
+            task_version_id: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Revision Number */
+            revision_number: number;
+            /** Title */
+            title: string;
+            /** Body Markdown */
+            body_markdown: string;
+            target: components["schemas"]["PublicationTargetResponse"];
+            /** Post Type */
+            post_type: string;
+            /** Requested Status */
+            requested_status: string;
+            /** Preview Url */
+            preview_url: string | null;
+            /** External Slug */
+            external_slug: string | null;
+            /** External Version */
+            external_version: string | null;
+            /** Response Evidence */
+            response_evidence: {
+                [key: string]: unknown;
+            } | null;
+            /** Failure Message */
+            failure_message: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            execution: components["schemas"]["ExecutionResponse"] | null;
+        };
+        /** @enum {string} */
+        PublishTaskStatus: "pending" | "succeeded" | "failed" | "outcome_unknown";
         /** ReadinessChecks */
         ReadinessChecks: {
             /**
@@ -2635,6 +2816,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_publication_targets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationTargetListResponse"];
+                };
+            };
+        };
+    };
+    list_eligible_articles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EligibleArticleListResponse"];
+                };
+            };
+        };
+    };
+    confirm_publication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPublicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_publish_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publish_task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishTaskResponse"];
                 };
             };
             /** @description Validation Error */

@@ -11,6 +11,10 @@ type ExecutionStatus = Literal[
 ]
 type SourcePreparationStatus = Literal["processing", "ready", "warning", "failure"]
 
+#: A 发布任务 is pending until Blog answers. `outcome_unknown` is terminal by
+#: ADR-0001: transmission may have started, so 立言阁 must never resend it.
+type PublishTaskStatus = Literal["pending", "succeeded", "failed", "outcome_unknown"]
+
 #: Why an Execution exists: the initial operation, its one automatic recovery
 #: attempt, or a retry the user asked for.
 type RunOrigin = Literal["initial", "automatic", "manual"]
@@ -24,6 +28,7 @@ _CANCELLED_MESSAGES: dict[str, str] = {
     "parse_file": "Parsing was cancelled. Retry it or replace this source.",
     "analyze_source": "知言分析已取消，可重新发起。",
     "generate_article": "立言生成已取消，可重新发起。",
+    "publish_preview": "发布已取消。",
 }
 
 GENERIC_CANCELLED_MESSAGE = "The work was cancelled. Start it again when you are ready."

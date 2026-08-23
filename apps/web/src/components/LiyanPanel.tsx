@@ -14,6 +14,10 @@ import {
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ArticleRevisionHistory } from "./ArticleRevisionHistory";
+import {
+  PublicationConfirmation,
+  type PublicationArticle,
+} from "./PublicationConfirmation";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
 import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
 import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
@@ -42,12 +46,14 @@ export function LiyanPanel({
   userId,
   accessToken,
   taskId,
+  taskLabel = "",
   capsuleSelection = null,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
 }: {
   userId: string;
   accessToken: string;
   taskId: string;
+  taskLabel?: string;
   capsuleSelection?: CapsuleSelection | null;
   pollIntervalMs?: number;
 }) {
@@ -61,6 +67,7 @@ export function LiyanPanel({
   const [busy, setBusy] = useState(false);
   const [polls, setPolls] = useState(0);
   const [workingCopyHash, setWorkingCopyHash] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
   const loadedOnce = useRef(false);
   const startedExecutionIdRef = useRef<string | null>(null);
   const appliedResultIdRef = useRef<string | null>(null);
@@ -247,6 +254,20 @@ export function LiyanPanel({
   const publishableRevisionId = unsavedEdits
     ? null
     : state?.capabilities.publishable_revision_id ?? null;
+  const publishableRevision =
+    publishableRevisionId && state?.revisions.current?.id === publishableRevisionId
+      ? state.revisions.current
+      : null;
+  const publicationArticle: PublicationArticle | null = publishableRevision
+    ? {
+        taskId,
+        taskLabel: taskLabel || "本立言任务",
+        revisionId: publishableRevision.id,
+        revisionNumber: publishableRevision.number,
+        title: publishableRevision.title,
+        bodyMarkdown: publishableRevision.body_markdown,
+      }
+    : null;
   const failureMessage = state?.execution?.error?.message;
   const retry = state?.capabilities.retry;
   const reloadWhenAllowed = useCallback(() => void load(), [load]);
@@ -299,6 +320,16 @@ export function LiyanPanel({
             保存 Revision
           </button>
         ) : null}
+        {publicationArticle && !publishing ? (
+          <button
+            className="button button--quiet"
+            type="button"
+            disabled={busy}
+            onClick={() => setPublishing(true)}
+          >
+            发布
+          </button>
+        ) : null}
         {state?.capabilities.can_cancel && state.execution ? (
           <button
             className="button button--quiet"
@@ -326,6 +357,17 @@ export function LiyanPanel({
             载入为未保存草稿
           </button>
         </div>
+      ) : null}
+
+      {publishing && publicationArticle ? (
+        <PublicationConfirmation
+          accessToken={accessToken}
+          article={publicationArticle}
+          // The server re-checks the draft against the Revision it is asked to
+          // publish, so an edit made in another tab cannot slip through.
+          workingCopyHash={workingCopyHash}
+          onClose={() => setPublishing(false)}
+        />
       ) : null}
 
       {state ? (

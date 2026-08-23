@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     zhiyan_timeout_seconds: int = 300
     liyan_model: str = "deepseek-v4-flash"
     liyan_timeout_seconds: int = 300
+    #: A JSON array of 发布目标. Operator configuration, never user data:
+    #: {key, display_name, site_url, api_base_url, author, emails}.
+    publication_targets: str = ""
+    blog_ingest_token: str = ""
+    blog_timeout_seconds: int = 60
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

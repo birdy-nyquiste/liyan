@@ -21,6 +21,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 
 from liyan_server.execution_states import (
     ExecutionStatus,
+    PublishTaskStatus,
     RunOrigin,
     SourcePreparationStatus,
 )
@@ -417,6 +418,58 @@ class LiyanRevision(Base):
     )
     idempotency_key: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PublishTask(Base):
+    """One independent attempt to place an immutable Revision on a 发布目标.
+
+    Every column the platform needs is copied here at confirmation time, and the
+    task, version, and Revision are recorded as plain identifiers rather than
+    foreign keys: this record is evidence of a submission that already happened,
+    so deleting the 立言任务 must not be able to take it with it.
+    """
+
+    __tablename__ = "publish_tasks"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "idempotency_key",
+            name="uq_publish_tasks_owner_idempotency_key",
+        ),
+        Index("ix_publish_tasks_owner_id", "owner_id"),
+        Index("ix_publish_tasks_revision_id", "revision_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    task_id: Mapped[UUID] = mapped_column(Uuid)
+    task_version_id: Mapped[UUID] = mapped_column(Uuid)
+    revision_id: Mapped[UUID] = mapped_column(Uuid)
+    revision_number: Mapped[int] = mapped_column(Integer)
+    target_key: Mapped[str] = mapped_column(String(64))
+    target_platform: Mapped[str] = mapped_column(String(64))
+    target_display_name: Mapped[str] = mapped_column(String(255))
+    target_site_url: Mapped[str] = mapped_column(Text)
+    target_api_base_url: Mapped[str] = mapped_column(Text)
+    target_author: Mapped[str] = mapped_column(String(255))
+    post_type: Mapped[str] = mapped_column(String(32))
+    requested_status: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+    body_markdown: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[PublishTaskStatus] = mapped_column(String(32))
+    preview_url: Mapped[str | None] = mapped_column(Text)
+    preview_path: Mapped[str | None] = mapped_column(Text)
+    external_slug: Mapped[str | None] = mapped_column(String(255))
+    external_version: Mapped[str | None] = mapped_column(String(64))
+    response_evidence: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    failure_message: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Database:

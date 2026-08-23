@@ -192,6 +192,7 @@ export function TaskCard({
                   userId={userId}
                   accessToken={accessToken}
                   taskId={task.id}
+                  taskLabel={task.display_name}
                   capsuleSelection={capsuleSelection}
                 />
               ) : (

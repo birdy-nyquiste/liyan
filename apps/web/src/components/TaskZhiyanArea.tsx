@@ -8,7 +8,6 @@ import {
   startZhiyanRun,
   type TaskVersionZhiyanResponse,
 } from "../api/client";
-import { LiyanGate } from "./LiyanGate";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { ZhiyanPanel } from "./ZhiyanPanel";
@@ -19,6 +18,15 @@ const LOAD_FAILED = "知言状态加载失败，请稍后重试。";
 const START_FAILED = "知言分析未能启动，请稍后重试。";
 const CANCEL_FAILED = "终止知言分析失败，请稍后重试。";
 const TOO_MANY_REQUESTS = 429;
+
+export type ZhiyanAreaState = {
+  versionId: string;
+  done: number;
+  failed: number;
+  total: number;
+  liyanReady: boolean;
+  liyanReason: string | null;
+};
 
 /**
  * The 知言 area of one task's current 任务版本, and the 立言 gate beside it.
@@ -33,16 +41,14 @@ export function TaskZhiyanArea({
   taskId,
   versionId,
   pollIntervalMs = POLL_INTERVAL_MS,
-  showLiyanGate = true,
-  onLiyanAvailabilityChange,
+  onZhiyanState,
   onCapsuleSelect,
 }: {
   accessToken: string;
   taskId: string;
   versionId?: string | null;
   pollIntervalMs?: number;
-  showLiyanGate?: boolean;
-  onLiyanAvailabilityChange?(available: boolean): void;
+  onZhiyanState?(state: ZhiyanAreaState): void;
   onCapsuleSelect?(choice: CapsuleChoice): void;
 }) {
   const [overview, setOverview] = useState<TaskVersionZhiyanResponse | null>(null);
@@ -76,9 +82,25 @@ export function TaskZhiyanArea({
     overview !== null && !liyanAvailable,
   );
 
+  // Report which 任务版本 the verdict belongs to. A bare boolean cannot survive
+  // reads settling in any order: whoever answered last would decide.
+  const loadedVersionId = overview?.task_version_id ?? null;
+  const total = overview?.sources.length ?? 0;
+  const done = overview?.sources.filter((source) => source.status === "succeeded").length ?? 0;
+  const failed = overview?.sources.filter((source) => source.status === "failed").length ?? 0;
+  const liyanReason = overview?.liyan.unavailable_reason;
   useEffect(() => {
-    onLiyanAvailabilityChange?.(liyanAvailable);
-  }, [onLiyanAvailabilityChange, liyanAvailable]);
+    if (loadedVersionId) {
+      onZhiyanState?.({
+        versionId: loadedVersionId,
+        done,
+        failed,
+        total,
+        liyanReady: liyanAvailable,
+        liyanReason: liyanReason ?? null,
+      });
+    }
+  }, [loadedVersionId, done, failed, total, liyanAvailable, liyanReason, onZhiyanState]);
 
   // Poll only while a run is unfinished, and stop at its terminal state.
   useEffect(() => {
@@ -132,7 +154,7 @@ export function TaskZhiyanArea({
   return (
     <div className="task-card__zhiyan">
       <h3 className="section-kicker" ref={zhiyanHeading} tabIndex={-1}>
-        知言（共 {overview.sources.length} 个来源）
+        共 {overview.sources.length} 个来源的独立报告
       </h3>
       {error ? (
         <p role="alert" className="form-error">{error}</p>
@@ -149,9 +171,6 @@ export function TaskZhiyanArea({
           onCapsuleSelect={onCapsuleSelect}
         />
       ))}
-      {showLiyanGate ? (
-        <LiyanGate liyan={overview.liyan} headingId={`liyan-${taskId}`} />
-      ) : null}
     </div>
   );
 }

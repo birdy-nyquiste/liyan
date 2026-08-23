@@ -1,8 +1,9 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
-import { TaskZhiyanArea } from "./TaskZhiyanArea";
+import { TaskArea } from "./TaskArea";
+import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
 import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
 import { TaskSourceVersions } from "./TaskSourceVersions";
@@ -27,7 +28,8 @@ export function TaskCard({
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
-  const [liyanReady, setLiyanReady] = useState(false);
+  const [zhiyan, setZhiyan] = useState<ZhiyanAreaState | null>(null);
+  const [focus, setFocus] = useState<"work" | "sources">("work");
   const [capsuleSelection, setCapsuleSelection] = useState<CapsuleSelection | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
@@ -45,6 +47,21 @@ export function TaskCard({
       setError("重命名失败，请重试。");
     }
   }
+
+  // 立言 is open only for the version the server actually cleared, so a later
+  // version-list read can no longer close an area that is genuinely ready.
+  const liyanReady = zhiyan !== null && zhiyan.liyanReady && zhiyan.versionId === selectedVersionId;
+  const noteZhiyanState = useCallback((state: ZhiyanAreaState) => setZhiyan(state), []);
+  const viewingCurrent = selectedVersionId === task.current_version_id;
+  const sourceCount = task.additional_source_count + 1;
+
+  const zhiyanSummary = zhiyan === null
+    ? "读取中"
+    : zhiyan.failed > 0
+      ? `${zhiyan.failed} 个来源分析失败`
+      : zhiyan.done === zhiyan.total
+        ? `${zhiyan.total} 份报告已完成`
+        : `${zhiyan.done} / ${zhiyan.total} 份报告完成`;
 
   const selectCapsule = (choice: CapsuleChoice) => {
     setCapsuleSelection((current) => ({ ...choice, nonce: (current?.nonce ?? 0) + 1 }));
@@ -76,8 +93,12 @@ export function TaskCard({
           <div>
             <h3>{task.display_name}</h3>
             <p className="task-card__source">{task.first_source_title}</p>
-            <p>
-              另有 {task.additional_source_count} 个来源 · {new Date(task.created_at).toLocaleDateString("zh-CN")}
+            <p className="task-card__meta">
+              <span>共 {sourceCount} 个来源</span>
+              <span aria-hidden="true">·</span>
+              <span>V{task.current_version_number}</span>
+              <span aria-hidden="true">·</span>
+              <span>{new Date(task.created_at).toLocaleDateString("zh-CN")}</span>
             </p>
           </div>
           <div className="workspace__actions">
@@ -104,46 +125,84 @@ export function TaskCard({
       )}
       {opened ? (
         <div className="task-detail">
-          <TaskSourceVersions
-            accessToken={accessToken}
-            taskId={task.id}
-            onVersionSelected={(versionId) => {
-              setSelectedVersionId(versionId);
-              setLiyanReady(false);
-              setCapsuleSelection(null);
-            }}
-            onCurrentVersionChanged={(version) => {
-              setSelectedVersionId(version.id);
-              setCapsuleSelection(null);
-              setTask((current) => ({
-                ...current,
-                current_version_id: version.id,
-                current_version_number: version.number,
-                first_source_title: version.sources[0]?.title ?? current.first_source_title,
-                additional_source_count: Math.max(0, version.sources.length - 1),
-              }));
-            }}
-            onEditingChange={(editing) => onSourceEditingChange?.(task.id, editing)}
-          />
-          <TaskZhiyanArea
-            accessToken={accessToken}
-            taskId={task.id}
-            versionId={selectedVersionId}
-            showLiyanGate={!liyanReady}
-            onLiyanAvailabilityChange={setLiyanReady}
-            onCapsuleSelect={
-              selectedVersionId === task.current_version_id ? selectCapsule : undefined
-            }
-          />
-          {selectedVersionId === task.current_version_id && liyanReady ? (
-            <LiyanPanel
-              key={selectedVersionId}
-              userId={userId}
-              accessToken={accessToken}
-              taskId={task.id}
-              capsuleSelection={capsuleSelection}
-            />
-          ) : null}
+          <div className="task-areas" data-focus={focus}>
+            <TaskArea
+              id={`sources-${task.id}`}
+              label="来源"
+              summary={`${sourceCount} 个来源 · V${task.current_version_number}`}
+              expanded={focus === "sources"}
+              onExpand={() => setFocus("sources")}
+            >
+              <TaskSourceVersions
+                accessToken={accessToken}
+                taskId={task.id}
+                onVersionSelected={(versionId) => {
+                  setSelectedVersionId(versionId);
+                  setCapsuleSelection(null);
+                }}
+                onCurrentVersionChanged={(version) => {
+                  setSelectedVersionId(version.id);
+                  setCapsuleSelection(null);
+                  setTask((current) => ({
+                    ...current,
+                    current_version_id: version.id,
+                    current_version_number: version.number,
+                    first_source_title: version.sources[0]?.title ?? current.first_source_title,
+                    additional_source_count: Math.max(0, version.sources.length - 1),
+                  }));
+                }}
+                onEditingChange={(editing) => {
+                  // Editing sources takes the room; finishing gives it back.
+                  setFocus(editing ? "sources" : "work");
+                  onSourceEditingChange?.(task.id, editing);
+                }}
+              />
+            </TaskArea>
+
+            <TaskArea
+              id={`zhiyan-${task.id}`}
+              label="知言"
+              summary={zhiyanSummary}
+              expanded={focus === "work"}
+              onExpand={() => setFocus("work")}
+            >
+              <TaskZhiyanArea
+                accessToken={accessToken}
+                taskId={task.id}
+                versionId={selectedVersionId}
+                onZhiyanState={noteZhiyanState}
+                onCapsuleSelect={viewingCurrent ? selectCapsule : undefined}
+              />
+            </TaskArea>
+
+            <TaskArea
+              id={`liyan-${task.id}`}
+              label="立言"
+              summary={
+                !viewingCurrent
+                  ? "历史版本只读"
+                  : liyanReady ? "可以撰写" : "等待知言完成"
+              }
+              expanded={focus === "work"}
+              onExpand={() => setFocus("work")}
+            >
+              {viewingCurrent && liyanReady ? (
+                <LiyanPanel
+                  key={selectedVersionId}
+                  userId={userId}
+                  accessToken={accessToken}
+                  taskId={task.id}
+                  capsuleSelection={capsuleSelection}
+                />
+              ) : (
+                <p className="form-hint" role="status">
+                  {!viewingCurrent
+                    ? "历史任务版本只读，恢复为当前版本后才能撰写立言。"
+                    : zhiyan?.liyanReason ?? "知言状态读取中。"}
+                </p>
+              )}
+            </TaskArea>
+          </div>
         </div>
       ) : null}
     </article>

@@ -354,9 +354,6 @@ describe("TaskZhiyanArea", () => {
     const succeeded = screen.getByLabelText("知言报告 城市空气质量年度回顾");
     expect(within(succeeded).getAllByText("F-01")).not.toHaveLength(0);
     expect(screen.getByText("分析未完成")).toBeInTheDocument();
-    expect(
-      screen.getByText("仍有来源没有成功的知言报告，全部成功后才能生成立言。"),
-    ).toBeInTheDocument();
   });
 
   it("shows the one failure message the server allows, and offers a retry", async () => {
@@ -630,40 +627,8 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" />);
 
-    const zhiyan = await screen.findByRole("heading", { name: /知言（共 1 个来源）/ });
+    const zhiyan = await screen.findByRole("heading", { name: /共 1 个来源的独立报告/ });
     await waitFor(() => expect(zhiyan).toHaveFocus());
-    expect(screen.getByRole("heading", { name: "立言文章" })).not.toHaveFocus();
-  });
-
-  it("moves focus to 立言 only once the server permits generating it", async () => {
-    respondWith(
-      overviewResponse(
-        [
-          stateResponse({
-            status: "running",
-            report: null,
-            execution: execution(),
-            capabilities: {
-              can_start: false,
-              can_cancel: true,
-              retry: { allowed: false, remaining: 2, allowed_at: null },
-            },
-          }),
-        ],
-        LIYAN_WAITING,
-      ),
-      overviewResponse([stateResponse()], LIYAN_OPEN),
-    );
-
-    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
-    const heading = await screen.findByRole("heading", { name: "立言文章" });
-
-    expect(heading).not.toHaveFocus();
-    expect(
-      screen.getByText("知言分析尚未全部完成，全部报告成功后才能生成立言。"),
-    ).toBeInTheDocument();
-    await waitFor(() => expect(heading).toHaveFocus());
-    expect(screen.getByText("全部知言报告已完成，可以进入立言。")).toBeInTheDocument();
   });
 
   it("polls only while a run is active and stops at its terminal state", async () => {

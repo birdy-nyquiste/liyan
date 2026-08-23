@@ -56,17 +56,13 @@ class GeneratedArticle(BaseModel):
         return value.strip()
 
 
-def accept_article_text(article_text: str) -> GeneratedArticle:
-    try:
-        article = GeneratedArticle.model_validate(json.loads(article_text))
-    except (json.JSONDecodeError, ValidationError) as error:
-        raise LiyanRunFailure("invalid_article_schema", UNUSABLE_MESSAGE, str(error)) from error
-    body = article.body_markdown
-    forbidden = (
-        _RAW_HTML.search(article.title)
+def unsupported_article_markdown(title: str, body: str) -> bool:
+    """Whether the pair leaves the canonical Markdown subset both sides may store."""
+    return bool(
+        _RAW_HTML.search(title)
         or _RAW_HTML.search(body)
         or _TABLE_DIVIDER.search(body)
-        or _IMAGE.search(article.title)
+        or _IMAGE.search(title)
         or _IMAGE.search(body)
         or _CODE.search(body)
         or _UNSUPPORTED_HEADING.search(body)
@@ -76,14 +72,22 @@ def accept_article_text(article_text: str) -> GeneratedArticle:
         or _DEFINITION_LIST.search(body)
         or _INDENTED_CODE.search(body)
         or _LINK_DEFINITION.search(body)
-        or _TITLE_MARKDOWN.search(article.title)
+        or _TITLE_MARKDOWN.search(title)
         or "~~" in body
         or _PUBLICATION_FIELD.search(body)
         or _YAML_FRONTMATTER.search(body)
         or _UNSAFE_LINK.search(body)
-        or "\n" in article.title
+        or "\n" in title
     )
-    if forbidden:
+
+
+def accept_article_text(article_text: str) -> GeneratedArticle:
+    try:
+        article = GeneratedArticle.model_validate(json.loads(article_text))
+    except (json.JSONDecodeError, ValidationError) as error:
+        raise LiyanRunFailure("invalid_article_schema", UNUSABLE_MESSAGE, str(error)) from error
+    body = article.body_markdown
+    if unsupported_article_markdown(article.title, body):
         raise LiyanRunFailure(
             "unsupported_article_markdown",
             UNUSABLE_MESSAGE,

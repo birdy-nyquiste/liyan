@@ -48,7 +48,10 @@ export function TaskWorkspace({
   };
 
   return (
-    <section className="workspace workspace--tasks" aria-labelledby="task-list-heading">
+    <section
+      className={`workspace workspace--tasks ${openedTaskId ? "workspace--wide" : ""}`}
+      aria-labelledby="task-list-heading"
+    >
       <div className="workspace__heading">
         <div>
           <p className="section-kicker">{identity.email}</p>

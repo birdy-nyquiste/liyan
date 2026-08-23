@@ -1,28 +1,13 @@
 import { EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef } from "react";
 
+import { articleExtensions } from "./articleEditorSchema";
 import {
   canonicalMarkdownToTiptap,
   isSafeArticleHref,
   tiptapToCanonicalMarkdown,
 } from "./articleMarkdown";
 import type { LiyanWorkingCopy } from "./workingCopyStorage";
-
-const extensions = [StarterKit.configure({
-  code: false,
-  codeBlock: false,
-  strike: false,
-  hardBreak: false,
-  heading: { levels: [2, 3] },
-  link: {
-    autolink: false,
-    linkOnPaste: true,
-    openOnClick: false,
-    protocols: ["http", "https"],
-    HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
-  },
-})];
 
 export function ArticleWorkingCopyEditor({
   taskId,
@@ -43,7 +28,7 @@ export function ArticleWorkingCopyEditor({
     onChange(next);
   };
   const editor = useEditor({
-    extensions,
+    extensions: articleExtensions,
     content: canonicalMarkdownToTiptap(value.body_markdown),
     editable: !disabled,
     immediatelyRender: false,

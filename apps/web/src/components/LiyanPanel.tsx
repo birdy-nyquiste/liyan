@@ -4,6 +4,8 @@ import {
   ApiError,
   cancelExecution,
   getTaskLiyan,
+  restoreLiyanRevision,
+  saveLiyanRevision,
   startLiyanRun,
   type InstructionDocument,
   type LiyanStateResponse,
@@ -11,7 +13,9 @@ import {
 } from "../api/client";
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
+import { ArticleRevisionHistory } from "./ArticleRevisionHistory";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
+import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
 import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
 import { canonicalizeArticleMarkdown } from "./articleMarkdown";
 import {
@@ -22,6 +26,10 @@ import {
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const TOO_MANY_REQUESTS = 429;
+const CONFLICT = 409;
+const STALE_BASE = "文章已有更新的 Revision，请先查看最新内容。";
+const UNSAVED_EDITS = "有未保存的修改，请先保存后再发布。";
+const DISCARD_ON_RESTORE = "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？";
 
 const workingCopyFromResult = (
   result: NonNullable<LiyanStateResponse["result"]>,
@@ -52,9 +60,12 @@ export function LiyanPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [polls, setPolls] = useState(0);
+  const [workingCopyHash, setWorkingCopyHash] = useState<string | null>(null);
   const loadedOnce = useRef(false);
   const startedExecutionIdRef = useRef<string | null>(null);
   const appliedResultIdRef = useRef<string | null>(null);
+  const workingCopyHashRef = useRef<string | null>(null);
+  const unsavedEditsRef = useRef(false);
 
   const updateWorkingCopy = useCallback((next: LiyanWorkingCopy) => {
     setWorkingCopy(next);
@@ -75,7 +86,9 @@ export function LiyanPanel({
 
   const load = useCallback(async () => {
     try {
-      const next = await getTaskLiyan(accessToken, taskId);
+      // The draft's hash travels with every read, so the server decides whether the
+      // newest Revision is still publishable rather than being asked to guess.
+      const next = await getTaskLiyan(accessToken, taskId, workingCopyHashRef.current);
       setState(next);
       applyStartedResult(next);
       if (next.request) {
@@ -97,6 +110,23 @@ export function LiyanPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let current = true;
+    if (workingCopy === null) {
+      workingCopyHashRef.current = null;
+      setWorkingCopyHash(null);
+      return;
+    }
+    void articleContentHash(workingCopy).then((hash) => {
+      if (!current) return;
+      workingCopyHashRef.current = hash;
+      setWorkingCopyHash(hash);
+    });
+    return () => {
+      current = false;
+    };
+  }, [workingCopy]);
 
   const active = state?.status === "running";
   useEffect(() => {
@@ -151,6 +181,55 @@ export function LiyanPanel({
     }
   }
 
+  async function save() {
+    if (!workingCopy) return;
+    setBusy(true);
+    try {
+      const next = await saveLiyanRevision(accessToken, taskId, {
+        idempotency_key: crypto.randomUUID(),
+        base_revision_id: state?.revisions.current?.id ?? null,
+        title: workingCopy.title.trim(),
+        body_markdown: workingCopy.body_markdown.trim(),
+      });
+      setState(next);
+      setError(null);
+    } catch (thrown) {
+      // A rejected save must never discard the browser-local draft.
+      const stale = thrown instanceof ApiError && thrown.status === CONFLICT;
+      // The draft stays untouched; only the Revision it must be based on is refreshed,
+      // so the rejection leaves the newer Revision on screen to compare against.
+      if (stale) await load();
+      setError(stale ? STALE_BASE : "保存文章失败，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restore(revisionId: string) {
+    if (unsavedEditsRef.current && !window.confirm(DISCARD_ON_RESTORE)) return;
+    setBusy(true);
+    try {
+      const next = await restoreLiyanRevision(
+        accessToken,
+        taskId,
+        revisionId,
+        crypto.randomUUID(),
+      );
+      setState(next);
+      if (next.revisions.current) {
+        updateWorkingCopy({
+          title: next.revisions.current.title,
+          body_markdown: canonicalizeArticleMarkdown(next.revisions.current.body_markdown),
+        });
+      }
+      setError(null);
+    } catch {
+      setError("恢复历史 Revision 失败，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function recover() {
     if (!state?.result) return;
     updateWorkingCopy(workingCopyFromResult(state.result));
@@ -160,15 +239,25 @@ export function LiyanPanel({
 
   const recoveredResult =
     loadedOnce.current && state?.result && workingCopy === null && startedExecutionId === null;
+  const unsavedEdits = !draftMatchesRevision(
+    workingCopy,
+    workingCopyHash,
+    state?.revisions.current?.content_hash ?? null,
+  );
+  const publishableRevisionId = unsavedEdits
+    ? null
+    : state?.capabilities.publishable_revision_id ?? null;
   const failureMessage = state?.execution?.error?.message;
   const retry = state?.capabilities.retry;
   const reloadWhenAllowed = useCallback(() => void load(), [load]);
   const countdown = useRetryCountdown(retry?.allowed_at ?? null, reloadWhenAllowed);
   const heading = useFocusWhen<HTMLHeadingElement>(state?.capabilities.can_generate ?? false);
+  useEffect(() => {
+    unsavedEditsRef.current = unsavedEdits;
+  }, [unsavedEdits]);
 
   return (
     <section className="zhiyan-panel liyan-panel" aria-labelledby={`liyan-${taskId}`}>
-      <p className="section-kicker">立言</p>
       <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>立言文章</h3>
 
       <p className="liyan-instruction-label">立言指令（可选）</p>
@@ -200,6 +289,16 @@ export function LiyanPanel({
         >
           {state?.status === "failed" ? "重试" : "生成立言"}
         </button>
+        {workingCopy ? (
+          <button
+            className="button button--quiet"
+            type="button"
+            disabled={busy || !state?.capabilities.can_save || !unsavedEdits}
+            onClick={() => void save()}
+          >
+            保存 Revision
+          </button>
+        ) : null}
         {state?.capabilities.can_cancel && state.execution ? (
           <button
             className="button button--quiet"
@@ -227,6 +326,18 @@ export function LiyanPanel({
             载入为未保存草稿
           </button>
         </div>
+      ) : null}
+
+      {state ? (
+        <ArticleRevisionHistory
+          history={state.revisions}
+          publishableRevisionId={publishableRevisionId}
+          publicationUnavailableReason={
+            unsavedEdits ? UNSAVED_EDITS : state.capabilities.publication_unavailable_reason
+          }
+          disabled={busy || !state.capabilities.can_save}
+          onRestore={(revisionId) => void restore(revisionId)}
+        />
       ) : null}
 
       {workingCopy ? (

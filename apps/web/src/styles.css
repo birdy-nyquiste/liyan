@@ -1,5 +1,44 @@
 :root {
-  color: #29261f;
+  /* 4pt spacing scale. Every gap and pad in the workbench comes from here. */
+  --space-3xs: 4px;
+  --space-2xs: 8px;
+  --space-xs: 12px;
+  --space-sm: 16px;
+  --space-md: 20px;
+  --space-lg: 28px;
+  --space-xl: 40px;
+  --space-2xl: 56px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --ink: #29261f;
+  --ink-muted: #6e685b;
+  --ink-faint: #746e60;
+  --accent: #856b37;
+  --accent-soft: #efe7d4;
+  --rule: rgb(66 57 39 / 14%);
+  --rule-soft: rgb(66 57 39 / 8%);
+  --surface: #fffdf8;
+  --surface-sunk: #f7f3e9;
+  --ok: #4a6741;
+  --ok-soft: #e3ecdd;
+  --warn: #8a5a12;
+  --warn-soft: #f4e8d2;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-strong: 650;
+
+  --z-sticky: 10;
+  --z-toast: 40;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 180ms;
+
+  color: var(--ink);
   background: #f3efe6;
   font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
   font-synthesis: none;
@@ -180,6 +219,12 @@ h1 {
   color: #95473d;
 }
 
+/* One open task holds three areas; give it the width, and only then. */
+.workspace--wide {
+  width: min(1480px, calc(100vw - 40px));
+  margin-left: calc((min(1040px, 100vw - 40px) - min(1480px, 100vw - 40px)) / 2);
+}
+
 .workspace--tasks {
   display: block;
 }
@@ -309,17 +354,29 @@ h1 {
 }
 
 .task-card h3 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-3xs);
+}
+
+.task-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-card__meta [aria-hidden="true"] {
+  color: var(--ink-faint);
 }
 
 .task-card p {
-  margin-bottom: 5px;
-  color: #6e685b;
+  margin: 0;
+  color: var(--ink-muted);
 }
 
-.task-card__source {
-  color: #29261f !important;
-  font-weight: 650;
+.task-card p.task-card__source {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }
 
 .empty-state {
@@ -330,10 +387,10 @@ h1 {
   text-align: center;
 }
 
-.empty-state__title {
-  margin-bottom: 6px;
-  color: #29261f !important;
-  font-weight: 750;
+.empty-state .empty-state__title {
+  margin-bottom: var(--space-3xs);
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }
 
 @media (max-width: 640px) {
@@ -361,16 +418,103 @@ h1 {
   margin-top: 8px;
 }
 
-.task-detail,
-.source-versions {
+.task-detail {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-sm);
+  grid-column: 1 / -1;
+}
+
+/*
+ * Source, 知言, and 立言 side by side. Normal work keeps Source folded to a rail
+ * and gives the other two the room; editing sources reverses it. Below 1100px
+ * the columns stack, because three columns of prose stop being readable.
+ */
+.task-areas {
+  display: grid;
+  gap: var(--space-sm);
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .task-areas[data-focus="work"] {
+    grid-template-columns: 15rem minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .task-areas[data-focus="sources"] {
+    grid-template-columns: minmax(0, 1fr) 15rem 15rem;
+  }
+}
+
+.task-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.task-area[data-state="collapsed"] {
+  background: var(--surface-sunk);
+}
+
+.task-area__toggle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.task-area__toggle:hover .task-area__label {
+  color: var(--accent);
+}
+
+.task-area__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task-area__label {
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.02em;
+  transition: color var(--duration) var(--ease-out);
+}
+
+.task-area__summary {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.task-area__body {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm) var(--space-sm);
+}
+
+/* The area owns the surface; nothing inside it draws a second card. */
+.task-area__body > .zhiyan-panel,
+.task-area__body > .source-versions,
+.task-area__body > .liyan-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 
 .source-versions {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgb(66 57 39 / 14%);
+  display: grid;
+  gap: var(--space-sm);
 }
 
 .source-versions__heading {
@@ -536,17 +680,65 @@ h1 {
   border-top: 1px solid #d9cfb8;
 }
 
-.zhiyan-section {
-  margin-top: 18px;
-  padding-top: 14px;
+.liyan-revisions {
+  margin-top: 22px;
+  padding-top: 18px;
   border-top: 1px solid rgb(66 57 39 / 10%);
 }
 
-.zhiyan-section h4 {
-  margin: 0 0 8px;
+.liyan-revision {
+  padding: 10px 0;
+}
+
+.liyan-revision--current {
+  padding-top: 4px;
+}
+
+.liyan-revision__identity {
+  margin: 0;
   color: #856b37;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   letter-spacing: 0.04em;
+}
+
+.liyan-revision__title {
+  margin: 2px 0 4px;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.liyan-revision-history summary {
+  cursor: pointer;
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.liyan-revision-history {
+  margin: 8px 0 0;
+  padding: 0;
+  border-top: 1px solid rgb(66 57 39 / 10%);
+  list-style: none;
+}
+
+.liyan-revision-history li + li {
+  border-top: 1px solid rgb(66 57 39 / 10%);
+}
+
+/*
+ * A 知言报告 is read, not scanned once. Sections are separated generously and
+ * their contents grouped tightly, so hierarchy comes from space and weight
+ * rather than from colouring every label.
+ */
+.zhiyan-section {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.zhiyan-section h4 {
+  margin: 0 0 var(--space-2xs);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.01em;
 }
 
 .zhiyan-items {
@@ -586,8 +778,8 @@ h1 {
   color: #4d3e1f;
 }
 
-.zhiyan-item__claim {
-  color: #29261f !important;
+.zhiyan-item p.zhiyan-item__claim {
+  color: var(--ink);
   font-weight: 650;
 }
 
@@ -649,22 +841,36 @@ h1 {
   font-style: italic;
 }
 
+/*
+ * Labels sit above their text rather than beside it: in a column this narrow a
+ * label gutter costs the prose the measure it needs.
+ */
 .zhiyan-detail-list {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 14px;
-  margin: 0 0 12px;
+  gap: var(--space-3xs);
+  margin: 0 0 var(--space-xs);
 }
 
 .zhiyan-detail-list dt {
-  color: #856b37;
-  font-size: 0.9rem;
-  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+}
+
+.zhiyan-detail-list dt + dd {
+  margin-bottom: var(--space-2xs);
 }
 
 .zhiyan-detail-list dd {
   margin: 0;
-  color: #29261f;
+  max-width: 68ch;
+  color: var(--ink);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.zhiyan-detail-list dd:last-child {
+  margin-bottom: 0;
 }
 
 .zhiyan-quote {

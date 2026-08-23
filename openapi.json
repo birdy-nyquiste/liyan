@@ -1204,6 +1204,64 @@
         }
       }
     },
+    "/tasks/{task_id}/versions/{version_id}/zhiyan": {
+      "get": {
+        "tags": [
+          "zhiyan"
+        ],
+        "summary": "Get Task Version Zhiyan",
+        "operationId": "get_task_version_zhiyan",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionZhiyanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks/{task_id}/zhiyan": {
       "get": {
         "tags": [
@@ -1236,6 +1294,269 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskVersionZhiyanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/versions": {
+      "get": {
+        "tags": [
+          "source editing"
+        ],
+        "summary": "List Versions",
+        "operationId": "list_task_versions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionHistory"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/source-edit-sessions": {
+      "post": {
+        "tags": [
+          "source editing"
+        ],
+        "summary": "Create Edit Session",
+        "operationId": "create_source_edit_session",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceEditSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/source-edit-sessions/{edit_id}/discard": {
+      "post": {
+        "tags": [
+          "source editing"
+        ],
+        "summary": "Discard Edit Session",
+        "operationId": "discard_source_edit_session",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/source-edit-sessions/{edit_id}/save": {
+      "post": {
+        "tags": [
+          "source editing"
+        ],
+        "summary": "Save Edit Session",
+        "operationId": "save_source_edit_session",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "edit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Edit Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSourceEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/versions/{version_id}/restore": {
+      "post": {
+        "tags": [
+          "source editing"
+        ],
+        "summary": "Restore Version",
+        "operationId": "restore_task_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskVersionSnapshot"
                 }
               }
             }
@@ -2293,6 +2614,104 @@
         ],
         "title": "ReplaceUrlSourceRequest"
       },
+      "RestoreVersionRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "title": "RestoreVersionRequest"
+      },
+      "SaveSourceEditRequest": {
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "title": "Idempotency Key"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SaveSourceItem"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Sources"
+          },
+          "accepted_warning_versions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "Accepted Warning Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "sources"
+        ],
+        "title": "SaveSourceEditRequest"
+      },
+      "SaveSourceItem": {
+        "properties": {
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "base_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Revision Id"
+          },
+          "prepared_source_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared Source Id"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SaveSourceItem"
+      },
       "SessionSourceCapabilities": {
         "properties": {
           "can_retry": {
@@ -2432,6 +2851,23 @@
           "capabilities"
         ],
         "title": "SessionSourceResponse"
+      },
+      "SourceEditSessionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "base_version": {
+            "$ref": "#/components/schemas/TaskVersionSnapshot"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "base_version"
+        ],
+        "title": "SourceEditSessionResponse"
       },
       "SourceFailure": {
         "properties": {
@@ -2747,6 +3183,68 @@
         ],
         "title": "TaskVersionDetail"
       },
+      "TaskVersionHistory": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskVersionSnapshot"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "historical_limit": {
+            "type": "integer",
+            "title": "Historical Limit",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TaskVersionHistory"
+      },
+      "TaskVersionSnapshot": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/VersionSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/VersionCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "created_at",
+          "is_current",
+          "sources",
+          "capabilities"
+        ],
+        "title": "TaskVersionSnapshot"
+      },
       "TaskVersionZhiyanResponse": {
         "properties": {
           "task_id": {
@@ -2956,6 +3454,76 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VersionCapabilities": {
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_edit",
+          "can_restore",
+          "unavailable_reason"
+        ],
+        "title": "VersionCapabilities"
+      },
+      "VersionSource": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "id",
+          "title",
+          "body",
+          "provenance"
+        ],
+        "title": "VersionSource"
       },
       "ViewpointItem": {
         "properties": {

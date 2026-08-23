@@ -414,6 +414,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{task_id}/versions/{version_id}/zhiyan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task Version Zhiyan */
+        get: operations["get_task_version_zhiyan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks/{task_id}/zhiyan": {
         parameters: {
             query?: never;
@@ -428,6 +445,91 @@ export interface paths {
         get: operations["get_task_zhiyan"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_task_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}/source-edit-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Edit Session */
+        post: operations["create_source_edit_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/source-edit-sessions/{edit_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Edit Session */
+        post: operations["discard_source_edit_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/source-edit-sessions/{edit_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Edit Session */
+        post: operations["save_source_edit_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{task_id}/versions/{version_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Version */
+        post: operations["restore_task_version"];
         delete?: never;
         options?: never;
         head?: never;
@@ -760,6 +862,32 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** RestoreVersionRequest */
+        RestoreVersionRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+        };
+        /** SaveSourceEditRequest */
+        SaveSourceEditRequest: {
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Sources */
+            sources: components["schemas"]["SaveSourceItem"][];
+            /** Accepted Warning Versions */
+            accepted_warning_versions?: {
+                [key: string]: number;
+            };
+        };
+        /** SaveSourceItem */
+        SaveSourceItem: {
+            /** Source Id */
+            source_id?: string | null;
+            /** Base Revision Id */
+            base_revision_id?: string | null;
+            /** Prepared Source Id */
+            prepared_source_id?: string | null;
+            content?: components["schemas"]["SourceInput"] | null;
+        };
         /** SessionSourceCapabilities */
         SessionSourceCapabilities: {
             /** Can Retry */
@@ -798,6 +926,12 @@ export interface components {
             failure: components["schemas"]["SourceFailure"] | null;
             active_execution: components["schemas"]["ExecutionResponse"] | null;
             capabilities: components["schemas"]["SessionSourceCapabilities"];
+        };
+        /** SourceEditSessionResponse */
+        SourceEditSessionResponse: {
+            /** Id */
+            id: string;
+            base_version: components["schemas"]["TaskVersionSnapshot"];
         };
         /** SourceFailure */
         SourceFailure: {
@@ -913,6 +1047,33 @@ export interface components {
             /** Source Revisions */
             source_revisions: components["schemas"]["SourceRevisionSummary"][];
         };
+        /** TaskVersionHistory */
+        TaskVersionHistory: {
+            /** Items */
+            items: components["schemas"]["TaskVersionSnapshot"][];
+            /**
+             * Historical Limit
+             * @default 3
+             */
+            historical_limit: number;
+        };
+        /** TaskVersionSnapshot */
+        TaskVersionSnapshot: {
+            /** Id */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Is Current */
+            is_current: boolean;
+            /** Sources */
+            sources: components["schemas"]["VersionSource"][];
+            capabilities: components["schemas"]["VersionCapabilities"];
+        };
         /** TaskVersionZhiyanResponse */
         TaskVersionZhiyanResponse: {
             /** Task Id */
@@ -973,6 +1134,28 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VersionCapabilities */
+        VersionCapabilities: {
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Restore */
+            can_restore: boolean;
+            /** Unavailable Reason */
+            unavailable_reason: string | null;
+        };
+        /** VersionSource */
+        VersionSource: {
+            /** Source Id */
+            source_id: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Provenance */
+            provenance: string | null;
         };
         /** ViewpointItem */
         ViewpointItem: {
@@ -1864,6 +2047,38 @@ export interface operations {
             };
         };
     };
+    get_task_version_zhiyan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionZhiyanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_task_zhiyan: {
         parameters: {
             query?: never;
@@ -1882,6 +2097,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskVersionZhiyanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_task_versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_source_edit_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceEditSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_source_edit_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_source_edit_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSourceEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_task_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskVersionSnapshot"];
                 };
             };
             /** @description Validation Error */

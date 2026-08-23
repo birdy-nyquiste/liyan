@@ -22,16 +22,26 @@ export function TaskWorkspace({
   const [creating, setCreating] = useState(false);
   const [creationDirty, setCreationDirty] = useState(false);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
+  const [sourceEditingTaskIds, setSourceEditingTaskIds] = useState<Set<string>>(new Set());
 
   const taskCreated = (task: TaskSummary) => {
     setOpenedTaskId(task.id);
     onTaskCreated(task);
   };
 
+  const openTask = (taskId: string) => {
+    if (
+      sourceEditingTaskIds.size > 0
+      && !sourceEditingTaskIds.has(taskId)
+      && !window.confirm("未保存的来源修改会被丢弃，确定离开当前任务吗？")
+    ) return;
+    setOpenedTaskId(taskId);
+  };
+
   const attemptSignOut = () => {
     if (
-      !creationDirty ||
-      window.confirm("未完成的创建内容不会保存，确定退出登录吗？")
+      (!creationDirty && sourceEditingTaskIds.size === 0) ||
+      window.confirm("未完成的创建内容或来源修改不会保存，确定退出登录吗？")
     ) {
       void onSignOut();
     }
@@ -73,7 +83,13 @@ export function TaskWorkspace({
             task={task}
             accessToken={accessToken}
             opened={task.id === openedTaskId}
-            onOpen={setOpenedTaskId}
+            onOpen={openTask}
+            onSourceEditingChange={(taskId, editing) => setSourceEditingTaskIds((current) => {
+              const next = new Set(current);
+              if (editing) next.add(taskId);
+              else next.delete(taskId);
+              return next;
+            })}
           />
         ))}
       </div>

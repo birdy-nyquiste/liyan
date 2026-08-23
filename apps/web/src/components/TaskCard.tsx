@@ -3,22 +3,26 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { TaskZhiyanArea } from "./TaskZhiyanArea";
+import { TaskSourceVersions } from "./TaskSourceVersions";
 
 export function TaskCard({
   task: initialTask,
   accessToken,
   opened = false,
   onOpen,
+  onSourceEditingChange,
 }: {
   task: TaskSummary;
   accessToken: string;
   opened?: boolean;
   onOpen?(taskId: string): void;
+  onSourceEditingChange?(taskId: string, editing: boolean): void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -88,7 +92,31 @@ export function TaskCard({
           </div>
         </div>
       )}
-      {opened ? <TaskZhiyanArea accessToken={accessToken} taskId={task.id} /> : null}
+      {opened ? (
+        <div className="task-detail">
+          <TaskSourceVersions
+            accessToken={accessToken}
+            taskId={task.id}
+            onVersionSelected={setSelectedVersionId}
+            onCurrentVersionChanged={(version) => {
+              setSelectedVersionId(version.id);
+              setTask((current) => ({
+                ...current,
+                current_version_id: version.id,
+                current_version_number: version.number,
+                first_source_title: version.sources[0]?.title ?? current.first_source_title,
+                additional_source_count: Math.max(0, version.sources.length - 1),
+              }));
+            }}
+            onEditingChange={(editing) => onSourceEditingChange?.(task.id, editing)}
+          />
+          <TaskZhiyanArea
+            accessToken={accessToken}
+            taskId={task.id}
+            versionId={selectedVersionId}
+          />
+        </div>
+      ) : null}
     </article>
   );
 }

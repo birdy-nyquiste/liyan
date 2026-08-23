@@ -4,6 +4,7 @@ import {
   ApiError,
   cancelExecution,
   getTaskZhiyan,
+  getTaskVersionZhiyan,
   startZhiyanRun,
   type TaskVersionZhiyanResponse,
 } from "../api/client";
@@ -29,10 +30,12 @@ const TOO_MANY_REQUESTS = 429;
 export function TaskZhiyanArea({
   accessToken,
   taskId,
+  versionId,
   pollIntervalMs = POLL_INTERVAL_MS,
 }: {
   accessToken: string;
   taskId: string;
+  versionId?: string | null;
   pollIntervalMs?: number;
 }) {
   const [overview, setOverview] = useState<TaskVersionZhiyanResponse | null>(null);
@@ -43,14 +46,18 @@ export function TaskZhiyanArea({
 
   const load = useCallback(async () => {
     try {
-      setOverview(await getTaskZhiyan(accessToken, taskId));
+      setOverview(
+        versionId
+          ? await getTaskVersionZhiyan(accessToken, taskId, versionId)
+          : await getTaskZhiyan(accessToken, taskId),
+      );
       setError(null);
     } catch {
       setError(LOAD_FAILED);
     } finally {
       setPolls((count) => count + 1);
     }
-  }, [accessToken, taskId]);
+  }, [accessToken, taskId, versionId]);
 
   useEffect(() => {
     void load();

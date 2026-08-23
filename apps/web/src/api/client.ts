@@ -11,6 +11,11 @@ export type SessionSourceResponse = components["schemas"]["SessionSourceResponse
 export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
 export type ZhiyanStateResponse = components["schemas"]["ZhiyanStateResponse"];
 export type TaskVersionZhiyanResponse = components["schemas"]["TaskVersionZhiyanResponse"];
+export type TaskVersionHistory = components["schemas"]["TaskVersionHistory"];
+export type TaskVersionSnapshot = components["schemas"]["TaskVersionSnapshot"];
+export type VersionSource = components["schemas"]["VersionSource"];
+export type SourceEditSessionResponse = components["schemas"]["SourceEditSessionResponse"];
+export type SaveSourceEditRequest = components["schemas"]["SaveSourceEditRequest"];
 
 export class ApiError extends Error {
   constructor(public readonly status: number) {
@@ -302,6 +307,89 @@ export async function getTaskZhiyan(
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/zhiyan", {
     params: { path: { task_id: taskId } },
   });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function getTaskVersionZhiyan(
+  accessToken: string,
+  taskId: string,
+  versionId: string,
+): Promise<TaskVersionZhiyanResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/tasks/{task_id}/versions/{version_id}/zhiyan",
+    { params: { path: { task_id: taskId, version_id: versionId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function listTaskVersions(
+  accessToken: string,
+  taskId: string,
+): Promise<TaskVersionHistory> {
+  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/versions", {
+    params: { path: { task_id: taskId } },
+  });
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function createSourceEditSession(
+  accessToken: string,
+  taskId: string,
+): Promise<SourceEditSessionResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/tasks/{task_id}/source-edit-sessions",
+    { params: { path: { task_id: taskId } } },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function saveSourceEditSession(
+  accessToken: string,
+  editSessionId: string,
+  request: SaveSourceEditRequest,
+): Promise<TaskVersionSnapshot> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/source-edit-sessions/{edit_id}/save",
+    { params: { path: { edit_id: editSessionId } }, body: request },
+  );
+  if (!result.data) throw new ApiError(result.response.status);
+  return result.data;
+}
+
+export async function discardSourceEditSession(
+  accessToken: string,
+  editSessionId: string,
+  keepalive = false,
+): Promise<void> {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  const response = await fetch(new Request(
+    `${baseUrl}/source-edit-sessions/${editSessionId}/discard`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      keepalive,
+    },
+  ));
+  if (!response.ok) throw new ApiError(response.status);
+}
+
+export async function restoreTaskVersion(
+  accessToken: string,
+  taskId: string,
+  versionId: string,
+  idempotencyKey: string,
+): Promise<TaskVersionSnapshot> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/tasks/{task_id}/versions/{version_id}/restore",
+    {
+      params: { path: { task_id: taskId, version_id: versionId } },
+      body: { idempotency_key: idempotencyKey },
+    },
+  );
   if (!result.data) throw new ApiError(result.response.status);
   return result.data;
 }

@@ -106,6 +106,10 @@ class SourceRevision(Base):
         ForeignKey("sources.id", ondelete="CASCADE"),
         index=True,
     )
+    source_preparation_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("source_preparations.id", name="fk_source_revisions_source_preparation_id"),
+    )
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
     provenance: Mapped[str | None] = mapped_column(Text)
@@ -127,6 +131,31 @@ class TaskVersionSource(Base):
         primary_key=True,
     )
     position: Mapped[int] = mapped_column(Integer)
+
+
+class SourceEditSession(Base):
+    """An intentionally unrecoverable browser editing checkpoint for 来源."""
+
+    __tablename__ = "source_edit_sessions"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    task_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("tasks.id", ondelete="CASCADE"), index=True
+    )
+    base_version_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("task_versions.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    save_idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    save_request_hash: Mapped[str | None] = mapped_column(String(64))
+    saved_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("task_versions.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class SourcePreparation(Base):

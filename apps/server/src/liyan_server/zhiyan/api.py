@@ -24,6 +24,7 @@ from liyan_server.database import (
     SourceRevision,
     Task,
     TaskVersion,
+    TaskVersionSource,
     User,
     ZhiyanReport,
     aware_utc,
@@ -55,6 +56,7 @@ RATE_LIMITED_MESSAGE = "重试次数已用完，请稍后再试。"
 BUSY_MESSAGE = "服务繁忙，请重试。"
 WAITING_MESSAGE = "知言分析尚未全部完成，全部报告成功后才能生成立言。"
 INCOMPLETE_MESSAGE = "仍有来源没有成功的知言报告，全部成功后才能生成立言。"
+HISTORICAL_MESSAGE = "历史任务版本只读，恢复为当前版本后才能继续操作。"
 
 
 class ZhiyanRetryState(BaseModel):
@@ -131,9 +133,7 @@ def zhiyan_execution_response(execution: Execution) -> ExecutionResponse:
     response = execution_response(execution)
     if execution.status not in {"failed", "stale"}:
         return response
-    return response.model_copy(
-        update={"error": ExecutionError(code="busy", message=BUSY_MESSAGE)}
-    )
+    return response.model_copy(update={"error": ExecutionError(code="busy", message=BUSY_MESSAGE)})
 
 
 def zhiyan_state_response(
@@ -141,6 +141,8 @@ def zhiyan_state_response(
     report: ZhiyanReport | None,
     execution: Execution | None,
     retry: RetryState,
+    *,
+    allow_actions: bool = True,
 ) -> ZhiyanStateResponse:
     active = execution is not None and execution.status in ACTIVE_EXECUTION_STATUSES
     return ZhiyanStateResponse(
@@ -150,10 +152,9 @@ def zhiyan_state_response(
         report=report_response(report) if report else None,
         execution=zhiyan_execution_response(execution) if execution else None,
         capabilities=ZhiyanCapabilities(
-            can_start=(
-                report is None and not active and (execution is None or retry.allowed)
-            ),
-            can_cancel=active,
+            can_start=allow_actions
+            and (report is None and not active and (execution is None or retry.allowed)),
+            can_cancel=allow_actions and active,
             retry=ZhiyanRetryState.of(retry),
         ),
     )
@@ -212,13 +213,65 @@ def zhiyan_router(
             )
         return revision
 
-    def state_of(session: Session, revision: SourceRevision, now: datetime) -> ZhiyanStateResponse:
+    def state_of(
+        session: Session,
+        revision: SourceRevision,
+        now: datetime,
+        *,
+        allow_actions: bool = True,
+    ) -> ZhiyanStateResponse:
         runs = load_runs(session, revision.id)
         return zhiyan_state_response(
             revision,
             accepted_report(session, revision.id),
             runs.latest,
             runs.retry_state(now),
+            allow_actions=allow_actions,
+        )
+
+    def is_current_revision(session: Session, revision: SourceRevision) -> bool:
+        current = session.scalar(
+            select(TaskVersionSource.source_revision_id)
+            .join(Task, Task.current_version_id == TaskVersionSource.task_version_id)
+            .join(Source, Source.task_id == Task.id)
+            .where(
+                TaskVersionSource.source_revision_id == revision.id,
+                Source.id == revision.source_id,
+            )
+        )
+        return current is not None
+
+    def require_current_revision(session: Session, revision: SourceRevision) -> None:
+        if not is_current_revision(session, revision):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=HISTORICAL_MESSAGE,
+            )
+
+    def version_response(
+        session: Session,
+        task: Task,
+        version: TaskVersion,
+    ) -> TaskVersionZhiyanResponse:
+        current = task.current_version_id == version.id
+        now = datetime.now(UTC)
+        sources = [
+            state_of(session, revision, now, allow_actions=current)
+            for revision in version_source_revisions(session, version.id)
+        ]
+        return TaskVersionZhiyanResponse(
+            task_id=str(task.id),
+            task_version_id=str(version.id),
+            task_version_number=version.number,
+            sources=sources,
+            liyan=(
+                liyan_capabilities(sources)
+                if current
+                else LiyanCapabilities(
+                    can_generate=False,
+                    unavailable_reason=HISTORICAL_MESSAGE,
+                )
+            ),
         )
 
     @router.post(
@@ -238,6 +291,7 @@ def zhiyan_router(
             source_revision_id=source_revision_id,
             owner_id=user.id,
         )
+        require_current_revision(session, revision)
         if accepted_report(session, revision.id) is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -294,7 +348,41 @@ def zhiyan_router(
             source_revision_id=source_revision_id,
             owner_id=user.id,
         )
-        return state_of(session, revision, datetime.now(UTC))
+        return state_of(
+            session,
+            revision,
+            datetime.now(UTC),
+            allow_actions=is_current_revision(session, revision),
+        )
+
+    @router.get(
+        "/tasks/{task_id}/versions/{version_id}/zhiyan",
+        operation_id="get_task_version_zhiyan",
+        response_model=TaskVersionZhiyanResponse,
+        tags=["zhiyan"],
+    )
+    def get_task_version_zhiyan(
+        task_id: UUID,
+        version_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> TaskVersionZhiyanResponse:
+        task = session.scalar(
+            select(Task).where(
+                Task.id == task_id,
+                Task.owner_id == user.id,
+                Task.number.is_not(None),
+            )
+        )
+        version = session.scalar(
+            select(TaskVersion).where(
+                TaskVersion.id == version_id,
+                TaskVersion.task_id == task_id,
+            )
+        )
+        if task is None or version is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+        return version_response(session, task, version)
 
     @router.get(
         "/tasks/{task_id}/zhiyan",
@@ -322,18 +410,7 @@ def zhiyan_router(
         )
         if task is None or version is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
-        now = datetime.now(UTC)
-        sources = [
-            state_of(session, revision, now)
-            for revision in version_source_revisions(session, version.id)
-        ]
-        return TaskVersionZhiyanResponse(
-            task_id=str(task.id),
-            task_version_id=str(version.id),
-            task_version_number=version.number,
-            sources=sources,
-            liyan=liyan_capabilities(sources),
-        )
+        return version_response(session, task, version)
 
     return router
 

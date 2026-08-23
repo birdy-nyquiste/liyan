@@ -288,6 +288,9 @@ def task_creation_router(
             content_hash = _request_hash(prepared.model_dump())
             revision = SourceRevision(
                 source_id=source.id,
+                source_preparation_id=(
+                    ordered_sources[position].id if request.source is None else None
+                ),
                 title=prepared.title,
                 body=prepared.body,
                 provenance=prepared.provenance,

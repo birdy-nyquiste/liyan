@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from liyan_server.cleanup import policy_from, run_cleanup
 from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher
 from liyan_server.database import Database, Execution
-from liyan_server.execution_dispatch import CeleryExecutionDispatcher
+from liyan_server.execution_dispatch import EXECUTION_QUEUE, CeleryExecutionDispatcher
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
 from liyan_server.liyan.deepseek import DeepSeekLiyanProvider
@@ -27,6 +27,12 @@ from liyan_server.zhiyan.worker import process_zhiyan_run
 configure_logging()
 settings = Settings()
 celery_app = Celery("liyan-worker", broker=settings.broker_url)
+
+# What this worker consumes, and where beat sends. The API dispatches to the
+# same name, so the two cannot disagree without the import failing. Left to
+# Celery's default the worker would listen on `celery` while every Execution
+# piled up in `source-processing`, and nothing would say so.
+celery_app.conf.task_default_queue = EXECUTION_QUEUE
 
 #: Cleanup is the one job nobody triggers, which is why it needs a schedule at
 #: all. Beat is a separate process from the worker: without it nothing is ever

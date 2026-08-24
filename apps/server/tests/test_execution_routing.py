@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server import celery_worker
 from liyan_server.database import Database, Execution, User
+from liyan_server.execution_dispatch import EXECUTION_QUEUE, CeleryExecutionDispatcher
 from liyan_server.settings import Settings
 
 
@@ -99,3 +100,32 @@ def test_an_unknown_operation_is_ignored_rather_than_crashing_the_worker(
         monkeypatch.setattr(celery_worker, name, refuse)
 
     celery_worker.process_execution(str(execution_id))
+
+
+def test_the_worker_listens_where_the_api_sends() -> None:
+    """The quietest possible failure, and the only thing that catches it.
+
+    A producer that sends to a queue the consumer does not listen on breaks
+    nothing visibly: the API accepts the work and answers 202, the queue fills,
+    the worker sits idle reporting itself healthy, and every task shows as
+    processing forever. Beat keeps running, because its own tasks go to the
+    default queue — which makes the worker look alive while it consumes nothing.
+    """
+    assert celery_worker.celery_app.conf.task_default_queue == EXECUTION_QUEUE
+
+
+def test_a_dispatched_execution_is_addressed_to_that_queue() -> None:
+    sent: dict[str, object] = {}
+
+    class RecordingCelery:
+        def send_task(self, name: str, *, args: list[str], queue: str) -> None:
+            sent.update({"name": name, "args": args, "queue": queue})
+
+    dispatcher = CeleryExecutionDispatcher.__new__(CeleryExecutionDispatcher)
+    dispatcher._celery = RecordingCelery()
+    execution_id = uuid4()
+
+    dispatcher.dispatch(execution_id)
+
+    assert sent["queue"] == EXECUTION_QUEUE
+    assert sent["args"] == [str(execution_id)]

@@ -3,6 +3,12 @@ from uuid import UUID
 
 from celery import Celery  # type: ignore[import-untyped]
 
+#: The one queue this system uses. Named here, imported by both sides: a
+#: producer that sends somewhere the consumer does not listen fails in the
+#: quietest way available — the API accepts the work, the queue fills, the
+#: worker sits idle, and nothing anywhere reports a problem.
+EXECUTION_QUEUE = "source-processing"
+
 
 class ExecutionDispatcher(Protocol):
     def dispatch(self, execution_id: UUID) -> None: ...
@@ -26,7 +32,7 @@ class CeleryExecutionDispatcher:
         self._celery.send_task(
             "liyan.process_execution",
             args=[str(execution_id)],
-            queue="source-processing",
+            queue=EXECUTION_QUEUE,
         )
 
     def is_reachable(self) -> bool:

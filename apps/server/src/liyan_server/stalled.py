@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 #: would survive, so it does not spend the automatic attempt.
 STALLED_CODE = "worker_lost"
 
+#: Queued and never claimed. A different cause and a different fix: a message
+#: was lost or purged, or it was addressed to a queue no worker consumes, so the
+#: answer is a worker or a routing name rather than a dead process.
+NEVER_STARTED_CODE = "worker_never_started"
+
 STALLED_MESSAGE = "这次运行没有返回结果，可以重新发起。"
 
 #: What a file or URL 来源's Execution targets, spelled the way the two
@@ -49,6 +54,10 @@ class StalledPolicy:
     """
 
     timeout: timedelta = timedelta(minutes=30)
+    #: How long work may wait unclaimed. A backlog is not a fault — the worker
+    #: may simply be busy — so this is generous too; it exists to catch a queue
+    #: nobody is consuming, which otherwise waits forever in silence.
+    queued_timeout: timedelta = timedelta(minutes=30)
 
 
 @dataclass
@@ -58,7 +67,10 @@ class StalledReport:
 
 
 def policy_from(settings: Settings) -> StalledPolicy:
-    return StalledPolicy(timeout=timedelta(minutes=settings.stalled_execution_timeout_minutes))
+    return StalledPolicy(
+        timeout=timedelta(minutes=settings.stalled_execution_timeout_minutes),
+        queued_timeout=timedelta(minutes=settings.unclaimed_execution_timeout_minutes),
+    )
 
 
 def _release_source(session: Session, execution: Execution, now: datetime) -> None:
@@ -86,24 +98,34 @@ def _release_source(session: Session, execution: Execution, now: datetime) -> No
 def recover_stalled_executions(
     database_url: str, *, policy: StalledPolicy, now: datetime
 ) -> StalledReport:
-    """End every run that has been going too long to still be going."""
+    """End every run that has waited too long to still be waiting.
+
+    Two ways that happens, and they are worth telling apart. A `running` run
+    whose worker died is the obvious one. A `queued` run nobody ever claimed is
+    the quieter one: never claimed means never `running`, so a sweep that looked
+    only at runs in flight would never see it, and the 来源 shows 处理中 until
+    somebody thinks to look inside the broker.
+    """
     database = Database(database_url)
     if database.engine is None:
         raise RuntimeError("Database is not configured.")
     report = StalledReport()
     cutoff = now - policy.timeout
+    queued_cutoff = now - policy.queued_timeout
     try:
         with Session(database.engine) as session:
-            running = session.scalars(
-                select(Execution).where(Execution.status == "running")
+            waiting = session.scalars(
+                select(Execution).where(Execution.status.in_(("running", "queued")))
             ).all()
-            for execution in running:
-                started = execution.started_at or execution.created_at
+            for execution in waiting:
+                claimed = execution.status == "running"
+                since = execution.started_at if claimed else execution.created_at
+                limit = cutoff if claimed else queued_cutoff
                 # Compared here, not in SQL: SQLite stores these naive.
-                if aware_utc(started) >= cutoff:
+                if aware_utc(since or execution.created_at) >= limit:
                     continue
                 execution.status = "failed"
-                execution.error_code = STALLED_CODE
+                execution.error_code = STALLED_CODE if claimed else NEVER_STARTED_CODE
                 execution.error_message = STALLED_MESSAGE
                 execution.finished_at = now
                 _release_source(session, execution, now)
@@ -116,7 +138,7 @@ def recover_stalled_executions(
                         "execution_id": str(execution.id),
                         "operation": execution.operation,
                         "attempt": execution.attempt,
-                        "error_code": STALLED_CODE,
+                        "error_code": execution.error_code,
                     },
                 )
     finally:

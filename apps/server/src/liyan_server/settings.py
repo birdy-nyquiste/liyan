@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     #: calling a slow run dead costs a user their work, calling a dead one
     #: slow only delays the next sweep.
     stalled_execution_timeout_minutes: int = 30
+    unclaimed_execution_timeout_minutes: int = 30
     stalled_sweep_interval_seconds: int = 300
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.

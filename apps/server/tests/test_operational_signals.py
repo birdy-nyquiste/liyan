@@ -21,7 +21,12 @@ from zhiyan_support import confirm_sources, zhiyan_client
 from liyan_server.app import create_app
 from liyan_server.database import Database, Execution, User, ZhiyanReport
 from liyan_server.settings import Settings
-from liyan_server.stalled import STALLED_CODE, StalledPolicy, recover_stalled_executions
+from liyan_server.stalled import (
+    NEVER_STARTED_CODE,
+    STALLED_CODE,
+    StalledPolicy,
+    recover_stalled_executions,
+)
 from liyan_server.worker_health import record_heartbeat, silent_workers
 
 
@@ -301,3 +306,69 @@ def test_a_live_worker_never_masks_a_dead_one(tmp_path: Path) -> None:
 
     assert ready.json()["checks"]["worker"] == "silent"
     assert silent_workers(Database(database_url)) == ("liyan-beat",)
+
+
+def _queued_execution(database_url: str, *, created_at: datetime) -> UUID:
+    """One Execution nobody ever collected, as a lost message would leave it."""
+    database = Database(database_url)
+    assert database.engine is not None
+    execution_id = uuid4()
+    with Session(database.engine) as session:
+        owner = User(email="writer@example.com", auth_subject="supabase-user-1")
+        session.add(owner)
+        session.flush()
+        session.add(
+            Execution(
+                id=execution_id,
+                owner_id=owner.id,
+                operation="fetch_url",
+                target_type="source_preparation",
+                target_id=uuid4(),
+                input_version=1,
+                input_identity="identity",
+                input_snapshot={},
+                attempt=1,
+                origin="initial",
+                status="queued",
+                created_at=created_at,
+            )
+        )
+        session.commit()
+    database.dispose()
+    return execution_id
+
+
+def test_work_nobody_ever_collected_stops_waiting_forever(tmp_path: Path) -> None:
+    """The failure that hid a queue nobody consumed.
+
+    A message can be lost, purged, or addressed to a queue no worker listens on.
+    The Execution then sits `queued` — never claimed, so never `running`, so
+    invisible to a sweep that only rescues runs in flight — and the 来源 shows
+    处理中 until somebody thinks to look in the broker.
+    """
+    database_url = migrated_database(tmp_path)
+    execution_id = _queued_execution(database_url, created_at=datetime.now(UTC))
+
+    report = recover_stalled_executions(
+        database_url, policy=StalledPolicy(), now=later(hours=2)
+    )
+
+    assert report.stalled_executions == 1
+    status, code, _ = _execution(database_url, execution_id)
+    assert status == "failed"
+    # Distinct from a run that died mid-flight: nothing ever picked this up, and
+    # the fix is a worker or a queue name rather than a dead process.
+    assert code == NEVER_STARTED_CODE
+
+
+def test_work_queued_a_moment_ago_is_left_in_the_queue(tmp_path: Path) -> None:
+    """A backlog is not a fault; the worker may simply be busy."""
+    database_url = migrated_database(tmp_path)
+    execution_id = _queued_execution(database_url, created_at=datetime.now(UTC))
+
+    report = recover_stalled_executions(
+        database_url, policy=StalledPolicy(), now=later(minutes=5)
+    )
+
+    assert report.stalled_executions == 0
+    assert _execution(database_url, execution_id)[0] == "queued"

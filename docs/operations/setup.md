@@ -303,6 +303,37 @@ VITE_SENTRY_DSN=            # optional
 
 ---
 
+## Part 4½ — Proving the local stack before you provision anything
+
+Two bugs got past 347 passing tests: a database port collision and a worker
+consuming a queue nothing was sent to. Neither was application logic, and
+neither was visible to a suite where the queue is a double. So there is an
+opt-in check that runs the real thing.
+
+```bash
+LIYAN_LIVE_STACK=1 \
+LIYAN_TEST_DATABASE_URL=postgresql+psycopg://liyan:liyan@127.0.0.1:5433/liyan \
+  .venv/bin/python -m pytest apps/server/tests/test_live_stack.py
+```
+
+It starts a real Celery worker against your real broker and a fresh database,
+dispatches an Execution through the real API, and waits for the worker to
+collect it. Nothing is mocked. It costs nothing and takes a few seconds.
+
+Add real providers when you want the whole chain proven:
+
+```bash
+LIYAN_LIVE_PROVIDERS=1   # a real 知言 run. Spends DeepSeek credit.
+```
+
+> **`LIYAN_LIVE_BLOG=1` is deliberately separate.** A Preview is a real item on
+> a real Blog, cannot be retracted, and cannot be looked up again. Point it at a
+> Blog that does not matter — never at Production's.
+
+Run this before provisioning. Everything it catches is cheaper to find here.
+
+---
+
 ## Part 5 — Verifying an environment end to end
 
 In order. Each step depends on the one before.

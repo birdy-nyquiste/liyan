@@ -1,5 +1,6 @@
 from functools import cached_property
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,6 +58,28 @@ class Settings(BaseSettings):
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.
     worker_name: str = "celery-worker"
+
+    @field_validator("database_url")
+    @classmethod
+    def name_the_installed_driver(cls, value: str) -> str:
+        """Point a bare PostgreSQL URL at psycopg 3, which is what is installed.
+
+        A managed database hands out its URL in the platform's shape: Render's
+        `fromDatabase` wiring produces `postgresql://…` and Heroku still emits
+        `postgres://…`. SQLAlchemy reads a URL with no driver as psycopg 2, and
+        this project installs psycopg 3, so the first thing to touch the
+        database dies with ModuleNotFoundError for a driver nobody chose —
+        during the build, before anything has a chance to explain itself.
+
+        Editing the value by hand is not the fix: on Render it is wired from the
+        database resource, so a hand-edit is overwritten or has to be maintained
+        against it. A URL that already names a driver is left exactly as it is,
+        including psycopg 2, because naming one is a deliberate act.
+        """
+        for platform_scheme in ("postgresql://", "postgres://"):
+            if value.startswith(platform_scheme):
+                return "postgresql+psycopg://" + value[len(platform_scheme) :]
+        return value
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

@@ -17,7 +17,13 @@ services:
     region: singapore
     plan: starter
     healthCheckPath: /health/ready
-    buildCommand: pip install uv && uv sync --locked && uv run alembic upgrade head
+    buildCommand: pip install uv && uv sync --locked
+    # Migrations run here, not in the build. A build has no guaranteed route to
+    # the private database, and it runs even for a deploy that is then cancelled
+    # — which would leave the schema ahead of the code serving traffic. A
+    # pre-deploy runs once, after the build, before any request reaches the new
+    # version, and a failure stops the deploy instead of half-applying it.
+    preDeployCommand: uv run alembic upgrade head
     startCommand: uv run uvicorn liyan_server.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: LIYAN_DATABASE_URL

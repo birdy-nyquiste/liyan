@@ -252,8 +252,14 @@ On `liyan-api` only, set `LIYAN_CORS_ORIGINS` to the Vercel URL for this
 environment.
 
 `LIYAN_DATABASE_URL` and `LIYAN_BROKER_URL` are wired automatically from the
-database and queue in the blueprint. Migrations run in the API's build command,
-so there is no separate step.
+database and queue in the blueprint. Migrations run as the API's pre-deploy
+command, so there is no separate step.
+
+> **Render hands out `postgresql://…`**, which SQLAlchemy reads as psycopg 2 —
+> a driver this project does not install. The server rewrites a bare PostgreSQL
+> URL to name psycopg 3, so `fromDatabase` wiring works untouched. Do not hand-
+> edit the value to fix this: it is wired from the database resource, and an
+> edit either gets overwritten or has to be maintained against it.
 
 > **If the worker builds but URL 来源 fail on Render**, look for missing shared
 > libraries in its logs (`libnss3`, `libgbm`, and friends). Playwright downloads

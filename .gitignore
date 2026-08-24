@@ -13,3 +13,7 @@ apps/web/*.tsbuildinfo
 
 .coverage
 htmlcov/
+
+# Celery beat's own record of when each schedule last fired. Runtime state
+# belonging to one machine, not to the project.
+celerybeat-schedule*

@@ -79,9 +79,13 @@ recently, which is the signal to alert on.
 
 ## Environments
 
-`render.yaml` and [docs/operations/environments.md](docs/operations/environments.md)
-describe the Local, Staging, and Production split, what must never be shared
-between them, and the provisioning steps that are nobody's code.
+[docs/operations/setup.md](docs/operations/setup.md) is the runbook: what to
+create in Supabase, DeepSeek, Cloudflare R2, LSForum, Render, and Vercel, in the
+order that keeps you unblocked, with a verification step after each one.
+
+[docs/operations/environments.md](docs/operations/environments.md) is the
+reasoning behind it — what must never be shared between Local, Staging, and
+Production, and how to read the health signals.
 
 ## Checks
 

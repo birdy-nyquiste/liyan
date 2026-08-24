@@ -56,7 +56,23 @@ services:
     # minute per build — and only here: the API dispatches and beat sweeps, so
     # neither of them ever opens a page.
     buildCommand: pip install uv && uv sync --locked && uv run playwright install chromium
-    startCommand: uv run celery -A liyan_server.celery_worker worker --loglevel=info
+    # Concurrency is set, not defaulted. Celery forks one child per CPU, each
+    # child is a fully imported copy of this application at roughly 110MB, and
+    # a URL fetch then launches Chromium beside it — several hundred megabytes
+    # before any 来源 is read, on an instance with 512.
+    #
+    # max-tasks-per-child recycles the process periodically so a browser that
+    # does not release everything cannot accumulate across a day.
+    #
+    # gossip and mingle are how workers discover each other. There is one.
+    #
+    # The cost is that one long 知言 run holds the only slot. If throughput
+    # matters more than the instance size, raise the plan rather than this
+    # number: concurrency is what the memory limit is actually about.
+    startCommand: >-
+      uv run celery -A liyan_server.celery_worker worker
+      --loglevel=info --concurrency=1 --max-tasks-per-child=8
+      --without-gossip --without-mingle
     envVars:
       - key: LIYAN_WORKER_NAME
         value: liyan-worker

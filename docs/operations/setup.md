@@ -269,6 +269,15 @@ command, so there is no separate step.
 > Docker runtime built on `mcr.microsoft.com/playwright/python`. This is the one
 > step in this guide not verified against a real deployment.
 
+> **The worker is the service most likely to run out of memory.** Celery
+> forks one child per CPU by default and each child is a fully imported copy of
+> the application, so `render.yaml` pins concurrency to 1. Even then the sum is
+> close: roughly 110MB for the parent, 110MB for the child, and 150–250MB for
+> Chromium during a URL fetch, against 512MB on `starter`. If the worker is
+> killed mid-fetch, raise **that one service** to `standard` — the API and beat
+> are comfortable where they are. Do not raise concurrency to compensate; that
+> is the number the memory limit is about.
+
 ### 3. What must never be shared between environments
 
 Each is a separate **resource**, not a separate credential for the same one:

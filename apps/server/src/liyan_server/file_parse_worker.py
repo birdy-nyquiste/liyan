@@ -9,6 +9,7 @@ from liyan_server.database import Database, Execution, FileParseResult, SourcePr
 from liyan_server.execution_states import surrendered
 from liyan_server.file_parsing import FileParseFailure, FileParseLimits, parse_file
 from liyan_server.object_storage import ObjectStorage
+from liyan_server.observability import log_execution_failed
 from liyan_server.source_preparation import source_warnings
 
 
@@ -37,6 +38,12 @@ def _mark_failed(database: Database, execution_id: UUID, failure: FileParseFailu
         execution.error_message = failure.message
         execution.internal_error = failure.internal_error
         execution.finished_at = now
+        log_execution_failed(
+            execution_id=execution.id,
+            operation=execution.operation,
+            attempt=execution.attempt,
+            error_code=execution.error_code,
+        )
         if (
             source is not None
             and source.active_execution_id == execution.id

@@ -6,17 +6,19 @@ reach are different outages with different fixes. And an Execution whose worker
 died looks exactly like one still working, forever, unless something notices.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from cleanup_support import MemoryObjectStorage, cleanup_client, later
 from database_support import QueueSaying, migrated_database
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from zhiyan_support import confirm_sources, zhiyan_client
+from zhiyan_support import confirm_sources, unavailable, zhiyan_client
 
 from liyan_server.app import create_app
 from liyan_server.database import Database, Execution, User, ZhiyanReport
@@ -372,3 +374,29 @@ def test_work_queued_a_moment_ago_is_left_in_the_queue(tmp_path: Path) -> None:
 
     assert report.stalled_executions == 0
     assert _execution(database_url, execution_id)[0] == "queued"
+
+
+def test_a_failed_run_says_so_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Silence is the worst thing a failure can do to whoever is watching.
+
+    The workers record why a run failed on the Execution row and, until now,
+    logged nothing at all — so an operator with three terminals open saw a
+    source turn red and had no thread to pull. The row keeps the detail; the log
+    has to at least say that something ended badly, and which row to read.
+    """
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    confirm_sources(client, headers, ["四天工作制已经没有争议"])
+    dispatcher.provider.outcomes.append(unavailable())
+
+    with caplog.at_level(logging.WARNING, logger="liyan_server"):
+        dispatcher.run_next()
+
+    failures = [r for r in caplog.records if r.message == "execution_failed"]
+    assert failures, "a failed run logged nothing"
+    logged = failures[0].__dict__
+    assert logged["error_code"] == "provider_unavailable"
+    assert logged["operation"] == "analyze_source"
+    # The reason itself stays on the row: it can quote whatever it was handed.
+    assert "internal_error" not in logged

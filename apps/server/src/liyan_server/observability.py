@@ -131,3 +131,30 @@ def _reclaim(names: tuple[str, ...]) -> None:
         logger = logging.getLogger(name)
         logger.handlers = []
         logger.propagate = True
+
+
+def log_execution_failed(
+    *, execution_id: object, operation: str, attempt: int, error_code: str | None
+) -> None:
+    """Say that a run ended badly, and which row explains it.
+
+    Workers record the reason on the Execution and used to log nothing, which
+    left whoever was watching three terminals with a source that turned red and
+    no thread to pull.
+
+    The reason itself stays on the row rather than joining the log line. A
+    provider's error text quotes whatever it was handed, and this module's whole
+    premise is that such text never reaches a log. `internal_error` is read
+    deliberately, one execution at a time, by someone who has decided to look:
+
+        scripts/explain_execution.py <execution-id>
+    """
+    logging.getLogger("liyan_server.executions").warning(
+        "execution_failed",
+        extra={
+            "execution_id": str(execution_id),
+            "operation": operation,
+            "attempt": attempt,
+            "error_code": error_code,
+        },
+    )

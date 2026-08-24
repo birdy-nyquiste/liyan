@@ -27,6 +27,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message, surrendered
+from liyan_server.observability import log_execution_failed
 from liyan_server.zhiyan.acceptance import accept_report_text
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
 from liyan_server.zhiyan.orchestration import dispatch_or_fail, queue_run
@@ -198,6 +199,12 @@ def _fail_within(execution: Execution, failure: ZhiyanRunFailure) -> None:
     execution.internal_error = failure.internal_error
     execution.finished_at = now
     execution.retry_allowed_at = None if cancelled else retry_allowed_at(now, failure.code)
+    log_execution_failed(
+        execution_id=execution.id,
+        operation=execution.operation,
+        attempt=execution.attempt,
+        error_code=execution.error_code,
+    )
 
 
 def _finish_succeeded(

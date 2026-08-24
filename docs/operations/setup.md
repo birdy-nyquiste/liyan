@@ -45,6 +45,17 @@ npm install
 cp .env.example .env
 ```
 
+URL 来源 are extracted by driving a headless browser, and the browser is not a
+Python package — `uv sync` installs crawl4ai but not the Chromium it needs:
+
+```bash
+.venv/bin/playwright install chromium
+```
+
+> **Skip it and every URL 来源 fails** with "The article could not be fetched",
+> while the log says only `fetch_failed`. The real reason — Playwright naming a
+> binary that does not exist — is recorded on the Execution row.
+
 > **Why 5433, and why `127.0.0.1`.** A machine-wide PostgreSQL — Homebrew's or
 > Postgres.app's — commonly holds `127.0.0.1:5432`, and it wins over Docker's
 > wildcard bind. Connecting there succeeds and then fails with `role "liyan"
@@ -300,6 +311,29 @@ VITE_SENTRY_DSN=            # optional
 > `VITE_*` values are compiled into the bundle at build time. Changing one needs
 > a redeploy, not a restart. And never put a secret behind a `VITE_` name —
 > every visitor receives it.
+
+---
+
+## Part 4¼ — When something fails and the terminal is unhelpful
+
+A failed run logs `execution_failed` with its operation, attempt, and error
+code. The reason itself is deliberately not there: a provider's error text
+quotes whatever it was handed, and this application hands providers 来源 bodies
+and article drafts. Logs get shipped and retained; that text should not.
+
+So the detail is pulled rather than pushed:
+
+```bash
+.venv/bin/python scripts/explain_execution.py --recent
+```
+
+or, with an id from a log line:
+
+```bash
+.venv/bin/python scripts/explain_execution.py <execution-id>
+```
+
+It prints what the user was told, and what actually happened.
 
 ---
 

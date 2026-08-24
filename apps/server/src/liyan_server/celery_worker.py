@@ -34,6 +34,16 @@ celery_app = Celery("liyan-worker", broker=settings.broker_url)
 # piled up in `source-processing`, and nothing would say so.
 celery_app.conf.task_default_queue = EXECUTION_QUEUE
 
+# Celery replaces the root logger's handlers when a worker starts, which threw
+# away the JSON formatter and every `extra` field with it: `execution_failed`
+# reached the logs carrying no operation, no error code, and no execution id —
+# the exact fields it exists to carry. Keeping our own handlers is the whole
+# point of having configured them.
+celery_app.conf.worker_hijack_root_logger = False
+# Same reasoning for stdout: a print or a library's stray write should go
+# through the formatter rather than around it.
+celery_app.conf.worker_redirect_stdouts = False
+
 #: Cleanup is the one job nobody triggers, which is why it needs a schedule at
 #: all. Beat is a separate process from the worker: without it nothing is ever
 #: collected, and nothing says so.

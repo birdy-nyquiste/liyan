@@ -159,3 +159,17 @@ def test_uvicorns_own_handlers_are_taken_over() -> None:
         reclaimed = logging.getLogger(name)
         assert reclaimed.handlers == []
         assert reclaimed.propagate is True
+
+
+def test_celery_is_not_allowed_to_replace_the_formatter() -> None:
+    """Celery hijacks the root logger when a worker starts.
+
+    It did, and it threw away every `extra` field with the formatter: a real
+    deployment logged `execution_failed` carrying no operation, no error code,
+    and no execution id — precisely the fields that line exists to carry, and
+    the reason a failure was undiagnosable from the logs alone.
+    """
+    from liyan_server import celery_worker
+
+    assert celery_worker.celery_app.conf.worker_hijack_root_logger is False
+    assert celery_worker.celery_app.conf.worker_redirect_stdouts is False

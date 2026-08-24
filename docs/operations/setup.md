@@ -37,7 +37,7 @@ If you only want it running on your machine, Part 1 and Part 2 are enough. Parts
 docker compose up -d
 ```
 
-That starts PostgreSQL on 5432 and Redis on 6379.
+That starts PostgreSQL on **5433** and Redis on 6379.
 
 ```bash
 uv sync
@@ -45,10 +45,13 @@ npm install
 cp .env.example .env
 ```
 
-> **If port 5432 is taken** by another PostgreSQL — a Homebrew one, say —
-> `docker compose` still binds 5433. Point `LIYAN_DATABASE_URL` at
-> `127.0.0.1:5433` and use `127.0.0.1` rather than `localhost`, which may
-> resolve to the other server first.
+> **Why 5433, and why `127.0.0.1`.** A machine-wide PostgreSQL — Homebrew's or
+> Postgres.app's — commonly holds `127.0.0.1:5432`, and it wins over Docker's
+> wildcard bind. Connecting there succeeds and then fails with `role "liyan"
+> does not exist`, which reads like a broken container rather than the wrong
+> server. Publishing on 5433 sidesteps it. Use `127.0.0.1` rather than
+> `localhost` too: `localhost` may resolve to `::1` and reach the other server
+> first.
 
 ### 2. Create the schema
 

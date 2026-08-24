@@ -13,6 +13,7 @@ from liyan_server.health import health_router
 from liyan_server.identity_api import identity_router
 from liyan_server.liyan.api import liyan_router
 from liyan_server.object_storage import ObjectStorage, R2ObjectStorage
+from liyan_server.observability import configure_logging
 from liyan_server.publication.api import publication_router
 from liyan_server.publication.targets import configured_targets, unreachable_targets
 from liyan_server.settings import Settings
@@ -34,6 +35,10 @@ def create_app(
     execution_dispatcher: ExecutionDispatcher | None = None,
     object_storage: ObjectStorage | None = None,
 ) -> FastAPI:
+    # Before anything else logs: the startup warnings below are the first
+    # lines an operator reads, and they should arrive in the same shape as
+    # every other line.
+    configure_logging()
     current_settings = settings or Settings()
     database = Database(current_settings.database_url)
     verifier = jwt_verifier or JwksJwtVerifier(
@@ -82,7 +87,7 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    application.include_router(health_router(database, storage))
+    application.include_router(health_router(database, storage, dispatcher))
     application.include_router(identity_router(current_user))
     application.include_router(task_router(database, current_user))
     application.include_router(

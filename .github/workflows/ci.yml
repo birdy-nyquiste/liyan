@@ -50,6 +50,15 @@ jobs:
           uv run mypy
           uv run pytest
 
+      # The suite again, on the backend production actually uses. SQLite does
+      # not enforce foreign keys unless asked and this project never asks, so a
+      # delete that violates a constraint passes above and fails in production.
+      # Only this step can see that difference.
+      - name: Check backend against PostgreSQL
+        env:
+          LIYAN_TEST_DATABASE_URL: postgresql+psycopg://liyan:liyan@localhost:5432/liyan_test
+        run: uv run pytest
+
       - name: Check empty-database migrations
         run: |
           uv run alembic upgrade head

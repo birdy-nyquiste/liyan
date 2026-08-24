@@ -26,7 +26,7 @@ from liyan_server.database import (
     ZhiyanReport,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
-from liyan_server.execution_states import cancelled_message
+from liyan_server.execution_states import cancelled_message, surrendered
 from liyan_server.zhiyan.acceptance import accept_report_text
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
 from liyan_server.zhiyan.orchestration import dispatch_or_fail, queue_run
@@ -141,6 +141,11 @@ def _finish_failed(
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
+        if surrendered(execution.status):
+            # Already ended; re-failing it would overwrite worker_lost with a
+            # provider code and could spend an automatic attempt on a run
+            # nobody is waiting for.
+            return
         try:
             snapshot = ZhiyanRunSnapshot.from_json(execution.input_snapshot)
         except InvalidRunSnapshot:
@@ -209,6 +214,15 @@ def _finish_succeeded(
         task = _lock_task(session, snapshot)
         execution = session.get(Execution, execution_id)
         if execution is None:
+            return
+        if surrendered(execution.status):
+            # Someone already ended this run — the stalled sweep, or a newer run
+            # that won. `stale` is the established word for an answer that
+            # arrived and was not used; the original error_code is left in place
+            # so why it ended is still readable.
+            execution.status = "stale"
+            execution.stale_result = _stale_result(result)
+            session.commit()
             return
         execution.finished_at = now
         if task is None or task.deleted_at is not None or _cancelled(execution):

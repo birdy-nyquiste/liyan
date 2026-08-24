@@ -6,15 +6,13 @@ progress across several sources observable.
 """
 
 import json
-import os
-import subprocess
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from blog_support import DeterministicBlogSubmitter
+from database_support import migrated_database
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -194,6 +192,9 @@ class RecordingDispatcher:
     def dispatch(self, execution_id: UUID) -> None:
         self.execution_ids.append(execution_id)
 
+    def is_reachable(self) -> bool:
+        return True
+
     def run_next(self) -> None:
         execution_id = self.execution_ids.pop(0)
         database = Database(self.database_url)
@@ -219,21 +220,6 @@ class RecordingDispatcher:
     def run_all(self) -> None:
         while self.execution_ids:
             self.run_next()
-
-
-def migrated_database(tmp_path: Path) -> str:
-    project_root = Path(__file__).resolve().parents[3]
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'liyan.db'}"
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
-        cwd=project_root,
-        env=os.environ | {"LIYAN_DATABASE_URL": database_url},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    return database_url
 
 
 def zhiyan_client(tmp_path: Path) -> tuple[TestClient, dict[str, str], RecordingDispatcher]:

@@ -5,7 +5,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from liyan_server.database import Database
+from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.object_storage import ObjectStorage, ObjectStorageState
+from liyan_server.worker_health import WorkerState, worker_state
 
 
 class LivenessResponse(BaseModel):
@@ -14,6 +16,12 @@ class LivenessResponse(BaseModel):
 
 class ReadinessChecks(BaseModel):
     database: Literal["available", "unavailable"]
+    #: Gating, unlike object storage: everything this server does for a user is
+    #: queued work, so an unreachable broker means it cannot do its job at all.
+    queue: Literal["available", "unavailable"]
+    #: Reported, never gating. A silent worker is a real problem, but restarting
+    #: the API does not fix it and taking the API out of rotation hides it.
+    worker: WorkerState
     #: Reported, never gating. Object storage is required for file 来源 only —
     #: pasted and URL sources never touch it — and the Technical Spec is
     #: explicit that a short R2 outage must not become a restart condition.
@@ -25,7 +33,9 @@ class ReadinessResponse(BaseModel):
     checks: ReadinessChecks
 
 
-def health_router(database: Database, storage: ObjectStorage) -> APIRouter:
+def health_router(
+    database: Database, storage: ObjectStorage, dispatcher: ExecutionDispatcher
+) -> APIRouter:
     router = APIRouter(prefix="/health", tags=["health"])
 
     @router.get("/live", operation_id="get_liveness", response_model=LivenessResponse)
@@ -39,24 +49,21 @@ def health_router(database: Database, storage: ObjectStorage) -> APIRouter:
         responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadinessResponse}},
     )
     def get_readiness() -> ReadinessResponse | JSONResponse:
-        storage_state = storage.state()
-        if database.is_available():
-            return ReadinessResponse(
-                status="ready",
-                checks=ReadinessChecks(
-                    database="available", object_storage=storage_state
-                ),
-            )
-
-        body = ReadinessResponse(
-            status="not_ready",
-            checks=ReadinessChecks(
-                database="unavailable", object_storage=storage_state
-            ),
+        checks = ReadinessChecks(
+            database="available" if database.is_available() else "unavailable",
+            queue="available" if dispatcher.is_reachable() else "unavailable",
+            worker=worker_state(database),
+            object_storage=storage.state(),
         )
+        # Only the two the server cannot work without decide the verdict. The
+        # other two are reported so an operator can see them without a restart
+        # being the answer to either.
+        healthy = checks.database == "available" and checks.queue == "available"
+        if healthy:
+            return ReadinessResponse(status="ready", checks=checks)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=body.model_dump(),
+            content=ReadinessResponse(status="not_ready", checks=checks).model_dump(),
         )
 
     return router

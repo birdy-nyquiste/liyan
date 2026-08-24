@@ -12,8 +12,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from database_support import migrated_database
 from sqlalchemy.orm import Session
-from zhiyan_support import migrated_database
 
 from liyan_server import celery_worker
 from liyan_server.database import Database, Execution, User

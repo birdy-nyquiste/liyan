@@ -1,6 +1,7 @@
 from typing import BinaryIO
 
 import pytest
+from database_support import QueueSaying
 from fastapi.testclient import TestClient
 
 from liyan_server.app import create_app
@@ -42,12 +43,16 @@ class StorageSaying(ObjectStorage):
 
 
 def client_for(
-    database_url: str, storage: ObjectStorage | None = None
+    database_url: str,
+    storage: ObjectStorage | None = None,
+    *,
+    queue_reachable: bool = True,
 ) -> TestClient:
     return TestClient(
         create_app(
             configured(database_url),
             object_storage=storage or StorageSaying("ready"),
+            execution_dispatcher=QueueSaying(queue_reachable),
         )
     )
 
@@ -69,7 +74,12 @@ def test_readiness_reports_when_required_dependencies_are_usable() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"database": "available", "object_storage": "ready"},
+        "checks": {
+            "database": "available",
+            "queue": "available",
+            "worker": "unknown",
+            "object_storage": "ready",
+        },
     }
 
 
@@ -116,5 +126,10 @@ def test_readiness_is_unavailable_when_the_database_cannot_be_used(database_url:
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "checks": {"database": "unavailable", "object_storage": "ready"},
+        "checks": {
+            "database": "unavailable",
+            "queue": "available",
+            "worker": "unknown",
+            "object_storage": "ready",
+        },
     }

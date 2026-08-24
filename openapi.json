@@ -3908,6 +3908,17 @@
             ],
             "title": "Database"
           },
+          "queue": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "title": "Queue"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/WorkerState"
+          },
           "object_storage": {
             "$ref": "#/components/schemas/ObjectStorageState"
           }
@@ -3915,6 +3926,8 @@
         "type": "object",
         "required": [
           "database",
+          "queue",
+          "worker",
           "object_storage"
         ],
         "title": "ReadinessChecks"
@@ -5045,6 +5058,14 @@
           "empty_state"
         ],
         "title": "ViewpointSection"
+      },
+      "WorkerState": {
+        "type": "string",
+        "enum": [
+          "beating",
+          "silent",
+          "unknown"
+        ]
       },
       "WorkingCopyInput": {
         "properties": {

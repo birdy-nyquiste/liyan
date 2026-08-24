@@ -12,6 +12,7 @@ from typing import Any, BinaryIO
 from uuid import UUID
 
 from blog_support import DeterministicBlogSubmitter
+from database_support import migrated_database
 from fastapi.testclient import TestClient
 from publication_support import TARGETS
 from sqlalchemy.orm import Session
@@ -19,7 +20,6 @@ from zhiyan_support import (
     DeterministicJwtVerifier,
     DeterministicLiyanProvider,
     DeterministicZhiyanProvider,
-    migrated_database,
 )
 
 from liyan_server.app import create_app
@@ -102,6 +102,9 @@ class RecordingExecutionDispatcher:
 
     def dispatch(self, execution_id: UUID) -> None:
         self.execution_ids.append(execution_id)
+
+    def is_reachable(self) -> bool:
+        return True
 
     def run_all(self) -> None:
         while self.execution_ids:

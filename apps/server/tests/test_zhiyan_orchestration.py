@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from database_support import migrated_database
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,7 +25,6 @@ from zhiyan_support import (
     confirm_sources,
     create_session_sources,
     elapse_retry_backoff,
-    migrated_database,
     source_body,
     unavailable,
     zhiyan_client,
@@ -113,6 +113,9 @@ def test_a_queue_that_refuses_the_run_still_leaves_the_formal_task_created(
     class RefusingDispatcher:
         def dispatch(self, execution_id: UUID) -> None:
             raise RuntimeError("The broker is unreachable.")
+
+        def is_reachable(self) -> bool:
+            return False
 
     database_url = migrated_database(tmp_path)
     client = TestClient(

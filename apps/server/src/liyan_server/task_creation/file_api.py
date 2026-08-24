@@ -198,7 +198,7 @@ def _store_upload(
         # advice that cannot ever work.
         logger.error(
             "file_upload_storage_unconfigured",
-            extra={"source_id": str(source_id), "reason": str(error)},
+            extra={"source_id": str(source_id), "missing": list(storage.missing_settings())},
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

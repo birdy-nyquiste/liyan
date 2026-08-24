@@ -1,0 +1,104 @@
+# Local, Staging, Production
+
+Three environments that share nothing but a schema. The point of the isolation
+is not tidiness: 立言阁 spends money at DeepSeek, writes to a bucket, and creates
+real items on a real Blog. Anything shared between environments turns a Staging
+experiment into a Production event.
+
+## What runs where
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Workbench | Vercel | `apps/web/vercel.json`; one project per environment |
+| Server API | Render web service | Health check `/health/ready` |
+| Celery worker | Render worker | Every 知言 run, 立言 generation, parse, and Blog submission |
+| Celery beat | Render worker | Cleanup and the stalled-Execution sweep |
+| PostgreSQL | Render | One database per environment |
+| Queue | Render Key Value | Carries Execution identity only |
+
+`render.yaml` describes one environment. Staging and Production are two separate
+deployments of it with their own service names and their own secrets — never one
+stack addressed by two URLs.
+
+**A deviation worth naming:** scheduled work runs as Celery beat in a second
+`type: worker`, not as a Render `type: cronjob`. The schedule then lives beside
+the tasks it triggers, so the two cannot drift apart, and a missed tick is
+simply a later sweep rather than a separate job with its own failure story. The
+cost is that beat has no Render health check of its own — which is why it writes
+a heartbeat like any other worker (below).
+
+## What must never be shared
+
+Each of these is a separate resource per environment, not a separate credential
+for the same resource:
+
+- **The database.** Staging must not be able to read a Production 立言任务.
+- **The queue.** A shared broker would let one environment's worker pick up the
+  other's Executions, and the message carries only an id — the worker would look
+  it up in *its own* database and find nothing, or worse, something.
+- **The R2 bucket.** Cleanup lists the bucket to find objects no row names
+  (`cleanup.py`). Pointed at a shared bucket, Staging's sweep would collect
+  Production's uploads: every one of them is an orphan as far as Staging's
+  database is concerned. This is the sharpest reason on this page.
+- **The Supabase project.** Auth identities and the allowlist are per
+  environment.
+- **The Blog ingest credential.** `LIYAN_BLOG_INGEST_TOKEN` and
+  `LIYAN_PUBLICATION_TARGETS`. A Preview is a real Blog item; ADR-0001 means
+  立言阁 cannot retract one, and v0.11 offers no lookup to find it again. Staging
+  points at a Blog that does not matter, or at nothing at all.
+- **The DeepSeek key.** Separate keys keep Staging's spend legible, and let one
+  be revoked without stopping the product.
+
+Every one of these is `sync: false` in `render.yaml`, so no value is committed
+and Render asks per environment.
+
+## Secrets stay on the server
+
+The browser bundle carries only what is public by construction: the API base
+URL, the Supabase project URL, and the publishable key. The Blog credential, the
+DeepSeek key, and the R2 keys are read by the server and never appear in a
+response — a 发布目标 is returned without its token, and a log line cannot carry
+one (`observability.py` allowlists fields, so an unrecognised one is dropped).
+
+## Health and alerts
+
+- `/health/live` — the process is up. Liveness only.
+- `/health/ready` — `database` and `queue` gate the verdict, because nothing the
+  server does for a user works without them. `worker` and `object_storage` are
+  reported without gating: a silent worker is a real problem that restarting the
+  API does not fix, and the Technical Spec forbids making a short R2 outage a
+  restart condition.
+
+Point Render's health check at `/health/ready` and alert on:
+
+- **Readiness failing** — the deployment cannot serve.
+- **`checks.worker` = `silent`** — nothing is processing. The API still answers,
+  so this is the failure most likely to go unnoticed. The verdict is the *worst*
+  of the known workers, not the freshest: the worker and beat fail
+  independently, and beat dying quietly means nothing is ever cleaned up or
+  recovered again. `worker_health.silent_workers()` names which one.
+- **`checks.object_storage` = `unconfigured`** — file 来源 cannot be accepted.
+  Permanent until somebody edits configuration.
+- **`execution_presumed_lost` log lines** — a worker died mid-run. A few are
+  normal around a deploy; a stream of them is not.
+
+Client errors go to Sentry when `VITE_SENTRY_DSN` is set, scrubbed by
+`apps/web/src/monitoring.ts`: no request bodies, no query strings, no
+authorization header, no user beyond an id. Without a DSN, nothing is sent —
+which is what Local should be.
+
+## Still to do by hand
+
+Provisioning is not code. Someone with the accounts has to:
+
+1. Create the Render Blueprint from `render.yaml`, once per environment, and
+   enter each `sync: false` secret.
+2. Create one Vercel project per environment, with `VITE_API_BASE_URL`,
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and optionally
+   `VITE_SENTRY_DSN`.
+3. Create a separate R2 bucket per environment. The S3 endpoint must **exclude**
+   the bucket name — the Cloudflare dashboard's "S3 API" field includes it.
+4. Create a separate Supabase project per environment.
+5. Configure the Render alerts listed above.
+
+Until step 1 is done for Staging, there is no Staging.

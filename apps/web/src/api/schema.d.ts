@@ -1281,6 +1281,12 @@ export interface components {
              * @enum {string}
              */
             database: "available" | "unavailable";
+            /**
+             * Queue
+             * @enum {string}
+             */
+            queue: "available" | "unavailable";
+            worker: components["schemas"]["WorkerState"];
             object_storage: components["schemas"]["ObjectStorageState"];
         };
         /** ReadinessResponse */
@@ -1656,6 +1662,8 @@ export interface components {
             /** Empty State */
             empty_state: string | null;
         };
+        /** @enum {string} */
+        WorkerState: "beating" | "silent" | "unknown";
         /** WorkingCopyInput */
         WorkingCopyInput: {
             /** Title */

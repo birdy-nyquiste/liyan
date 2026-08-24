@@ -484,6 +484,20 @@ class PublishTask(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class WorkerHeartbeat(Base):
+    """The last time a worker process was known to be doing something.
+
+    A worker that dies leaves no mark: queued work simply stays queued, and the
+    API keeps answering, so nothing about the deployment looks wrong. One row
+    per worker, rewritten as it runs, is what makes that silence observable.
+    """
+
+    __tablename__ = "worker_heartbeats"
+
+    worker: Mapped[str] = mapped_column(String(255), primary_key=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Database:
     def __init__(self, database_url: str) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}

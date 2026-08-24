@@ -34,6 +34,26 @@ _CANCELLED_MESSAGES: dict[str, str] = {
 GENERIC_CANCELLED_MESSAGE = "The work was cancelled. Start it again when you are ready."
 
 
+#: A verdict has been reached and written. Nothing may change it afterwards.
+#: `cancel_requested` is deliberately absent: that is a request the worker
+#: itself still has to honour, and it is still the worker's row to finish.
+TERMINAL_EXECUTION_STATUSES: frozenset[ExecutionStatus] = frozenset(
+    {"succeeded", "failed", "cancelled", "stale"}
+)
+
+
+def surrendered(status: ExecutionStatus) -> bool:
+    """Whether this run has already been given up on by someone else.
+
+    The stalled sweep ends runs it presumes lost, and that presumption is
+    sometimes wrong — the worker was slow, not gone. When such a worker finally
+    answers, the answer describes a run the system already reported as failed
+    and the user may already have retried, so it is kept for tracing and never
+    becomes business content.
+    """
+    return status in TERMINAL_EXECUTION_STATUSES
+
+
 def cancelled_message(operation: str) -> str:
     """What the user reads when they cancelled one Execution.
 

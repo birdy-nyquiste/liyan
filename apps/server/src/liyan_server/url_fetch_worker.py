@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from liyan_server.database import Database, Execution, SourcePreparation, UrlFetchResult
+from liyan_server.execution_states import surrendered
 from liyan_server.source_preparation import source_warnings
 
 
@@ -60,6 +61,9 @@ def _mark_failed(database: Database, execution_id: UUID, failure: UrlFetchFailur
     with Session(database.engine) as session:
         execution = session.get(Execution, execution_id)
         if execution is None:
+            return
+        if surrendered(execution.status):
+            # The stalled sweep already ended this run and told the 来源 so.
             return
         source = session.get(SourcePreparation, execution.target_id)
         if execution.cancellation_requested_at is not None or execution.status in {
@@ -151,6 +155,11 @@ def process_url_fetch(
         with Session(database.engine) as session:
             execution = session.get(Execution, execution_id)
             if execution is None:
+                return
+            if surrendered(execution.status):
+                # Writing now would put a body into a 来源 whose run the system
+                # already reported as failed, and which the user may have
+                # retried since.
                 return
             result = UrlFetchResult(
                 execution_id=execution.id,

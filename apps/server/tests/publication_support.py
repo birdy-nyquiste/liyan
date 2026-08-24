@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from blog_support import SITE_URL, DeterministicBlogSubmitter, accepted
+from database_support import migrated_database
 from fastapi.testclient import TestClient
 from zhiyan_support import (
     DeterministicJwtVerifier,
     RecordingDispatcher,
     confirm_sources,
-    migrated_database,
 )
 
 from liyan_server.app import create_app

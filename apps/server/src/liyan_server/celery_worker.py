@@ -13,13 +13,18 @@ from liyan_server.file_parsing import FileParseLimits
 from liyan_server.liyan.deepseek import DeepSeekLiyanProvider
 from liyan_server.liyan.worker import process_liyan_run
 from liyan_server.object_storage import R2ObjectStorage
+from liyan_server.observability import configure_logging
 from liyan_server.publication.blog import LsforumBlogSubmitter
 from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
+from liyan_server.stalled import policy_from as stalled_policy_from
+from liyan_server.stalled import recover_stalled_executions
 from liyan_server.url_fetch_worker import process_url_fetch
+from liyan_server.worker_health import record_heartbeat
 from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
+configure_logging()
 settings = Settings()
 celery_app = Celery("liyan-worker", broker=settings.broker_url)
 
@@ -30,12 +35,19 @@ celery_app.conf.beat_schedule = {
     "clean-expired-data": {
         "task": "liyan.clean_expired_data",
         "schedule": float(settings.cleanup_interval_seconds),
-    }
+    },
+    "recover-stalled-executions": {
+        "task": "liyan.recover_stalled_executions",
+        "schedule": float(settings.stalled_sweep_interval_seconds),
+    },
 }
 
 
 @celery_app.task(name="liyan.clean_expired_data")  # type: ignore[untyped-decorator]
 def clean_expired_data() -> None:
+    # Beat's own heartbeat. Nothing else writes one for it, and a dead beat is
+    # invisible: the API answers, the worker runs, and no sweep ever happens.
+    record_heartbeat(settings.database_url, settings.worker_name)
     run_cleanup(
         settings.database_url,
         R2ObjectStorage(settings),
@@ -44,8 +56,21 @@ def clean_expired_data() -> None:
     )
 
 
+@celery_app.task(name="liyan.recover_stalled_executions")  # type: ignore[untyped-decorator]
+def recover_stalled() -> None:
+    record_heartbeat(settings.database_url, settings.worker_name)
+    recover_stalled_executions(
+        settings.database_url,
+        policy=stalled_policy_from(settings),
+        now=datetime.now(UTC),
+    )
+
+
 @celery_app.task(name="liyan.process_execution")  # type: ignore[untyped-decorator]
 def process_execution(execution_id: str) -> None:
+    # Written before the work, not after: a worker that dies mid-run should
+    # still have said it was alive, or its last run would look like its death.
+    record_heartbeat(settings.database_url, settings.worker_name)
     parsed_id = UUID(execution_id)
     database = Database(settings.database_url)
     if database.engine is None:

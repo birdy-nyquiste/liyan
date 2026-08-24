@@ -70,10 +70,18 @@ separate processes:
 ```
 
 Without the worker, everything a user starts stays queued. Without beat, nothing
-is ever cleaned up: abandoned uploads keep paying for storage and deleted 立言任务
-stay on disk past their 30 days. Neither failure raises anything — the API keeps
+is ever cleaned up and no stalled Execution is ever noticed: abandoned uploads
+keep paying for storage, deleted 立言任务 stay on disk past their 30 days, and a
+run whose worker died waits forever. None of it raises anything — the API keeps
 answering — so an environment that skips beat looks healthy while its bucket
-grows. Publication evidence is never affected either way.
+grows. `GET /health/ready` reports `worker: silent` when nothing has processed
+recently, which is the signal to alert on.
+
+## Environments
+
+`render.yaml` and [docs/operations/environments.md](docs/operations/environments.md)
+describe the Local, Staging, and Production split, what must never be shared
+between them, and the provisioning steps that are nobody's code.
 
 ## Checks
 

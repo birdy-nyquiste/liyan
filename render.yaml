@@ -1,0 +1,122 @@
+# 立言阁 on Render: the API, the worker that does everything slow, the beat
+# process that runs what nobody triggers, PostgreSQL, and the queue.
+#
+# One blueprint describes one environment. Staging and Production are two
+# separate deployments of this file with their own service names and their own
+# secrets — never one stack with two URLs pointed at it. Every secret below is
+# `sync: false`, so Render asks for it per environment and no value can be
+# copied from one to the other by being committed here.
+#
+# Beat matters as much as the worker: without it nothing is ever cleaned up and
+# no stalled Execution is ever noticed, and neither failure raises anything.
+
+services:
+  - type: web
+    name: liyan-api
+    runtime: python
+    region: singapore
+    plan: starter
+    healthCheckPath: /health/ready
+    buildCommand: pip install uv && uv sync --locked && uv run alembic upgrade head
+    startCommand: uv run uvicorn liyan_server.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: LIYAN_DATABASE_URL
+        fromDatabase:
+          name: liyan-postgres
+          property: connectionString
+      - key: LIYAN_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: liyan-queue
+          property: connectionString
+      - key: LIYAN_CORS_ORIGINS
+        sync: false
+      - key: LIYAN_SUPABASE_AUDIENCE
+        value: authenticated
+      # The rest — R2, DeepSeek, Blog, the allowlist, Supabase — come from the
+      # group, so one environment's value is entered once and the API and the
+      # workers cannot drift apart.
+      - fromGroup: liyan-shared
+
+  - type: worker
+    name: liyan-worker
+    runtime: python
+    region: singapore
+    plan: starter
+    buildCommand: pip install uv && uv sync --locked
+    startCommand: uv run celery -A liyan_server.celery_worker worker --loglevel=info
+    envVars:
+      - key: LIYAN_WORKER_NAME
+        value: liyan-worker
+      - fromGroup: liyan-shared
+      - key: LIYAN_DATABASE_URL
+        fromDatabase:
+          name: liyan-postgres
+          property: connectionString
+      - key: LIYAN_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: liyan-queue
+          property: connectionString
+
+  # Beat, not a Render cron job: the schedule lives in the application so the
+  # worker and the schedule cannot drift apart, and so a missed tick is simply
+  # a later sweep rather than a job that has to be reasoned about separately.
+  - type: worker
+    name: liyan-beat
+    runtime: python
+    region: singapore
+    plan: starter
+    buildCommand: pip install uv && uv sync --locked
+    startCommand: uv run celery -A liyan_server.celery_worker beat --loglevel=info
+    envVars:
+      - key: LIYAN_WORKER_NAME
+        value: liyan-beat
+      - fromGroup: liyan-shared
+      - key: LIYAN_DATABASE_URL
+        fromDatabase:
+          name: liyan-postgres
+          property: connectionString
+      - key: LIYAN_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: liyan-queue
+          property: connectionString
+
+  - type: keyvalue
+    name: liyan-queue
+    region: singapore
+    plan: starter
+    # The queue carries Execution identity and nothing else, so no business
+    # content is ever at rest here. It is still this environment's alone.
+    ipAllowList: []
+
+databases:
+  - name: liyan-postgres
+    region: singapore
+    plan: basic-256mb
+    postgresMajorVersion: "17"
+
+# Values that are the same for every process in one environment, and different
+# in every environment. Render prompts for each one per deployment.
+envVarGroups:
+  - name: liyan-shared
+    envVars:
+      - key: LIYAN_DEEPSEEK_API_KEY
+        sync: false
+      - key: LIYAN_R2_ENDPOINT_URL
+        sync: false
+      - key: LIYAN_R2_ACCESS_KEY_ID
+        sync: false
+      - key: LIYAN_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: LIYAN_R2_BUCKET
+        sync: false
+      - key: LIYAN_PUBLICATION_TARGETS
+        sync: false
+      - key: LIYAN_BLOG_INGEST_TOKEN
+        sync: false
+      - key: LIYAN_ALLOWED_EMAILS
+        sync: false
+      - key: LIYAN_SUPABASE_ISSUER
+        sync: false

@@ -13,7 +13,7 @@ from liyan_server.database import (
     TaskVersion,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
-from liyan_server.execution_states import cancelled_message
+from liyan_server.execution_states import cancelled_message, surrendered
 from liyan_server.liyan.acceptance import GeneratedArticle, accept_article_text
 from liyan_server.liyan.failures import LiyanRunFailure
 from liyan_server.liyan.orchestration import dispatch_or_fail, queue_run
@@ -122,6 +122,8 @@ def _finish_failed(
         execution = session.get(Execution, execution_id)
         if execution is None:
             return
+        if surrendered(execution.status):
+            return
         try:
             snapshot = LiyanRunSnapshot.from_json(execution.input_snapshot)
         except InvalidRunSnapshot:
@@ -193,6 +195,13 @@ def _finish_succeeded(
         task = _lock_task(session, snapshot)
         execution = session.get(Execution, execution_id)
         if execution is None:
+            return
+        if surrendered(execution.status):
+            # Already ended by the stalled sweep or a newer run. Kept for
+            # tracing under `stale`, with the original error_code intact.
+            execution.status = "stale"
+            execution.stale_result = _stale_result(provider_result)
+            session.commit()
             return
         execution.finished_at = now
         target_is_current = (

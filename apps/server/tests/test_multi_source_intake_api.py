@@ -1,12 +1,10 @@
-import os
-import subprocess
-import sys
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, cast
 from uuid import UUID
 
+from database_support import migrated_database
 from fastapi.testclient import TestClient
 
 from liyan_server.app import create_app
@@ -67,6 +65,9 @@ class RecordingExecutionDispatcher:
     def dispatch(self, execution_id: UUID) -> None:
         self.execution_ids.append(execution_id)
 
+    def is_reachable(self) -> bool:
+        return True
+
     def run_url(self) -> None:
         process_url_fetch(
             self.database_url,
@@ -89,21 +90,6 @@ class RecordingExecutionDispatcher:
             ),
             short_source_characters=500,
         )
-
-
-def migrated_database(tmp_path: Path) -> str:
-    project_root = Path(__file__).resolve().parents[3]
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'liyan.db'}"
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
-        cwd=project_root,
-        env=os.environ | {"LIYAN_DATABASE_URL": database_url},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    return database_url
 
 
 def authenticated_client(tmp_path: Path) -> tuple[TestClient, dict[str, str]]:

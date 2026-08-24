@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     cleanup_task_creation_session_ttl_hours: int = 24
     cleanup_source_edit_session_ttl_hours: int = 24
     cleanup_deleted_task_retention_days: int = 30
+    #: How long a run may say nothing before it is presumed lost. Generous:
+    #: calling a slow run dead costs a user their work, calling a dead one
+    #: slow only delays the next sweep.
+    stalled_execution_timeout_minutes: int = 30
+    stalled_sweep_interval_seconds: int = 300
+    #: Names this worker in its heartbeat. Render sets it per service, so
+    #: one silent worker among several is identifiable.
+    worker_name: str = "celery-worker"
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

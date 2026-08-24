@@ -69,18 +69,68 @@ one (`observability.py` allowlists fields, so an unrecognised one is dropped).
   API does not fix, and the Technical Spec forbids making a short R2 outage a
   restart condition.
 
-Point Render's health check at `/health/ready` and alert on:
+Point Render's health check at `/health/ready`. What to watch for, and how —
+the split matters, because Render can raise three of these four itself and the
+fourth needs something outside it.
 
-- **Readiness failing** — the deployment cannot serve.
-- **`checks.worker` = `silent`** — nothing is processing. The API still answers,
-  so this is the failure most likely to go unnoticed. The verdict is the *worst*
-  of the known workers, not the freshest: the worker and beat fail
-  independently, and beat dying quietly means nothing is ever cleaned up or
-  recovered again. `worker_health.silent_workers()` names which one.
-- **`checks.object_storage` = `unconfigured`** — file 来源 cannot be accepted.
-  Permanent until somebody edits configuration.
-- **`execution_presumed_lost` log lines** — a worker died mid-run. A few are
-  normal around a deploy; a stream of them is not.
+### Render raises these
+
+**Deploy and service failures.** Dashboard → the service → **Settings →
+Notifications**, or account-wide under **Settings → Notifications**. Covers
+builds that fail and services that crash-loop.
+
+**Readiness failing.** Already wired: `liyan-api` declares
+`healthCheckPath: /health/ready`, so a deployment that cannot serve is restarted
+and reported through the notifications above. `database` and `queue` are what
+gate that verdict.
+
+**Memory and CPU.** Dashboard → the service → **Metrics → Alerts**. Set this on
+`liyan-worker` above all: it is the service with a real ceiling, at roughly
+110MB for the parent, 110MB for the child, and 150–250MB for Chromium during a
+URL fetch, against 512MB on `starter`. Alert near 80% so the warning arrives
+before Render kills it.
+
+### Render cannot raise these
+
+`checks.worker` and `checks.object_storage` are in the **body** of a response
+that still returns 200. That is deliberate — a dead worker must not take the API
+out of rotation, and the Technical Spec forbids making a short R2 outage a
+restart condition — but it does mean Render's health check cannot see either.
+
+**`checks.worker` = `silent`** is the failure most likely to go unnoticed:
+nothing is processing, every task waits forever, and the API answers normally
+throughout. The verdict is the *worst* of the known workers rather than the
+freshest, because the worker and beat fail independently, and beat dying quietly
+means nothing is ever cleaned up or recovered again.
+`worker_health.silent_workers()` names which one.
+
+**`checks.object_storage` = `unconfigured`** means file 来源 cannot be accepted,
+permanently, until somebody edits configuration.
+
+Reach them with an external uptime monitor that can assert on the response body
+— Better Stack, Checkly, and UptimeRobot all do this on their free tiers. Point
+it at `/health/ready` and alert when the body **stops** containing:
+
+```
+"worker": "beating"
+```
+
+Matching on the healthy string rather than the unhealthy one is the safer way
+round: it also fires if the endpoint starts returning something unexpected,
+where a search for `"silent"` would quietly pass.
+
+**`execution_presumed_lost` and `worker_never_started` log lines** — a worker
+died mid-run, or work was queued that nobody ever collected. A few of the first
+are normal around a deploy; a stream is not, and any of the second means a
+worker or a queue name is wrong. Reach these by sending Render's logs to a
+service that alerts on content: Dashboard → the service → **Settings → Log
+Streams**.
+
+> If body-matching monitors ever feel like too much machinery, the alternative
+> is an endpoint that returns non-200 when a worker has gone silent, so the
+> simplest possible uptime check catches it. That has not been built, because it
+> means deciding that a silent worker makes the *API* unhealthy, and it does
+> not.
 
 Client errors go to Sentry when `VITE_SENTRY_DSN` is set, scrubbed by
 `apps/web/src/monitoring.ts`: no request bodies, no query strings, no
@@ -99,6 +149,7 @@ Provisioning is not code. Someone with the accounts has to:
 3. Create a separate R2 bucket per environment. The S3 endpoint must **exclude**
    the bucket name — the Cloudflare dashboard's "S3 API" field includes it.
 4. Create a separate Supabase project per environment.
-5. Configure the Render alerts listed above.
+5. Configure the alerts above — the three in Render's dashboard, and one
+   external monitor for `"worker": "beating"`, which Render cannot see.
 
 Until step 1 is done for Staging, there is no Staging.

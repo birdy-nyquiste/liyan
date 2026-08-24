@@ -298,17 +298,22 @@ Each is a separate **resource**, not a separate credential for the same one:
 
 ### 4. Health checks and alerts
 
-`liyan-api` already has `healthCheckPath: /health/ready`. Add alerts for:
+`liyan-api` already has `healthCheckPath: /health/ready`, so readiness
+failures are covered. Three more to set, and one that Render cannot raise at
+all:
 
-- **Readiness failing** — `database` or `queue` is down; the deployment cannot
-  serve.
-- **`checks.worker: "silent"`** — nothing has processed recently. The API keeps
-  answering, so this is the failure most likely to go unnoticed. The verdict is
-  the *worst* of the workers, so this catches beat dying while the worker lives.
-- **`checks.object_storage: "unconfigured"`** — uploads refused; permanent until
-  someone edits configuration.
-- **`execution_presumed_lost` log lines** — a worker died mid-run. A few around
-  a deploy are normal; a stream is not.
+| Watch for | Where |
+| --- | --- |
+| Deploy and service failures | Render → service → Settings → Notifications |
+| Memory on `liyan-worker` | Render → service → Metrics → Alerts, near 80% |
+| `execution_presumed_lost` in logs | Render → service → Settings → Log Streams |
+| `"worker": "beating"` disappearing from `/health/ready` | An external uptime monitor — Render cannot see response bodies |
+
+That last one is the failure most likely to go unnoticed: nothing is
+processing, every task waits forever, and the API answers normally throughout.
+
+[environments.md](environments.md#health-and-alerts) explains each, and why the
+worker deliberately does not gate readiness.
 
 > **Beat is a separate service and fails silently.** If it stops, nothing is
 > ever cleaned up and no stalled run is ever recovered, while everything looks

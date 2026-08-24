@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from liyan_server.app import create_app
-from liyan_server.object_storage import ObjectStorage, ObjectStorageState
+from liyan_server.object_storage import ObjectStorage, ObjectStorageState, StoredObject
 from liyan_server.settings import Settings
 
 
@@ -31,6 +31,11 @@ class StorageSaying(ObjectStorage):
         raise NotImplementedError
 
     def delete(self, key: str) -> None: ...
+
+    def list_objects(  # pragma: no cover - readiness never lists
+        self, prefix: str = ""
+    ) -> tuple[StoredObject, ...]:
+        raise NotImplementedError
 
     def state(self) -> ObjectStorageState:
         return self._state

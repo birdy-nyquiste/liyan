@@ -55,6 +55,26 @@ LIYAN_LIVE_R2=1 .venv/bin/python -m pytest apps/server/tests/test_r2_live_contra
 It writes one object to the configured bucket and deletes it again. The default
 suite skips it and stays offline.
 
+### Background work needs two processes
+
+Every 知言 run, 立言 generation, file parse, and Blog submission happens in a
+Celery worker, and the scheduled cleanup happens in Celery beat. They are
+separate processes:
+
+```bash
+.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info
+```
+
+```bash
+.venv/bin/celery -A liyan_server.celery_worker beat --loglevel=info
+```
+
+Without the worker, everything a user starts stays queued. Without beat, nothing
+is ever cleaned up: abandoned uploads keep paying for storage and deleted 立言任务
+stay on disk past their 30 days. Neither failure raises anything — the API keeps
+answering — so an environment that skips beat looks healthy while its bucket
+grows. Publication evidence is never affected either way.
+
 ## Checks
 
 ```bash

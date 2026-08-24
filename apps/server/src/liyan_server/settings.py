@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     publication_targets: str = ""
     blog_ingest_token: str = ""
     blog_timeout_seconds: int = 60
+    #: What each of these costs is documented in `.env.example`; why the rules
+    #: are what they are is in `cleanup.py`.
+    cleanup_interval_seconds: int = 3600
+    cleanup_task_creation_session_ttl_hours: int = 24
+    cleanup_source_edit_session_ttl_hours: int = 24
+    cleanup_deleted_task_retention_days: int = 30
 
     @cached_property
     def allowed_origins(self) -> tuple[str, ...]:

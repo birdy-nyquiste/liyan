@@ -1,8 +1,10 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from celery import Celery  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
 
+from liyan_server.cleanup import policy_from, run_cleanup
 from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher
 from liyan_server.database import Database, Execution
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher
@@ -20,6 +22,26 @@ from liyan_server.zhiyan.worker import process_zhiyan_run
 
 settings = Settings()
 celery_app = Celery("liyan-worker", broker=settings.broker_url)
+
+#: Cleanup is the one job nobody triggers, which is why it needs a schedule at
+#: all. Beat is a separate process from the worker: without it nothing is ever
+#: collected, and nothing says so.
+celery_app.conf.beat_schedule = {
+    "clean-expired-data": {
+        "task": "liyan.clean_expired_data",
+        "schedule": float(settings.cleanup_interval_seconds),
+    }
+}
+
+
+@celery_app.task(name="liyan.clean_expired_data")  # type: ignore[untyped-decorator]
+def clean_expired_data() -> None:
+    run_cleanup(
+        settings.database_url,
+        R2ObjectStorage(settings),
+        policy=policy_from(settings),
+        now=datetime.now(UTC),
+    )
 
 
 @celery_app.task(name="liyan.process_execution")  # type: ignore[untyped-decorator]

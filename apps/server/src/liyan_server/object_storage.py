@@ -7,6 +7,8 @@ unconfigured bucket cost an afternoon, so the difference is modelled here rather
 than guessed at the call site.
 """
 
+from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, Literal, Protocol, cast
@@ -18,6 +20,14 @@ from botocore.config import Config  # type: ignore[import-untyped]
 from liyan_server.settings import Settings
 
 type ObjectStorageState = Literal["ready", "unconfigured", "unreachable"]
+
+
+@dataclass(frozen=True)
+class StoredObject:
+    """One object as storage itself describes it, with no row involved."""
+
+    key: str
+    written_at: datetime
 
 #: Settings an operator must fill in before a file 来源 can be accepted, in the
 #: order they appear in `.env.example`.
@@ -45,6 +55,21 @@ class ObjectStorage(Protocol):
     def open(self, key: str) -> BinaryIO: ...
 
     def delete(self, key: str) -> None: ...
+
+    def list_objects(self, prefix: str = "") -> tuple[StoredObject, ...]:
+        """Everything under `prefix`, so cleanup can find what no row names.
+
+        An object whose row is gone is invisible to every other query in the
+        server, which is why the sweep that collects it has to ask storage
+        itself. The write time comes along because an object younger than an
+        upload's own commit is not an orphan — it is an upload in progress.
+
+        Unlike the other defaults here, this one refuses rather than answering.
+        An empty tuple would be a plausible lie — "the bucket holds nothing" —
+        and would turn the orphan sweep into a silent no-op for any storage that
+        forgot to implement it.
+        """
+        raise NotImplementedError(f"{type(self).__name__} cannot list objects.")
 
     def missing_settings(self) -> tuple[str, ...]:
         """Setting names an operator still has to fill in.
@@ -137,3 +162,12 @@ class R2ObjectStorage:
 
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self._configured_bucket(), Key=key)
+
+    def list_objects(self, prefix: str = "") -> tuple[StoredObject, ...]:
+        bucket = self._configured_bucket()
+        paginator = self._client.get_paginator("list_objects_v2")
+        return tuple(
+            StoredObject(key=item["Key"], written_at=item["LastModified"])
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
+            for item in page.get("Contents", ())
+        )

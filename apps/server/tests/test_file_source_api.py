@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -20,6 +21,7 @@ from liyan_server.object_storage import (
     ObjectStorage,
     ObjectStorageState,
     ObjectStorageUnconfigured,
+    StoredObject,
 )
 from liyan_server.settings import Settings
 
@@ -63,6 +65,13 @@ class MemoryObjectStorage(ObjectStorage):
 
     def delete(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    def list_objects(self, prefix: str = "") -> tuple[StoredObject, ...]:
+        return tuple(
+            StoredObject(key=key, written_at=datetime.now(UTC))
+            for key in sorted(self.objects)
+            if key.startswith(prefix)
+        )
 
 
 class RecordingExecutionDispatcher:

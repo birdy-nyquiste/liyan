@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, cast
@@ -12,7 +13,7 @@ from liyan_server.app import create_app
 from liyan_server.auth import InvalidAccessToken, VerifiedIdentity
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
-from liyan_server.object_storage import ObjectStorage
+from liyan_server.object_storage import ObjectStorage, StoredObject
 from liyan_server.settings import Settings
 from liyan_server.url_fetch_worker import UrlExtraction, process_url_fetch
 
@@ -39,6 +40,13 @@ class MemoryObjectStorage(ObjectStorage):
 
     def delete(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    def list_objects(self, prefix: str = "") -> tuple[StoredObject, ...]:
+        return tuple(
+            StoredObject(key=key, written_at=datetime.now(UTC))
+            for key in sorted(self.objects)
+            if key.startswith(prefix)
+        )
 
 
 class DeterministicUrlFetcher:

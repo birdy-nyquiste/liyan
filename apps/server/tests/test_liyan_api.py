@@ -10,6 +10,7 @@ from zhiyan_support import DeterministicLiyanProvider, confirm_sources, zhiyan_c
 from liyan_server.database import Database, Execution, Task, ZhiyanReport
 from liyan_server.liyan.acceptance import accept_article_text, unsupported_markdown_reason
 from liyan_server.liyan.failures import LiyanRunFailure
+from liyan_server.liyan.prompt import LIYAN_PROMPT
 from liyan_server.liyan.provider import (
     LiyanProviderFailure,
     LiyanProviderResult,
@@ -404,3 +405,32 @@ def test_an_acceptable_article_breaks_no_rule() -> None:
     )
 
     assert unsupported_markdown_reason(accepted.title, accepted.body_markdown) is None
+
+
+def test_the_prompt_names_every_construct_acceptance_rejects() -> None:
+    """The mismatch that threw away real generations.
+
+    The checks refused nineteen constructs while the prompt mentioned six, so a
+    run could be discarded for a rule the model was never told about — and the
+    record said only that "a forbidden Markdown construct" was present. A rule
+    the model is judged by has to be a rule the model was given.
+    """
+    forbidden_in_prompt = [
+        ("HTML", "HTML"),
+        ("tables", "表格"),
+        ("images", "图片"),
+        ("code", "代码"),
+        ("footnotes", "脚注"),
+        ("task lists", "任务列表"),
+        ("definition lists", "定义列表"),
+        ("link definitions", "链接引用定义"),
+        ("strikethrough", "删除线"),
+        ("H1 and H4+", "一级标题"),
+        ("setext headings", "下划线式标题"),
+        ("front matter", "front matter"),
+        ("publication fields", "发布字段"),
+    ]
+
+    missing = [name for name, phrase in forbidden_in_prompt if phrase not in LIYAN_PROMPT]
+
+    assert missing == [], f"acceptance rejects these but the prompt never says so: {missing}"

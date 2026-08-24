@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server.database import Database, Execution, PublishTask
 from liyan_server.execution_states import PublishTaskStatus
+from liyan_server.observability import log_execution_failed
 from liyan_server.publication.blog import (
     UNKNOWN_OUTCOME_MESSAGE,
     BlogOutcomeUnknown,
@@ -154,6 +155,12 @@ def _finish(
         execution.error_message = failure_message
         execution.internal_error = internal_error
         execution.finished_at = now
+        log_execution_failed(
+            execution_id=execution.id,
+            operation=execution.operation,
+            attempt=execution.attempt,
+            error_code=failure_code,
+        )
         # Publishing is never retried from inside the server: a blind resend
         # could create a second Blog item.
         execution.retry_allowed_at = None

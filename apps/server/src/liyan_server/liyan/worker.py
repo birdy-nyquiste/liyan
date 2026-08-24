@@ -25,6 +25,7 @@ from liyan_server.liyan.runs import (
     InvalidRunSnapshot,
     LiyanRunSnapshot,
 )
+from liyan_server.observability import log_execution_failed
 
 CANCELLED_MESSAGE = cancelled_message(LIYAN_OPERATION)
 UNREADABLE_RUN_MESSAGE = "立言请求已失效，请重新发起。"
@@ -180,6 +181,12 @@ def _fail_within(execution: Execution, failure: LiyanRunFailure) -> None:
     execution.internal_error = failure.internal_error
     execution.finished_at = now
     execution.retry_allowed_at = None if cancelled else retry_allowed_at(now, failure.code)
+    log_execution_failed(
+        execution_id=execution.id,
+        operation=execution.operation,
+        attempt=execution.attempt,
+        error_code=execution.error_code,
+    )
 
 
 def _finish_succeeded(

@@ -56,29 +56,57 @@ class GeneratedArticle(BaseModel):
         return value.strip()
 
 
+#: Each rule with the name it is known by, so a rejection can say which one it
+#: was. "A forbidden Markdown construct" is true of every article this refuses
+#: and tells whoever reads it nothing — not which rule, and not whether the
+#: model is close to acceptable or nowhere near it.
+_TITLE_RULES: tuple[tuple[str, object], ...] = (
+    ("raw HTML in the title", _RAW_HTML),
+    ("an image in the title", _IMAGE),
+    ("Markdown in the title", _TITLE_MARKDOWN),
+)
+
+_BODY_RULES: tuple[tuple[str, object], ...] = (
+    ("raw HTML", _RAW_HTML),
+    ("a table", _TABLE_DIVIDER),
+    ("an image", _IMAGE),
+    ("a code span or fence", _CODE),
+    ("an H1 or an H4 and deeper", _UNSUPPORTED_HEADING),
+    ("a setext H1", _SETEXT_H1),
+    ("a footnote", _FOOTNOTE),
+    ("a task list", _TASK_LIST),
+    ("a definition list", _DEFINITION_LIST),
+    ("indented code", _INDENTED_CODE),
+    ("a link definition", _LINK_DEFINITION),
+    ("publication front matter", _PUBLICATION_FIELD),
+    ("YAML front matter", _YAML_FRONTMATTER),
+    ("a link that is not https", _UNSAFE_LINK),
+)
+
+
+def unsupported_markdown_reason(title: str, body: str) -> str | None:
+    """Which rule the pair breaks, or None if it breaks none.
+
+    Named rather than counted: the model is asked for a narrow Markdown subset,
+    and knowing it reached for a table is the difference between adjusting a
+    prompt and guessing at one.
+    """
+    for reason, rule in _TITLE_RULES:
+        if rule.search(title):  # type: ignore[attr-defined]
+            return reason
+    for reason, rule in _BODY_RULES:
+        if rule.search(body):  # type: ignore[attr-defined]
+            return reason
+    if "~~" in body:
+        return "strikethrough"
+    if "\n" in title:
+        return "a line break in the title"
+    return None
+
+
 def unsupported_article_markdown(title: str, body: str) -> bool:
     """Whether the pair leaves the canonical Markdown subset both sides may store."""
-    return bool(
-        _RAW_HTML.search(title)
-        or _RAW_HTML.search(body)
-        or _TABLE_DIVIDER.search(body)
-        or _IMAGE.search(title)
-        or _IMAGE.search(body)
-        or _CODE.search(body)
-        or _UNSUPPORTED_HEADING.search(body)
-        or _SETEXT_H1.search(body)
-        or _FOOTNOTE.search(body)
-        or _TASK_LIST.search(body)
-        or _DEFINITION_LIST.search(body)
-        or _INDENTED_CODE.search(body)
-        or _LINK_DEFINITION.search(body)
-        or _TITLE_MARKDOWN.search(title)
-        or "~~" in body
-        or _PUBLICATION_FIELD.search(body)
-        or _YAML_FRONTMATTER.search(body)
-        or _UNSAFE_LINK.search(body)
-        or "\n" in title
-    )
+    return unsupported_markdown_reason(title, body) is not None
 
 
 def accept_article_text(article_text: str) -> GeneratedArticle:
@@ -87,11 +115,11 @@ def accept_article_text(article_text: str) -> GeneratedArticle:
     except (json.JSONDecodeError, ValidationError) as error:
         raise LiyanRunFailure("invalid_article_schema", UNUSABLE_MESSAGE, str(error)) from error
     body = article.body_markdown
-    if unsupported_article_markdown(article.title, body):
+    if reason := unsupported_markdown_reason(article.title, body):
         raise LiyanRunFailure(
             "unsupported_article_markdown",
             UNUSABLE_MESSAGE,
-            "The article contains a forbidden Markdown construct.",
+            f"The article uses {reason}, which the canonical subset forbids.",
         )
     if _INTERNAL_REFERENCE.search(article.title) or _INTERNAL_REFERENCE.search(body):
         raise LiyanRunFailure(

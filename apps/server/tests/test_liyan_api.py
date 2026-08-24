@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from zhiyan_support import DeterministicLiyanProvider, confirm_sources, zhiyan_client
 
 from liyan_server.database import Database, Execution, Task, ZhiyanReport
-from liyan_server.liyan.acceptance import accept_article_text
+from liyan_server.liyan.acceptance import accept_article_text, unsupported_markdown_reason
 from liyan_server.liyan.failures import LiyanRunFailure
 from liyan_server.liyan.provider import (
     LiyanProviderFailure,
@@ -368,3 +369,38 @@ def _elapse_backoff(database_url: str, execution_id: str) -> None:
         execution.retry_allowed_at = datetime.now(UTC) - timedelta(seconds=1)
         session.commit()
     database.dispose()
+
+
+def test_a_rejected_article_says_which_rule_it_broke() -> None:
+    """"A forbidden Markdown construct" is true of every rejection and helps nobody.
+
+    The model is asked for a narrow subset. Knowing it reached for a table is
+    the difference between adjusting a prompt and guessing at one.
+    """
+    with pytest.raises(LiyanRunFailure) as rejected:
+        accept_article_text(
+            json.dumps(
+                {
+                    "title": "四天工作制的真问题",
+                    "body_markdown": "先看数据。\n\n| 年份 | 营收 |\n| --- | --- |\n| 2024 | 35% |",
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    assert rejected.value.code == "unsupported_article_markdown"
+    assert "a table" in (rejected.value.internal_error or "")
+
+
+def test_an_acceptable_article_breaks_no_rule() -> None:
+    accepted = accept_article_text(
+        json.dumps(
+            {
+                "title": "四天工作制的真问题",
+                "body_markdown": "工时只是生产方式的一部分。\n\n## 现实条件\n\n先改流程。",
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    assert unsupported_markdown_reason(accepted.title, accepted.body_markdown) is None

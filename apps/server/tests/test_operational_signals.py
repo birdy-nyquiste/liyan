@@ -400,3 +400,36 @@ def test_a_failed_run_says_so_in_the_log(
     assert logged["operation"] == "analyze_source"
     # The reason itself stays on the row: it can quote whatever it was handed.
     assert "internal_error" not in logged
+
+
+def test_every_worker_reports_the_failures_it_records() -> None:
+    """A structural check, because the omission is what keeps happening.
+
+    Failure logging was added to three of the four workers and missed on the
+    fourth, and the gap surfaced the way it always does — someone watching a
+    terminal while 立言 generation failed twice in silence. A behavioural test
+    per worker would not have caught it either, because the missing one simply
+    had no test.
+
+    So this asserts the rule rather than an instance: every module that writes a
+    terminal failure onto an Execution also says so. It is coupled to the source
+    on purpose. That coupling is the point — a fifth worker cannot be added
+    without either logging its failures or failing here.
+    """
+    workers = [
+        "zhiyan/worker.py",
+        "liyan/worker.py",
+        "url_fetch_worker.py",
+        "file_parse_worker.py",
+        "publication/worker.py",
+    ]
+    root = Path(__file__).resolve().parents[1] / "src" / "liyan_server"
+
+    silent = [
+        name
+        for name in workers
+        if 'execution.status = "failed"' in (root / name).read_text()
+        and "log_execution_failed" not in (root / name).read_text()
+    ]
+
+    assert silent == [], f"these workers fail without saying so: {silent}"

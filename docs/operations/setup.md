@@ -255,6 +255,14 @@ environment.
 database and queue in the blueprint. Migrations run in the API's build command,
 so there is no separate step.
 
+> **If the worker builds but URL 来源 fail on Render**, look for missing shared
+> libraries in its logs (`libnss3`, `libgbm`, and friends). Playwright downloads
+> the browser, but Chromium also needs system packages that Render's native
+> Python runtime may not carry. `playwright install --with-deps chromium` fixes
+> it where `apt` is reachable; where it is not, switch that one service to a
+> Docker runtime built on `mcr.microsoft.com/playwright/python`. This is the one
+> step in this guide not verified against a real deployment.
+
 ### 3. What must never be shared between environments
 
 Each is a separate **resource**, not a separate credential for the same one:

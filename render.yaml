@@ -43,7 +43,13 @@ services:
     runtime: python
     region: singapore
     plan: starter
-    buildCommand: pip install uv && uv sync --locked
+    # Chromium as well as the packages: URL 来源 are extracted by driving a
+    # headless browser, and it is not a Python dependency, so `uv sync` alone
+    # leaves crawl4ai naming a binary that does not exist. Every URL 来源 then
+    # fails with a message that says nothing about browsers. Roughly 95MB and a
+    # minute per build — and only here: the API dispatches and beat sweeps, so
+    # neither of them ever opens a page.
+    buildCommand: pip install uv && uv sync --locked && uv run playwright install chromium
     startCommand: uv run celery -A liyan_server.celery_worker worker --loglevel=info
     envVars:
       - key: LIYAN_WORKER_NAME

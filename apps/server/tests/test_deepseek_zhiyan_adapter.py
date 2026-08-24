@@ -6,6 +6,7 @@ import pytest
 from liyan_server.zhiyan.deepseek import (
     DeepSeekZhiyanProvider,
     ProviderHttpResponse,
+    provider_result,
     request_body,
 )
 from liyan_server.zhiyan.prompt import AcceptedSourceRevision, zhiyan_request
@@ -280,3 +281,29 @@ def test_text_that_is_not_fenced_is_passed_through(unfenced: str) -> None:
     result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
 
     assert result.report_text == unfenced.strip()
+
+
+def test_a_reply_with_no_text_says_what_it_did_carry() -> None:
+    """"No output text" alone is a dead end.
+
+    A reply that is only a search call, one whose message content is empty, and
+    one shaped differently all produce the same absence of text and call for
+    different fixes. The item types are structural — no part of them is 来源 or
+    report content — so naming them costs nothing and ends the guessing.
+    """
+    with pytest.raises(ZhiyanProviderFailure) as refused:
+        provider_result(
+            {
+                "status": "completed",
+                "output": [
+                    {"type": "web_search_call", "action": {"type": "search", "query": "x"}},
+                    {"type": "reasoning"},
+                ],
+            },
+            fallback_model="deepseek-v4-flash",
+        )
+
+    assert refused.value.code == "invalid_provider_response"
+    detail = refused.value.internal_error or ""
+    assert "web_search_call" in detail
+    assert "reasoning" in detail

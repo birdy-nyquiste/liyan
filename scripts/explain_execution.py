@@ -20,6 +20,8 @@ from typing import Any
 import sqlalchemy
 from sqlalchemy import text
 
+from liyan_server.settings import Settings
+
 RECENT = text(
     """
     SELECT id, operation, status, attempt, error_code, error_message,
@@ -41,10 +43,16 @@ ONE = text(
 
 
 def _database_url() -> str:
-    url = os.environ.get("LIYAN_DATABASE_URL", "").strip()
-    if not url:
+    """Read it the way the server does, so the same rules apply.
+
+    Going to the environment directly would skip the driver rewrite in
+    `Settings`, and this script would then fail against a managed database in
+    exactly the way the server no longer does — which is the moment somebody
+    most needs it to work.
+    """
+    if not os.environ.get("LIYAN_DATABASE_URL", "").strip():
         sys.exit("LIYAN_DATABASE_URL is not set. Source your .env first.")
-    return url
+    return Settings().database_url
 
 
 def _show(row: Any) -> None:

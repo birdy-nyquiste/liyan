@@ -74,6 +74,13 @@ services:
       --loglevel=info --concurrency=1 --max-tasks-per-child=8
       --without-gossip --without-mingle
     envVars:
+      # Where the browser is downloaded to, and later looked for. Playwright
+      # defaults to ~/.cache, and on Render that directory does not survive from
+      # the build into the running service: the build installs Chromium happily
+      # and every URL 来源 then fails with "Executable doesn't exist". Only the
+      # project directory persists, so the browser goes there.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/src/.playwright
       - key: LIYAN_WORKER_NAME
         value: liyan-worker
       - fromGroup: liyan-shared

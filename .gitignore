@@ -17,3 +17,7 @@ htmlcov/
 # Celery beat's own record of when each schedule last fired. Runtime state
 # belonging to one machine, not to the project.
 celerybeat-schedule*
+
+# Where Playwright's browsers land when installed into the project, which is
+# how they survive from a Render build into the running service.
+.playwright/

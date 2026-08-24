@@ -167,10 +167,19 @@ def provider_result(payload: object, *, fallback_model: str) -> ZhiyanProviderRe
             texts.extend(_message_texts(item))
     report_text = _unfenced("".join(texts).strip())
     if not report_text:
+        # Name what the response did carry. The types are structural — no part
+        # of them is 来源 or report content — and without them "no output text"
+        # is a dead end: a reply that is only web_search_call, one whose message
+        # has empty content, and one whose items are shaped differently all read
+        # identically, and they call for different fixes.
+        present = sorted({str(item.get("type")) for item in output if isinstance(item, dict)})
         raise ZhiyanProviderFailure(
             "invalid_provider_response",
             UNUSABLE_MESSAGE,
-            internal_error="DeepSeek response carried no output text.",
+            internal_error=(
+                "DeepSeek response carried no output text; "
+                f"output items were {present or ['none']}."
+            ),
         )
     model = payload.get("model")
     response_id = payload.get("id")

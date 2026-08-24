@@ -261,13 +261,18 @@ command, so there is no separate step.
 > edit the value to fix this: it is wired from the database resource, and an
 > edit either gets overwritten or has to be maintained against it.
 
-> **If the worker builds but URL 来源 fail on Render**, look for missing shared
-> libraries in its logs (`libnss3`, `libgbm`, and friends). Playwright downloads
-> the browser, but Chromium also needs system packages that Render's native
-> Python runtime may not carry. `playwright install --with-deps chromium` fixes
-> it where `apt` is reachable; where it is not, switch that one service to a
-> Docker runtime built on `mcr.microsoft.com/playwright/python`. This is the one
-> step in this guide not verified against a real deployment.
+> **URL 来源 failing on Render with "Executable doesn't exist"** means the
+> browser was installed during the build and then lost. Playwright defaults to
+> `~/.cache`, which does not survive from a Render build into the running
+> service; only the project directory does. `render.yaml` sets
+> `PLAYWRIGHT_BROWSERS_PATH` inside the project for exactly this. If it is
+> missing, the build succeeds and every fetch fails.
+>
+> **A different symptom, missing shared libraries** (`libnss3`, `libgbm`), means
+> Chromium is there but its system packages are not.
+> `playwright install --with-deps chromium` fixes that where `apt` is reachable;
+> where it is not, switch that one service to a Docker runtime built on
+> `mcr.microsoft.com/playwright/python`.
 
 > **The worker is the service most likely to run out of memory.** Celery
 > forks one child per CPU by default and each child is a fully imported copy of

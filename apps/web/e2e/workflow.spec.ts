@@ -40,13 +40,17 @@ test("browser history cannot discard an unfinished source without confirmation",
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByLabel("来源标题").fill("尚未保存的来源");
 
-  page.once("dialog", (dialog) => dialog.dismiss());
+  // The question is asked in the page, not by the browser: a native confirm()
+  // can be suppressed, and a suppressed one answers "stay here" on the writer's
+  // behalf — silently trapping them on the page they are trying to leave.
   await page.goBack();
+  await expect(page.getByRole("alertdialog")).toContainText("离开这里？");
+  await page.getByRole("button", { name: "取消" }).click();
   await expect(page).toHaveURL(/\/task$/);
   await expect(page.getByLabel("来源标题")).toHaveValue("尚未保存的来源");
 
-  page.once("dialog", (dialog) => dialog.accept());
   await page.goBack();
+  await page.getByRole("alertdialog").getByRole("button", { name: "仍要离开" }).click();
   await expect(page).toHaveURL(/\/publications$/);
 });
 

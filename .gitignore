@@ -18,6 +18,10 @@ htmlcov/
 # belonging to one machine, not to the project.
 celerybeat-schedule*
 
+# The signed-in session the browser suite bootstraps once per run. A real
+# Supabase access token: never committed, and stale within the hour anyway.
+apps/web/e2e/.auth/
+
 # What a browser-test run leaves behind: traces, screenshots, and the HTML
 # report. Evidence about one run on one machine, not about the project.
 apps/web/test-results/

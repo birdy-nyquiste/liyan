@@ -97,7 +97,14 @@ Run it before a release and record the answer here:
 | _not yet run_ | | | | | | |
 
 **This table is empty, and until it has a row the ceiling above is reasoned
-rather than measured.** The reasoning is sound — the memory arithmetic is real
+rather than measured.**
+
+One number is known without it, from the browser suite's own runs against
+Staging on 2026-08-24: **a single 知言 run takes two to three minutes**, and
+under a sequence of them DeepSeek began answering `busy`. One writer alone can
+therefore hold the only worker slot for minutes at a time, and the provider
+refuses before the queue does — which is an argument for the ceiling existing,
+and a reason to measure it with more than one writer before launch. The reasoning is sound — the memory arithmetic is real
 and the batch size is structural — but a launch decision wants the second
 column too. Fill it from a Staging run with the writers a launch expects.
 

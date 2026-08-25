@@ -4,7 +4,8 @@ import {
   expect,
   openLiyan,
   openedTask,
-  signIn,
+  openWorkbench,
+  PROVIDER_TIMEOUT,
   test,
 } from "./support/workbench";
 
@@ -20,29 +21,21 @@ import {
 
 const unique = () => `四天工作制 ${Date.now().toString(36)}`;
 
-test("a writer signs in with a one-time code", async ({ page }) => {
-  test.skip(
-    !AGAINST_STAGING,
-    "OTP needs a Supabase project and an address; the local run has neither.",
-  );
-
-  await signIn(page);
-
-  await expect(page.getByRole("heading", { name: "立言任务" })).toBeVisible();
-});
-
-test("the sign-in screen asks for an address before anything else", async ({ page }) => {
-  // The half of sign-in that exists in both runs: whatever else is wrong, an
-  // unauthenticated visitor must land somewhere that tells them what to do.
+test("the sign-in screen asks for an address before anything else", async ({ browser }) => {
+  // Signed out on purpose — every other spec arrives with the session the setup
+  // step signed in. Whatever else is wrong, an unauthenticated visitor must
+  // land somewhere that tells them what to do.
+  const page = await browser.newPage({ storageState: undefined });
   await page.goto("/");
 
   await expect(page.getByLabel("邮箱")).toBeVisible();
   await expect(page.getByRole("button", { name: "发送验证码" })).toBeVisible();
+  await page.close();
 });
 
 test("a pasted 来源 becomes a 立言任务 with a 知言报告", async ({ page }) => {
   const title = unique();
-  await signIn(page);
+  await openWorkbench(page);
 
   await createTaskWithReport(page, title);
 
@@ -53,7 +46,7 @@ test("a pasted 来源 becomes a 立言任务 with a 知言报告", async ({ page
 
 test("a 知言报告 is immutable once it succeeds", async ({ page }) => {
   const title = unique();
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, title);
 
   // No way back: a successful report has no start, retry, or cancel control.
@@ -65,13 +58,13 @@ test("a 知言报告 is immutable once it succeeds", async ({ page }) => {
 
 test("an article is generated, edited, saved, and restored", async ({ page }) => {
   const title = unique();
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, title);
 
   await openLiyan(page, title);
   await page.getByRole("button", { name: "生成立言" }).click();
   const editor = page.getByRole("textbox", { name: "文章正文" });
-  await expect(editor).toBeVisible({ timeout: 90_000 });
+  await expect(editor).toBeVisible({ timeout: PROVIDER_TIMEOUT });
 
   await page.getByRole("button", { name: "保存 Revision" }).click();
   await expect(page.getByText("Revision 1", { exact: true })).toBeVisible();
@@ -90,7 +83,7 @@ test("an article is generated, edited, saved, and restored", async ({ page }) =>
 
 test("a 立言任务 is deleted and leaves the list", async ({ page }) => {
   const title = unique();
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, title);
 
   page.once("dialog", (dialog) => void dialog.accept());
@@ -101,12 +94,12 @@ test("a 立言任务 is deleted and leaves the list", async ({ page }) => {
 
 test("publishing a saved Revision returns a Preview URL", async ({ page }) => {
   const title = unique();
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, title);
   await openLiyan(page, title);
   await page.getByRole("button", { name: "生成立言" }).click();
   await expect(page.getByRole("textbox", { name: "文章正文" })).toBeVisible({
-    timeout: 90_000,
+    timeout: PROVIDER_TIMEOUT,
   });
   await page.getByRole("button", { name: "保存 Revision" }).click();
 
@@ -115,7 +108,7 @@ test("publishing a saved Revision returns a Preview URL", async ({ page }) => {
   await page.getByLabel("作者（显示在 Blog 上）").fill("Zeng Zong");
   await page.getByRole("button", { name: "确认发布" }).click();
 
-  await expect(page.getByRole("link", { name: /\/preview\// })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("link", { name: /\/preview\// })).toBeVisible({ timeout: PROVIDER_TIMEOUT });
 });
 
 test("an unconfirmed Blog answer is shown as 结果未知 and cannot be resent", async ({
@@ -126,12 +119,12 @@ test("an unconfirmed Blog answer is shown as 结果未知 and cannot be resent",
     "Staging cannot be asked for an ambiguous Blog answer; ADR-0001 makes it terminal.",
   );
   const title = `结果未知 ${Date.now().toString(36)}`;
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, title);
   await openLiyan(page, title);
   await page.getByRole("button", { name: "生成立言" }).click();
   await expect(page.getByRole("textbox", { name: "文章正文" })).toBeVisible({
-    timeout: 90_000,
+    timeout: PROVIDER_TIMEOUT,
   });
 
   // The e2e Blog answers by title: this one asks for the outcome 立言阁 cannot
@@ -143,7 +136,7 @@ test("an unconfirmed Blog answer is shown as 结果未知 and cannot be resent",
   await page.getByLabel("作者（显示在 Blog 上）").fill("Zeng Zong");
   await page.getByRole("button", { name: "确认发布" }).click();
 
-  await expect(page.getByText(/结果未知，立言阁不会重发/)).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText(/结果未知，立言阁不会重发/)).toBeVisible({ timeout: PROVIDER_TIMEOUT });
   // The refusal that matters: nothing offers to send it again.
   await expect(page.getByRole("button", { name: "重试本次提交" })).toHaveCount(0);
 });
@@ -152,12 +145,12 @@ test("a URL 来源 that cannot be reached fails with a reason, not a spinner", a
   page,
 }) => {
   test.skip(!AGAINST_STAGING, "A local run has no Chromium behind the worker to fetch with.");
-  await signIn(page);
+  await openWorkbench(page);
 
   await page.getByRole("button", { name: "新建立言任务" }).click();
   await page.getByRole("button", { name: "公共文章链接" }).click();
   await page.getByLabel("来源网址").fill("https://example.invalid/does-not-resolve");
   await page.getByRole("button", { name: "添加来源" }).click();
 
-  await expect(page.getByText(/无法|失败/).first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText(/无法|失败/).first()).toBeVisible({ timeout: PROVIDER_TIMEOUT });
 });

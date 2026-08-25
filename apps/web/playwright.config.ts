@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { SESSION_STATE } from "./e2e/support/workbench";
+
 /**
  * The browser half of the Phase 1 release gate.
  *
@@ -32,7 +34,7 @@ export default defineConfig({
   testDir: "./e2e",
   // 知言 and 立言 are provider-paced even against doubles, and the workbench
   // polls rather than subscribes, so the waits here are real waits.
-  timeout: 120_000,
+  timeout: stagingUrl ? 600_000 : 120_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,
@@ -46,7 +48,16 @@ export default defineConfig({
     screenshot: "only-on-failure",
     locale: "zh-CN",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Sign-in happens once, here. A Supabase code is single-use, so a suite
+    // that signed in per spec could be run exactly once per code issued.
+    { name: "setup", testMatch: /.*\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: SESSION_STATE },
+      dependencies: ["setup"],
+    },
+  ],
   webServer: stagingUrl
     ? undefined
     : [
@@ -54,7 +65,7 @@ export default defineConfig({
           command: "../../.venv/bin/python ../../scripts/e2e_server.py --port 8099",
           url: `${apiUrl}/health/live`,
           reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
+          timeout: stagingUrl ? 600_000 : 120_000,
         },
         {
           // `--mode e2e` loads `.env.e2e` from the repo root, which is where
@@ -64,7 +75,7 @@ export default defineConfig({
           command: "npm run dev -- --mode e2e --port 5199 --strictPort",
           url: workbenchUrl,
           reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
+          timeout: stagingUrl ? 600_000 : 120_000,
         },
       ],
 });

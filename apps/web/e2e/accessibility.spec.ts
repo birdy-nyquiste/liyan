@@ -1,4 +1,4 @@
-import { createTaskWithReport, expect, signIn, test } from "./support/workbench";
+import { createTaskWithReport, expect, openWorkbench, test } from "./support/workbench";
 
 /**
  * The accessibility checks that need a real browser.
@@ -22,7 +22,7 @@ const BREAKPOINTS = [
 for (const breakpoint of BREAKPOINTS) {
   test(`the workbench fits ${breakpoint.name} without sideways scrolling`, async ({ page }) => {
     await page.setViewportSize({ width: breakpoint.width, height: breakpoint.height });
-    await signIn(page);
+    await openWorkbench(page);
     // With a task open, because that is where the wide content is: a 知言报告
     // is dense lists and long quotes, and an empty workspace proves nothing
     // about either.
@@ -38,7 +38,7 @@ for (const breakpoint of BREAKPOINTS) {
 }
 
 test("every control a keyboard reaches is visible when it has focus", async ({ page }) => {
-  await signIn(page);
+  await openWorkbench(page);
   await createTaskWithReport(page, unique());
 
   // A short timeout on purpose: this asks where focus is *now*, and the answer

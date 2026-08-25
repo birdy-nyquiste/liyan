@@ -73,12 +73,19 @@ that the thing on the other end is really shaped the way the adapter believes.
 | `test_r2_live_contract.py` | `LIYAN_LIVE_R2=1` | The credentials, endpoint, and bucket name agree with each other |
 | `test_zhiyan_live_contract.py` | none — replays a captured response | The adapter still reads what DeepSeek really sent, offline |
 | `test_live_stack.py` | `LIYAN_LIVE_PROVIDERS=1` | DeepSeek answers, and its answer passes acceptance |
-| `test_live_stack.py` | `LIYAN_LIVE_BLOG=1` | Blog accepts a Preview and returns a URL |
+| `test_blog_live_contract.py` | `LIYAN_LIVE_BLOG=1` | The ingest credential works, and Blog still answers with the `previewPath` the adapter requires |
 
-`LIYAN_LIVE_BLOG` deserves its own decision every time. A Preview is a real item
-on a real Blog, 立言阁 cannot retract one, and v0.11 offers no way to look one up
-again (ADR-0001). Point it at a Blog that does not matter, and never at
-Production's.
+`LIYAN_LIVE_BLOG` deserves its own decision every time, and it has a file of its
+own so that no other check can turn it on by including it. A Preview is a real
+item on a real Blog, 立言阁 cannot retract one, and v0.11 offers no way to look
+one up again (ADR-0001). Every run leaves a draft behind, titled
+`立言阁发布通道校验` and dated so whoever finds it knows it can be deleted. Point
+it at a Blog that does not matter, and never at Production's.
+
+A real 知言 run takes two to three minutes end to end, which is why the browser
+suite waits on provider-paced work for as long as the server itself does
+(`LIYAN_ZHIYAN_TIMEOUT_SECONDS`, 300s) rather than for something that felt
+generous.
 
 ### 5. The browser suite — against Staging, before a release
 
@@ -137,12 +144,16 @@ procedure for each is on that page.
 The machinery is built and green. Three of the criteria it exists to serve are
 not yet *met*, and none of them can be met from a developer's machine:
 
-1. **The browser suite has never run against Staging** (step 5), because there
-   is no Staging yet. It runs locally and in CI against the substituted stack,
-   which proves the workbench and nothing about a deployment. Note also that no
-   single execution covers every journey: OTP sign-in and a failing URL 来源 are
-   skipped locally, and 结果未知 is skipped against Staging, because a real Blog
-   cannot be asked for an ambiguous answer.
+1. **The browser suite's OTP sign-in is not covered against Staging.** Every
+   other spec has passed against the deployment (2026-08-24), including a real
+   Preview created through the workbench. Sign-in itself is bootstrapped through
+   Supabase's API rather than the workbench's form, because reaching the 验证码
+   field means submitting the address, and that makes Supabase issue a new code
+   — invalidating the one being typed. Configure a test address with a fixed
+   code and set `LIYAN_E2E_FIXED_OTP=1`; the form spec then runs as written.
+   Note also that no single execution covers every journey: a failing URL 来源
+   is skipped locally, and 结果未知 is skipped against Staging, because a real
+   Blog cannot be asked for an ambiguous answer.
 2. **The launch ceiling is reasoned, not measured** (step 6). The table in
    [limits.md](limits.md) has no rows.
 3. **Two accessibility thresholds have no recorded result** (step 7) — the

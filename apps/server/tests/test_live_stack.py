@@ -14,12 +14,11 @@ Three gates, because they cost different things:
 
     LIYAN_LIVE_STACK=1      real PostgreSQL, Redis, Celery worker.   Free.
     LIYAN_LIVE_PROVIDERS=1  adds a real 知言 run through DeepSeek.   Spends money.
-    LIYAN_LIVE_BLOG=1       adds a real Blog Preview.                Irreversible.
 
-The last one deserves its own gate rather than riding along with the others: a
-Preview is a real item on a real Blog, 立言阁 cannot retract one, and v0.11
-offers no way to look one up again (ADR-0001). Point it at a Blog that does not
-matter, and never at Production's.
+Blog has a gate of its own, in `test_blog_live_contract.py`, and not because it
+is tidier there: a Preview is a real item on a real Blog, 立言阁 cannot retract
+one, and v0.11 offers no way to look one up again (ADR-0001). A gate that
+irreversible should not be something another check can turn on by including it.
 """
 
 import os
@@ -235,13 +234,19 @@ def _confirm_pasted_task(client: TestClient) -> dict[str, Any]:
         },
     )
     assert created.status_code == 201, created.text
+    source = created.json()
     confirmed = client.post(
         "/task-creation/confirm",
         headers=HEADERS,
         json={
             "idempotency_key": "live-confirm-1",
             "client_session_id": "live-3",
-            "source_ids": [created.json()["id"]],
+            "source_ids": [source["id"]],
+            # This 来源 is deliberately short — it is the worked example the
+            # Agent Spec analyses — so intake warns about it, and confirmation
+            # refuses until the warning is answered. A user answers it by
+            # deciding the 来源 is complete; so does this.
+            "accepted_warning_versions": {source["id"]: source["input_version"]},
         },
     )
     assert confirmed.status_code == 200, confirmed.text

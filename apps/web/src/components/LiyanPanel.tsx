@@ -22,6 +22,7 @@ import {
 } from "./PublicationConfirmation";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { RunningNotice } from "./RunningNotice";
 import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
 import { ArrowUp, Square } from "lucide-react";
 
@@ -377,12 +378,7 @@ export function LiyanPanel({
           grey lines and a small square in the composer, both easy to miss.
           Outside the scrolling region: always in view, and not competing with
           the article's own sticky toolbar for the top of it. */}
-      {active ? (
-        <p className="liyan-generating" role="status">
-          <span className="liyan-generating__bar" aria-hidden="true" />
-          {t("正在生成立言文章…")}
-        </p>
-      ) : null}
+      {active ? <RunningNotice label={t("正在生成立言文章…")} /> : null}
 
       <div className="liyan-panel__document">
 
@@ -399,8 +395,17 @@ export function LiyanPanel({
         </p>
       ) : null}
 
+      {/* "没有未保存的修改。" is what 已保存的草稿 in the row above already says, so
+          it stops being said twice on screen — but a disabled button is skipped
+          by keyboard navigation, so the reason stays in the accessibility tree
+          as that button's description. */}
       {saveBlockedReason ? (
-        <p className="form-hint" id={`liyan-save-blocked-${taskId}`}>{domainMessage(saveBlockedReason)}</p>
+        <p
+          className={unsavedEdits ? "form-hint" : "sr-only"}
+          id={`liyan-save-blocked-${taskId}`}
+        >
+          {domainMessage(saveBlockedReason)}
+        </p>
       ) : null}
 
       {retry && retry.remaining === 0 ? (

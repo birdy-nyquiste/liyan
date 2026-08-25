@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 
 import { ConfirmDialog } from "./ConfirmDialog";
+import { RunningNotice } from "./RunningNotice";
 
 import {
   createPastedSource,
@@ -491,6 +492,9 @@ export function TaskSourceVersions({
                     </span>
                   </button>
 
+                  {source.prepared?.status === "processing" ? (
+                    <RunningNotice label={t("正在处理来源…")} />
+                  ) : null}
                   {source.prepared?.warnings.map((warning) => (
                     <p className="source-note source-note--warning" key={warning.code}>
                       {domainMessage(warning.message, warning.code)}

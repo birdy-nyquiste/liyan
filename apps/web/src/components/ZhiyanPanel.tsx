@@ -1,6 +1,7 @@
 import type { ZhiyanStateResponse } from "../api/client";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useRetryCountdown } from "./useRetryCountdown";
+import { RunningNotice } from "./RunningNotice";
 import { ZhiyanReportView } from "./ZhiyanReportView";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { STATUS_LABELS } from "./zhiyanStatus";
@@ -58,6 +59,10 @@ export function ZhiyanPanel({
       </header>
 
       <div id={`zhiyan-body-${revisionId}`}>
+
+      {state.status === "running" && !stopping ? (
+        <RunningNotice label={t("正在生成知言报告…")} />
+      ) : null}
 
       {unfinished && execution?.error ? (
         <p role="alert" className="form-error">

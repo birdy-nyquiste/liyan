@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, FileText, Plus } from "lucide-react";
 import { useInterfaceLocale } from "../interfaceLocale";
+import { RunningNotice } from "./RunningNotice";
 
 import {
   cancelExecution,
@@ -150,6 +151,9 @@ function SourceCard({
         <p role="alert" className="source-note source-note--failure">
           {domainMessage(source.failure.message, source.failure.code)}
         </p>
+      ) : null}
+      {source.status === "processing" ? (
+        <RunningNotice label={t("正在处理来源…")} />
       ) : null}
       {source.warnings.map((warning) => (
         <p className="source-note source-note--warning" key={warning.code}>

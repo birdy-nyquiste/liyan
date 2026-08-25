@@ -109,6 +109,8 @@ const ENGLISH: Record<string, string> = {
   "未保存的草稿": "Unsaved draft",
   "已保存的草稿": "Saved draft",
   "正在生成立言文章…": "Writing the article…",
+  "正在生成知言报告…": "Writing the report…",
+  "正在处理来源…": "Reading the source…",
   "文章标题": "Article title",
   "文章正文": "Article body",
   "文章格式": "Article formatting",

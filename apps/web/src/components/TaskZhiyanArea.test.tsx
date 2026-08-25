@@ -555,6 +555,30 @@ describe("TaskZhiyanArea", () => {
     expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).toBeVisible();
   });
 
+  it("says a report is being written where the report will appear", async () => {
+    const running = overviewResponse(
+      [
+        stateResponse({
+          status: "running",
+          report: null,
+          execution: execution(),
+          capabilities: {
+            can_start: false,
+            can_cancel: true,
+            retry: { allowed: false, remaining: 2, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_WAITING,
+    );
+    respondWith(running, running);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+
+    // The same notice every provider-paced run shows, so it is learned once.
+    expect(await screen.findByRole("status")).toHaveTextContent("正在生成知言报告…");
+  });
+
   it("says a run is stopping once the server has the request", async () => {
     // The worker stops at its next checkpoint, so the run keeps reporting
     // "running" for a while. Without reading the execution, 终止分析 looked like

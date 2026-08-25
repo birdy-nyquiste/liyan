@@ -215,6 +215,28 @@ describe("task creation session", () => {
     expect(confirmation.accepted_warning_versions).toEqual({ "pasted-1": 2 });
   });
 
+  it("says a source is being read while it is being prepared", async () => {
+    const preparing: TestSource = {
+      id: "url-1",
+      client_source_id: "client-url",
+      kind: "url",
+      input_version: 1,
+      status: "processing" as TestSource["status"],
+      title: "Fetching article",
+      body: "",
+      provenance: "https://example.com/article",
+      warnings: [],
+      failure: null,
+      active_execution: null,
+      capabilities,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([preparing]))));
+
+    renderSession();
+
+    expect(await screen.findByRole("status")).toHaveTextContent("正在处理来源…");
+  });
+
   it("keeps every retained source after confirmation fails", async () => {
     const retained: TestSource = {
       id: "pasted-1",

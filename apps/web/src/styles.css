@@ -1464,6 +1464,42 @@ html[lang^="zh"] .signed-out-hero .subtitle {
  * view that grows past the fold shoves the content beside it a few pixels left,
  * and shoves it back when it shrinks.
  */
+/*
+ * The browser paints a scrollbar its own way: on this canvas that meant a white
+ * track running down the edge of every scrolling region, brighter than anything
+ * around it. The thumb is enough of a signal; the track is the page.
+ */
+:root {
+  scrollbar-color: var(--rule) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--rule);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .route-surface,
 .task-source-view,
 .task-workspace-pane > .zhiyan-panel,
@@ -2505,10 +2541,10 @@ a.source-meta:focus-visible .source-meta__value {
 
 .liyan-instruction-label,
 /*
- * A generation runs for minutes with nothing arriving on screen, so it says so
- * where the article will appear, and keeps saying it while the writer scrolls.
+ * Every provider-paced run says so in the place its result will appear: a
+ * source being read, a 知言 report being written, a 立言 article being drafted.
  */
-.liyan-generating {
+.running-notice {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -2522,7 +2558,7 @@ a.source-meta:focus-visible .source-meta__value {
   font-weight: var(--weight-medium);
 }
 
-.liyan-generating__bar {
+.running-notice__bar {
   position: relative;
   width: 42px;
   height: 4px;
@@ -2532,16 +2568,16 @@ a.source-meta:focus-visible .source-meta__value {
   overflow: hidden;
 }
 
-.liyan-generating__bar::after {
+.running-notice__bar::after {
   position: absolute;
   border-radius: inherit;
   background: var(--accent);
   content: "";
   inset: 0 60% 0 0;
-  animation: liyan-sweep 1.4s var(--ease-out) infinite;
+  animation: run-sweep 1.4s var(--ease-out) infinite;
 }
 
-@keyframes liyan-sweep {
+@keyframes run-sweep {
   0% { inset: 0 100% 0 0; }
   50% { inset: 0 0 0 60%; }
   100% { inset: 0 0 0 100%; }
@@ -2559,7 +2595,7 @@ a.source-meta:focus-visible .source-meta__value {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .liyan-generating__bar::after {
+  .running-notice__bar::after {
     animation: none;
     inset: 0 30% 0 0;
   }

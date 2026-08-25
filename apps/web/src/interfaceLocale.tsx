@@ -108,6 +108,7 @@ const ENGLISH: Record<string, string> = {
   "本立言任务": "This Liyan task",
   "未保存的草稿": "Unsaved draft",
   "已保存的草稿": "Saved draft",
+  "正在生成立言文章…": "Writing the article…",
   "文章标题": "Article title",
   "文章正文": "Article body",
   "文章格式": "Article formatting",

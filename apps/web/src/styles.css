@@ -2504,6 +2504,67 @@ a.source-meta:focus-visible .source-meta__value {
 }
 
 .liyan-instruction-label,
+/*
+ * A generation runs for minutes with nothing arriving on screen, so it says so
+ * where the article will appear, and keeps saying it while the writer scrolls.
+ */
+.liyan-generating {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin: var(--space-2xs) 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.9rem;
+  font-weight: var(--weight-medium);
+}
+
+.liyan-generating__bar {
+  position: relative;
+  width: 42px;
+  height: 4px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  overflow: hidden;
+}
+
+.liyan-generating__bar::after {
+  position: absolute;
+  border-radius: inherit;
+  background: var(--accent);
+  content: "";
+  inset: 0 60% 0 0;
+  animation: liyan-sweep 1.4s var(--ease-out) infinite;
+}
+
+@keyframes liyan-sweep {
+  0% { inset: 0 100% 0 0; }
+  50% { inset: 0 0 0 60%; }
+  100% { inset: 0 0 0 100%; }
+}
+
+/* Stopping is the one thing that can be done to a run; say it in red rather
+   than in the same ink as sending. */
+.liyan-composer__send--stop {
+  background: var(--danger);
+  color: var(--canvas);
+}
+
+.liyan-composer__send--stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, var(--ink));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liyan-generating__bar::after {
+    animation: none;
+    inset: 0 30% 0 0;
+  }
+}
+
 .liyan-panel__state {
   margin: 0;
   color: var(--ink-faint);

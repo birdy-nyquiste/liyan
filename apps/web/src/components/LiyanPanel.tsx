@@ -373,6 +373,17 @@ export function LiyanPanel({
         </div>
       </header>
 
+      {/* A run takes minutes. The only signs of one were a grey line among other
+          grey lines and a small square in the composer, both easy to miss.
+          Outside the scrolling region: always in view, and not competing with
+          the article's own sticky toolbar for the top of it. */}
+      {active ? (
+        <p className="liyan-generating" role="status">
+          <span className="liyan-generating__bar" aria-hidden="true" />
+          {t("正在生成立言文章…")}
+        </p>
+      ) : null}
+
       <div className="liyan-panel__document">
 
       {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
@@ -382,7 +393,7 @@ export function LiyanPanel({
       {state?.status === "cancelled" && failureMessage ? (
         <p role="status" className="form-hint">{domainMessage(failureMessage, state.execution?.error?.code)}</p>
       ) : null}
-      {state?.capabilities.unavailable_reason ? (
+      {state?.capabilities.unavailable_reason && !active ? (
         <p role="status" className="form-hint" id={`liyan-blocked-${taskId}`}>
           {domainMessage(state.capabilities.unavailable_reason)}
         </p>
@@ -494,7 +505,7 @@ export function LiyanPanel({
           onChange={setInstruction}
         />
         <button
-          className="liyan-composer__send"
+          className={`liyan-composer__send${active ? " liyan-composer__send--stop" : ""}`}
           type="submit"
           // An empty composer still has something to send: 立言 with the default
           // instruction. The label says which of the two this press will do, and

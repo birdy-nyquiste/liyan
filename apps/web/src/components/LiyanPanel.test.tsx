@@ -154,6 +154,18 @@ describe("LiyanPanel", () => {
     expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
   });
 
+  it("says a run is under way where the article will appear", async () => {
+    respondWith(state("running"));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    // A run takes minutes with nothing arriving on screen; the sign of one is
+    // not left to a grey line among other grey lines.
+    expect(await screen.findByRole("status")).toHaveTextContent("正在生成立言文章…");
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    // And it is not also announced as an unavailable reason underneath.
+    expect(screen.queryByText("立言文章正在生成中。")).not.toBeInTheDocument();
+  });
+
   it("projects canonical Markdown through the constrained Tiptap editor", async () => {
     respondWith(state("succeeded"));
     const user = userEvent.setup();

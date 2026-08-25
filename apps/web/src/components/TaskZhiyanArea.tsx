@@ -12,6 +12,7 @@ import {
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { ZhiyanPanel } from "./ZhiyanPanel";
+import { useInterfaceLocale } from "../interfaceLocale";
 import { EXECUTION_POLL_MS } from "./pollIntervals";
 
 const LOAD_FAILED = "知言状态加载失败，请稍后重试。";
@@ -51,6 +52,7 @@ export function TaskZhiyanArea({
   onZhiyanState?(state: ZhiyanAreaState): void;
   onCapsuleSelect?(choice: CapsuleChoice): void;
 }) {
+  const { locale, t, domainMessage } = useInterfaceLocale();
   const [overview, setOverview] = useState<TaskVersionZhiyanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -149,9 +151,9 @@ export function TaskZhiyanArea({
     return (
       <div className="task-card__zhiyan">
         {error ? (
-          <p role="alert" className="form-error">{error}</p>
+          <p role="alert" className="form-error">{domainMessage(error)}</p>
         ) : (
-          <p className="form-hint">知言状态加载中</p>
+          <p className="form-hint">{t("知言状态加载中")}</p>
         )}
       </div>
     );
@@ -160,10 +162,10 @@ export function TaskZhiyanArea({
   return (
     <div className="task-card__zhiyan">
       <h3 className="section-kicker" ref={zhiyanHeading} tabIndex={-1}>
-        共 {overview.sources.length} 个来源的独立报告
+        {locale === "en" ? `${overview.sources.length} independent source reports` : `共 ${overview.sources.length} 个来源的独立报告`}
       </h3>
       {error ? (
-        <p role="alert" className="form-error">{error}</p>
+        <p role="alert" className="form-error">{domainMessage(error)}</p>
       ) : null}
       {overview.sources.map((source) => (
         <ZhiyanPanel

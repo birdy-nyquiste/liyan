@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 
 import type { SignedOutState } from "../auth/state";
+import { useInterfaceLocale } from "../interfaceLocale";
 
 type AuthPanelProps = {
   state: SignedOutState;
@@ -17,6 +18,7 @@ export function AuthPanel({
   onRequestOtp,
   onVerifyOtp,
 }: AuthPanelProps) {
+  const { locale, t } = useInterfaceLocale();
   function submitEmail(event: FormEvent) {
     event.preventDefault();
     void onRequestOtp(state.email);
@@ -30,14 +32,14 @@ export function AuthPanel({
   return (
     <section className="workspace auth-card" aria-labelledby="auth-heading">
       <div>
-        <p className="section-kicker">仅限受邀用户</p>
-        <h2 id="auth-heading">登录工作台</h2>
-        <p>使用邮箱接收一次性验证码，无需密码。</p>
+        <p className="section-kicker">{t("仅限受邀用户")}</p>
+        <h2 id="auth-heading">{t("登录工作台")}</h2>
+        <p>{t("使用邮箱接收一次性验证码，无需密码。")}</p>
       </div>
 
       {state.screen === "email" ? (
         <form className="auth-form" onSubmit={submitEmail}>
-          <label htmlFor="email">邮箱</label>
+          <label htmlFor="email">{t("邮箱")}</label>
           <input
             id="email"
             type="email"
@@ -47,13 +49,13 @@ export function AuthPanel({
             onChange={(event) => onEmailChange(event.target.value)}
           />
           <button className="button" type="submit" disabled={state.busy}>
-            发送验证码
+            {t("发送验证码")}
           </button>
         </form>
       ) : (
         <form className="auth-form" onSubmit={submitOtp}>
-          <p className="form-hint">验证码已发送至 {state.email}</p>
-          <label htmlFor="otp">验证码</label>
+          <p className="form-hint">{locale === "en" ? `Verification code sent to ${state.email}` : `验证码已发送至 ${state.email}`}</p>
+          <label htmlFor="otp">{t("验证码")}</label>
           <input
             id="otp"
             inputMode="numeric"
@@ -63,13 +65,13 @@ export function AuthPanel({
             onChange={(event) => onOtpChange(event.target.value)}
           />
           <button className="button" type="submit" disabled={state.busy}>
-            登录
+            {t("登录")}
           </button>
         </form>
       )}
       {state.message ? (
         <p className="form-error" role="alert">
-          {state.message}
+          {t(state.message)}
         </p>
       ) : null}
     </section>

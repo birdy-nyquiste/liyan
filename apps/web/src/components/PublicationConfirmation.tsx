@@ -11,6 +11,7 @@ import {
   type PublishTaskResponse,
 } from "../api/client";
 import { ArticleReader } from "./ArticleReader";
+import { useInterfaceLocale } from "../interfaceLocale";
 import {
   EXISTING_PREVIEW_WARNING,
   PRECONDITION_FAILED,
@@ -85,6 +86,7 @@ export function PublicationConfirmation({
   onStatusChange?(): void;
   onClose(): void;
 }) {
+  const { locale, t, domainMessage } = useInterfaceLocale();
   const [targets, setTargets] = useState<PublicationTargetResponse[] | null>(null);
   const [targetKey, setTargetKey] = useState<string | null>(null);
   const [author, setAuthor] = useState(() => rememberedAuthor(userId));
@@ -223,34 +225,38 @@ export function PublicationConfirmation({
 
   return (
     <section className="publication-confirmation" aria-labelledby="publication-confirm-heading">
-      <h3 id="publication-confirm-heading">确认发布</h3>
+      <h3 id="publication-confirm-heading">{t("确认发布")}</h3>
 
       <dl className="publication-locked">
         <div>
-          <dt>立言任务</dt>
+          <dt>{t("立言任务")}</dt>
           <dd>{article.taskLabel}</dd>
         </div>
         <div>
-          <dt>文章草稿</dt>
-          <dd>草稿 {article.revisionNumber}</dd>
+          <dt>{t("文章草稿")}</dt>
+          <dd>{t("草稿")} {article.revisionNumber}</dd>
         </div>
         <div>
-          <dt>标题</dt>
+          <dt>{t("标题")}</dt>
           <dd>{article.title}</dd>
         </div>
         <div>
-          <dt>作者</dt>
-          <dd>{confirmed ? publishTask?.author : author.trim() || "尚未填写"}</dd>
+          <dt>{t("作者")}</dt>
+          <dd>{confirmed ? publishTask?.author : author.trim() || t("尚未填写")}</dd>
         </div>
         <div>
-          <dt>发布目标</dt>
-          <dd>{selected ? `${selected.display_name}（${selected.site_url}）` : "尚未选择"}</dd>
+          <dt>{t("发布目标")}</dt>
+          <dd>{selected
+            ? locale === "en"
+              ? `${selected.display_name} (${selected.site_url})`
+              : `${selected.display_name}（${selected.site_url}）`
+            : t("尚未选择")}</dd>
         </div>
       </dl>
 
       {!confirmed ? (
         <label className="field">
-          <span>作者（显示在 Blog 上）</span>
+          <span>{t("作者（显示在 Blog 上）")}</span>
           <input
             type="text"
             value={author}
@@ -263,13 +269,13 @@ export function PublicationConfirmation({
       ) : null}
       {!confirmed && targets && targets.length > 1 ? (
         <label className="field">
-          <span>发布目标</span>
+          <span>{t("发布目标")}</span>
           <select
             value={targetKey ?? ""}
             disabled={busy}
             onChange={(event) => setTargetKey(event.target.value || null)}
           >
-            <option value="">请选择</option>
+            <option value="">{t("请选择")}</option>
             {targets.map((target) => (
               <option key={target.key} value={target.key}>
                 {target.display_name}
@@ -279,34 +285,34 @@ export function PublicationConfirmation({
         </label>
       ) : null}
       {targets && targets.length === 0 ? (
-        <p role="status" className="form-hint">当前没有可用的发布目标。</p>
+        <p role="status" className="form-hint">{t("当前没有可用的发布目标。")}</p>
       ) : null}
 
-      <p className="form-hint">确认页只能预览。要修改标题或正文，请返回编辑并保存新草稿。</p>
+      <p className="form-hint">{t("确认页只能预览。要修改标题或正文，请返回编辑并保存新草稿。")}</p>
       <ArticleReader
-        label={`草稿 ${article.revisionNumber} 发布正文`}
+        label={`${t("草稿")} ${article.revisionNumber} ${t("文章正文")}`}
         bodyMarkdown={article.bodyMarkdown}
       />
 
-      {error ? <p role="alert" className="form-error">{error}</p> : null}
+      {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
 
       {warning ? (
         <div className="publication-warning">
-          <p role="alert" className="form-error">{warning.message}</p>
+          <p role="alert" className="form-error">{domainMessage(warning.message)}</p>
           <button
             className="button"
             type="button"
             disabled={busy}
             onClick={() => void warning.proceed()}
           >
-            仍要发布
+            {t("仍要发布")}
           </button>
         </div>
       ) : null}
 
       {publishTask ? (
         <div className="publication-result">
-          <p role="status">{STATUS_TEXT[publishTask.status]}</p>
+          <p role="status">{t(STATUS_TEXT[publishTask.status])}</p>
           {publishTask.status === "succeeded" && publishTask.preview_url ? (
             <>
               <a
@@ -320,34 +326,36 @@ export function PublicationConfirmation({
               {/* 立言阁 stops here: what happens to the Preview in Blog is the
                   user's to decide, and the product claims nothing about it. */}
               <p className="form-hint">
-                是否在 Blog 上公开发布，由你在 Blog 决定；立言阁不再参与。
-                本次发布不会结束这项立言任务，你可以继续修改文章。
+                {t("是否在 Blog 上公开发布，由你在 Blog 决定；立言阁不再参与。本次发布不会结束这项立言任务，你可以继续修改文章。")}
               </p>
             </>
           ) : null}
           {publishTask.status === "failed" ? (
             <>
               {publishTask.failure_message ? (
-                <p role="alert" className="form-error">{publishTask.failure_message}</p>
+                <p role="alert" className="form-error">{domainMessage(publishTask.failure_message, publishTask.execution?.error?.code)}</p>
               ) : null}
               {/* Nothing was created, so the same snapshot may go again — and
                   only that snapshot: publishing a newer article is a new
                   confirmation, with the warning that belongs to one. */}
-              <p className="form-hint">Blog 没有收到内容，可以重新提交同一份快照。</p>
+              <p className="form-hint">{t("Blog 没有收到内容，可以重新提交同一份快照。")}</p>
               <button
                 className="button"
                 type="button"
                 disabled={busy}
                 onClick={() => void retry()}
               >
-                重试本次提交
+                {t("重试本次提交")}
               </button>
             </>
           ) : null}
           {publishTask.status === "outcome_unknown" ? (
             <p role="alert" className="form-error">
-              {publishTask.failure_message ??
-                "本次提交结果未知，立言阁不会重发；请到 Blog 查看后再决定。"}
+              {domainMessage(
+                publishTask.failure_message
+                  ?? "本次提交结果未知，立言阁不会重发；请到 Blog 查看后再决定。",
+                publishTask.execution?.error?.code,
+              )}
             </p>
           ) : null}
         </div>
@@ -361,11 +369,11 @@ export function PublicationConfirmation({
             disabled={busy || !targetKey || !author.trim()}
             onClick={() => void confirm()}
           >
-            确认发布
+            {t("确认发布")}
           </button>
         ) : null}
         <button className="button button--quiet" type="button" onClick={onClose}>
-          {confirmed ? "关闭" : "取消"}
+          {confirmed ? t("关闭") : t("取消")}
         </button>
       </div>
     </section>

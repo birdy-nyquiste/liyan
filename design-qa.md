@@ -26,22 +26,19 @@ The sidebar, task header, pane boundary, report surface, and composer were reada
 ## Findings
 
 - No actionable P0/P1/P2 visual mismatch remains.
-- [P3] 草稿历史 is currently summarized in the document pane instead of opening from a compact toolbar Sheet as shown in the reference. This does not obscure the Working Copy or break the workflow, but a later polish pass can move the existing history component into a right-side Sheet.
+- No actionable P3 mismatch remains. 草稿历史 now opens from the compact document toolbar in a right-side Sheet and restores focus to its trigger when closed.
 
 ## Comparison history
 
 1. Initial implementation capture: the 立言 composer appeared near the top of the empty document instead of remaining anchored at the bottom. Classified P2 because it materially changed the document-workspace hierarchy.
 2. Fix: the 立言 pane became a full-height flex document surface and the composer group was ordered after the document/history content with bottom auto-spacing and a quiet divider.
 3. Post-fix evidence: `docs/design/workbench-implementation.png` at 1440 × 640 shows the composer at the foot of the 立言 pane, aligned with the approved reference. The P2 finding is resolved.
+4. Review fix: moved 草稿历史 into the reference-aligned right-side Sheet without displacing the Working Copy or composer. The normalized capture was regenerated after this change.
 
 ## Primary interactions and runtime checks
 
 - Tested signed-out introduction, authenticated redirect, persistent shell, mobile drawer, task creation, canonical task URL, task-stage navigation, 44/56 desktop panes, mobile stacking/overflow, generation, explicit 草稿 save/restore, publication Preview, and terminal 结果未知 behavior.
 - Browser console errors checked: none.
-- Browser workflow result at the time of this report: 12 passed, 1 environment-dependent URL-source test skipped; the dedicated normalized design capture test passed.
-
-## Follow-up polish
-
-- Move 草稿历史 into a right-side Sheet and retain the current document in place.
+- Browser workflow result at the time of this report: 14 passed, 1 environment-dependent URL-source test skipped; the dedicated normalized design capture test passed.
 
 final result: passed

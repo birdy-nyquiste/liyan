@@ -33,6 +33,23 @@ test("the sign-in screen asks for an address before anything else", async ({ bro
   await page.close();
 });
 
+test("browser history cannot discard an unfinished source without confirmation", async ({ page }) => {
+  await openWorkbench(page);
+  await page.getByRole("link", { name: "发布" }).click();
+  await page.getByRole("link", { name: "新建立言任务" }).click();
+  await page.getByRole("button", { name: "添加来源" }).click();
+  await page.getByLabel("来源标题").fill("尚未保存的来源");
+
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.goBack();
+  await expect(page).toHaveURL(/\/task$/);
+  await expect(page.getByLabel("来源标题")).toHaveValue("尚未保存的来源");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.goBack();
+  await expect(page).toHaveURL(/\/publications$/);
+});
+
 test("a pasted 来源 becomes a 立言任务 with a 知言报告", async ({ page }) => {
   const title = unique();
   await openWorkbench(page);
@@ -67,11 +84,14 @@ test("an article is generated, edited, saved, and restored", async ({ page }) =>
   await expect(editor).toBeVisible({ timeout: PROVIDER_TIMEOUT });
 
   await page.getByRole("button", { name: "保存草稿" }).click();
+  await page.getByRole("button", { name: "草稿历史" }).click();
   await expect(page.getByText("草稿 1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "关闭" }).click();
 
   await editor.click();
   await page.keyboard.type("这一句是保存之后加的。");
   await page.getByRole("button", { name: "保存草稿" }).click();
+  await page.getByRole("button", { name: "草稿历史" }).click();
   await expect(page.getByText("草稿 2", { exact: true })).toBeVisible();
 
   // Restoring never rewinds: it creates Revision 3 carrying Revision 1's text,

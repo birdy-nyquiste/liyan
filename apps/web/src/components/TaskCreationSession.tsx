@@ -1,5 +1,6 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Plus } from "lucide-react";
+import { useInterfaceLocale } from "../interfaceLocale";
 
 import {
   cancelExecution,
@@ -59,6 +60,7 @@ function SourceCard({
   expanded: boolean;
   onToggle(): void;
 }) {
+  const { t, domainMessage } = useInterfaceLocale();
   const [draft, setDraft] = useState<DraftSource>({
     title: source.title ?? "",
     body: source.body ?? "",
@@ -104,7 +106,7 @@ function SourceCard({
         : source.kind === "url"
           ? editUrlSourceContent(accessToken, source.id, input)
           : editFileSourceContent(accessToken, source.id, input),
-      "保存来源失败，请重试。",
+      t("保存来源失败，请重试。"),
     );
   }
 
@@ -114,17 +116,17 @@ function SourceCard({
         className="source-operation__summary"
         type="button"
         aria-expanded={expanded}
-        aria-label={`编辑来源 ${source.title || "未命名来源"}`}
+        aria-label={`${t("编辑来源")} ${source.title || t("未命名来源")}`}
         onClick={onToggle}
       >
       <span className="source-operation__status">
-        <strong>{sourceKindLabels[source.kind]} · {source.title || "未命名来源"}</strong>
-        <span>{sourceStatusLabels[source.status]}</span>
+        <strong>{t(sourceKindLabels[source.kind])} · {source.title || t("未命名来源")}</strong>
+        <span>{t(sourceStatusLabels[source.status])}</span>
       </span>
       </button>
       {expanded ? <div className="source-operation__editor">
-      {source.failure ? <p role="alert" className="form-error">{source.failure.message}</p> : null}
-      {source.warnings.map((warning) => <p className="warning" key={warning.code}>{warning.message}</p>)}
+      {source.failure ? <p role="alert" className="form-error">{domainMessage(source.failure.message, source.failure.code)}</p> : null}
+      {source.warnings.map((warning) => <p className="warning" key={warning.code}>{domainMessage(warning.message, warning.code)}</p>)}
       {source.warnings.length > 0 ? (
         <label>
           <input
@@ -132,35 +134,35 @@ function SourceCard({
             checked={warningAccepted}
             onChange={(event) => onWarningAccepted(event.target.checked)}
           />
-          我已检查并接受此来源的警告
+          {t("我已检查并接受此来源的警告")}
         </label>
       ) : null}
       {source.capabilities.can_edit ? (
         <div className="creation-form">
-          <label htmlFor={`source-title-${source.id}`}>来源标题</label>
+          <label htmlFor={`source-title-${source.id}`}>{t("来源标题")}</label>
           <input id={`source-title-${source.id}`} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-          <label htmlFor={`source-body-${source.id}`}>来源正文</label>
+          <label htmlFor={`source-body-${source.id}`}>{t("来源正文")}</label>
           <textarea id={`source-body-${source.id}`} rows={8} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
-          <label htmlFor={`source-provenance-${source.id}`}>出处（可选）</label>
+          <label htmlFor={`source-provenance-${source.id}`}>{t("出处（可选）")}</label>
           <input id={`source-provenance-${source.id}`} value={draft.provenance} onChange={(event) => setDraft({ ...draft, provenance: event.target.value })} />
-          <button className="button button--quiet" type="button" disabled={busy} onClick={() => void save()}>保存此来源</button>
+          <button className="button button--quiet" type="button" disabled={busy} onClick={() => void save()}>{t("保存此来源")}</button>
         </div>
       ) : null}
       {source.capabilities.can_replace && source.kind === "url" ? (
         <div className="creation-form">
-          <label htmlFor={`replacement-url-${source.id}`}>替换网址</label>
+          <label htmlFor={`replacement-url-${source.id}`}>{t("替换网址")}</label>
           <input id={`replacement-url-${source.id}`} type="url" value={replacementUrl} onChange={(event) => setReplacementUrl(event.target.value)} />
           <button
             className="button button--quiet"
             type="button"
             disabled={busy || !replacementUrl}
             onClick={() => void perform(() => replaceUrlSource(accessToken, source.id, replacementUrl), "替换网址失败，请重试。")}
-          >替换网址</button>
+          >{t("替换网址")}</button>
         </div>
       ) : null}
       {source.capabilities.can_replace && source.kind === "file" ? (
         <label className="button button--quiet">
-          替换文件
+          {t("替换文件")}
           <input
             hidden
             type="file"
@@ -183,7 +185,7 @@ function SourceCard({
               () => source.kind === "url" ? retryUrlSource(accessToken, source.id) : retryFileSource(accessToken, source.id),
               "重试来源失败。",
             )}
-          >重试处理</button>
+          >{t("重试处理")}</button>
         ) : null}
         {source.capabilities.can_cancel && source.active_execution ? (
           <button
@@ -191,7 +193,7 @@ function SourceCard({
             type="button"
             disabled={busy}
             onClick={() => void perform(() => cancelExecution(accessToken, source.active_execution!.id), "取消处理失败。")}
-          >取消处理</button>
+          >{t("取消处理")}</button>
         ) : null}
         {source.capabilities.can_delete ? (
           <button
@@ -199,7 +201,7 @@ function SourceCard({
             type="button"
             disabled={busy}
             onClick={() => void perform(() => deleteTaskCreationSource(accessToken, source.id), "删除来源失败。")}
-          >删除来源</button>
+          >{t("删除来源")}</button>
         ) : null}
       </div>
       </div> : null}
@@ -218,6 +220,7 @@ export function TaskCreationSession({
   onClose(): void;
   onDirtyChange(dirty: boolean): void;
 }) {
+  const { t, domainMessage } = useInterfaceLocale();
   const [draft, setDraft] = useState<DraftSource>(emptyDraft);
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -262,7 +265,7 @@ export function TaskCreationSession({
     };
   }, [refresh, session]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onDirtyChange(dirty);
     return () => onDirtyChange(false);
   }, [dirty, onDirtyChange]);
@@ -344,14 +347,14 @@ export function TaskCreationSession({
   }
 
   const close = () => {
-    if (!dirty || window.confirm("未完成的创建内容不会保存，确定离开吗？")) onClose();
+    if (!dirty || window.confirm(t("未完成的创建内容不会保存，确定离开吗？"))) onClose();
   };
 
   return (
-    <section className="creation-session" aria-label="任务创建会话">
+    <section className="creation-session" aria-label={t("任务创建会话")}>
       <div className="creation-session__heading">
-        <div><p className="section-kicker">一个任务可保留 1–3 个来源</p><h3>整理任务来源</h3></div>
-        <button className="button button--quiet" type="button" onClick={close}>关闭</button>
+        <div><p className="section-kicker">{t("一个任务可保留 1–3 个来源")}</p><h3>{t("整理任务来源")}</h3></div>
+        <button className="button button--quiet" type="button" onClick={close}>{t("关闭")}</button>
       </div>
 
       {session?.sources.map((source) => (
@@ -381,30 +384,30 @@ export function TaskCreationSession({
       {session?.can_add !== false ? (
         adding ? (
         <form className="creation-form" onSubmit={(event) => void addSource(event)}>
-          <div className="source-kind-tabs" aria-label="来源类型">
-            <button className={`button ${mode === "pasted" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("pasted")}>粘贴文本</button>
-            <button className={`button ${mode === "url" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("url")}>公共文章链接</button>
-            <button className={`button ${mode === "file" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("file")}>上传文件</button>
+          <div className="source-kind-tabs" aria-label={t("来源类型")}>
+            <button className={`button ${mode === "pasted" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("pasted")}>{t("粘贴文本")}</button>
+            <button className={`button ${mode === "url" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("url")}>{t("公共文章链接")}</button>
+            <button className={`button ${mode === "file" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("file")}>{t("上传文件")}</button>
           </div>
           {mode === "pasted" ? (
             <>
-              <label htmlFor="source-title">来源标题</label>
+              <label htmlFor="source-title">{t("来源标题")}</label>
               <input key="pasted-title" id="source-title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required />
-              <label htmlFor="source-body">来源正文</label>
+              <label htmlFor="source-body">{t("来源正文")}</label>
               <textarea id="source-body" rows={10} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} required />
-              <label htmlFor="source-provenance">出处（可选）</label>
+              <label htmlFor="source-provenance">{t("出处（可选）")}</label>
               <input id="source-provenance" value={draft.provenance} onChange={(event) => setDraft({ ...draft, provenance: event.target.value })} />
             </>
           ) : mode === "url" ? (
-            <><label htmlFor="source-url">来源网址</label><input key="url" id="source-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required /></>
+            <><label htmlFor="source-url">{t("来源网址")}</label><input key="url" id="source-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} required /></>
           ) : (
             <>
-              <label htmlFor="source-file">来源文件</label>
+              <label htmlFor="source-file">{t("来源文件")}</label>
               <input key="file" id="source-file" type="file" accept=".pdf,.docx,.txt,.md,.markdown" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-              <p className="section-kicker">支持 PDF、DOCX、TXT 和 Markdown；扫描件不支持 OCR。</p>
+              <p className="section-kicker">{t("支持 PDF、DOCX、TXT 和 Markdown；扫描件不支持 OCR。")}</p>
             </>
           )}
-          <button className="button" type="submit" disabled={busy || (mode === "file" && !file)}>{busy ? "正在添加…" : "添加来源"}</button>
+          <button className="button" type="submit" disabled={busy || (mode === "file" && !file)}>{busy ? t("正在添加…") : t("添加来源")}</button>
         </form>
         ) : (
           <button
@@ -415,23 +418,23 @@ export function TaskCreationSession({
               setAdding(true);
             }}
           >
-            <Plus size={18} aria-hidden="true" /> 添加来源
+            <Plus size={18} aria-hidden="true" /> {t("添加来源")}
           </button>
         )
-      ) : <p className="section-kicker">已达到三个来源上限；删除一个来源后可继续添加。</p>}
+      ) : <p className="section-kicker">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
 
-      {error ? <p role="alert" className="form-error">{error}</p> : null}
+      {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
       <div className="button-row">
-        <button className="button" type="button" disabled={!canConfirm} onClick={() => void confirm()}>{busy ? "正在创建…" : "确认并创建任务"}</button>
+        <button className="button" type="button" disabled={!canConfirm} onClick={() => void confirm()}>{busy ? t("正在创建…") : t("确认并创建任务")}</button>
         {!canConfirm ? (
           <p className="section-kicker">
             {sourceCount === 0
-              ? "请先添加来源。"
+              ? t("请先添加来源。")
               : editingSourceIds.size > 0
-                ? "请先保存所有来源编辑。"
+                ? t("请先保存所有来源编辑。")
                 : !session?.can_confirm
-                ? "请等待所有来源处理完成。"
-                : "请接受所有来源警告。"}
+                ? t("请等待所有来源处理完成。")
+                : t("请接受所有来源警告。")}
           </p>
         ) : null}
       </div>

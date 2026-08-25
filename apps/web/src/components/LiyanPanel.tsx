@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 
 import {
   ApiError,
@@ -23,6 +24,7 @@ import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
 import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
 import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
 import { canonicalizeArticleMarkdown } from "./articleMarkdown";
+import { useInterfaceLocale } from "../interfaceLocale";
 import {
   loadWorkingCopy,
   saveWorkingCopy,
@@ -68,6 +70,7 @@ export function LiyanPanel({
   onPublicationChanged?(): void;
   onPublish?(taskId: string, revisionId: string): void;
 }) {
+  const { locale, t, domainMessage } = useInterfaceLocale();
   const [state, setState] = useState<LiyanStateResponse | null>(null);
   const [instruction, setInstruction] = useState<InstructionDocument>({ content: [] });
   const [workingCopy, setWorkingCopy] = useState<LiyanWorkingCopy | null>(() =>
@@ -79,6 +82,8 @@ export function LiyanPanel({
   const [polls, setPolls] = useState(0);
   const [workingCopyHash, setWorkingCopyHash] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyTriggerRef = useRef<HTMLButtonElement>(null);
   const loadedOnce = useRef(false);
   const startedExecutionIdRef = useRef<string | null>(null);
   const appliedResultIdRef = useRef<string | null>(null);
@@ -315,9 +320,9 @@ export function LiyanPanel({
 
   return (
     <section className="zhiyan-panel liyan-panel" aria-labelledby={`liyan-${taskId}`}>
-      <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>立言文章</h3>
+      <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
 
-      <p className="liyan-instruction-label">立言指令（可选）</p>
+      <p className="liyan-instruction-label">{t("立言指令（可选）")}</p>
       <InstructionEditor
         taskId={taskId}
         value={instruction}
@@ -326,16 +331,16 @@ export function LiyanPanel({
         onChange={setInstruction}
       />
 
-      {error ? <p role="alert" className="form-error">{error}</p> : null}
+      {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
       {state?.status === "failed" && failureMessage ? (
-        <p role="alert" className="form-error">{failureMessage}</p>
+        <p role="alert" className="form-error">{domainMessage(failureMessage, state.execution?.error?.code)}</p>
       ) : null}
       {state?.status === "cancelled" && failureMessage ? (
-        <p role="status" className="form-hint">{failureMessage}</p>
+        <p role="status" className="form-hint">{domainMessage(failureMessage, state.execution?.error?.code)}</p>
       ) : null}
       {state?.capabilities.unavailable_reason ? (
         <p role="status" className="form-hint" id={`liyan-blocked-${taskId}`}>
-          {state.capabilities.unavailable_reason}
+          {domainMessage(state.capabilities.unavailable_reason)}
         </p>
       ) : null}
 
@@ -354,7 +359,7 @@ export function LiyanPanel({
           disabled={busy || active || composerHasContent || !state?.capabilities.can_generate}
           onClick={() => void generate(true)}
         >
-          默认生成
+          {t("默认生成")}
         </button>
         <button
           className="button"
@@ -362,7 +367,7 @@ export function LiyanPanel({
           disabled={busy || (!active && state?.status !== "failed" && (!composerHasContent || !state?.capabilities.can_generate))}
           onClick={() => void (active ? cancel() : generate())}
         >
-          {active ? "停止" : state?.status === "failed" ? "重试" : "发送"}
+          {active ? t("停止") : state?.status === "failed" ? t("重试") : t("发送")}
         </button>
         {workingCopy ? (
           <button
@@ -372,7 +377,12 @@ export function LiyanPanel({
             disabled={saveDisabled}
             onClick={() => void save()}
           >
-            保存草稿
+            {t("保存草稿")}
+          </button>
+        ) : null}
+        {state ? (
+          <button ref={historyTriggerRef} className="button button--quiet" type="button" onClick={() => setHistoryOpen(true)}>
+            {t("草稿历史")}
           </button>
         ) : null}
         {publicationArticle && !publishing ? (
@@ -385,28 +395,28 @@ export function LiyanPanel({
               else setPublishing(true);
             }}
           >
-            发布
+            {t("发布")}
           </button>
         ) : null}
       </div>
 
       {saveBlockedReason ? (
-        <p className="form-hint" id={`liyan-save-blocked-${taskId}`}>{saveBlockedReason}</p>
+        <p className="form-hint" id={`liyan-save-blocked-${taskId}`}>{domainMessage(saveBlockedReason)}</p>
       ) : null}
 
       {retry && retry.remaining === 0 ? (
-        <p className="form-hint">重试次数已用完，请稍后再试。</p>
+        <p className="form-hint">{t("重试次数已用完，请稍后再试。")}</p>
       ) : countdown > 0 && retry ? (
         <p className="form-hint">
-          {countdown} 秒后可重试，还可重试 {retry.remaining} 次。
+          {locale === "en" ? `Retry in ${countdown}s; ${retry.remaining} retries remain.` : `${countdown} 秒后可重试，还可重试 ${retry.remaining} 次。`}
         </p>
       ) : null}
 
       {recoveredResult ? (
         <div className="liyan-result-offer">
-          <p>有一份已完成的立言结果可载入。</p>
+          <p>{t("有一份已完成的立言结果可载入。")}</p>
           <button className="button button--quiet" type="button" onClick={recover}>
-            载入为未保存草稿
+            {t("载入为未保存草稿")}
           </button>
         </div>
       ) : null}
@@ -425,15 +435,32 @@ export function LiyanPanel({
       ) : null}
 
       {state ? (
-        <ArticleRevisionHistory
-          history={state.revisions}
-          publishableRevisionId={publishableRevisionId}
-          publicationUnavailableReason={
-            unsavedEdits ? UNSAVED_EDITS : state.capabilities.publication_unavailable_reason
-          }
-          disabled={busy || !state.capabilities.can_save}
-          onRestore={(revisionId) => void restore(revisionId)}
-        />
+        <Dialog.Root open={historyOpen} onOpenChange={setHistoryOpen}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="dialog-overlay" />
+            <Dialog.Content
+              className="draft-history-sheet"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                historyTriggerRef.current?.focus();
+              }}
+            >
+              <div className="workspace__heading">
+                <Dialog.Title>{t("草稿历史")}</Dialog.Title>
+                <Dialog.Close className="button button--quiet">{t("关闭")}</Dialog.Close>
+              </div>
+              <ArticleRevisionHistory
+                history={state.revisions}
+                publishableRevisionId={publishableRevisionId}
+                publicationUnavailableReason={
+                  unsavedEdits ? UNSAVED_EDITS : state.capabilities.publication_unavailable_reason
+                }
+                disabled={busy || !state.capabilities.can_save}
+                onRestore={(revisionId) => void restore(revisionId)}
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       ) : null}
 
       {workingCopy ? (

@@ -517,6 +517,7 @@ describe("TaskZhiyanArea", () => {
     );
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+    await userEvent.click(await screen.findByRole("button", { name: /城市空气质量年度回顾/ }));
     await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
 
     expect(await screen.findByText("分析已取消")).toBeInTheDocument();

@@ -2,6 +2,7 @@ import { mergeAttributes, Node, type JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef } from "react";
+import { useInterfaceLocale } from "../interfaceLocale";
 
 import type { InstructionCapsule, InstructionDocument } from "../api/client";
 
@@ -103,6 +104,7 @@ export function InstructionEditor({
   selection?: CapsuleSelection | null;
   onChange(value: InstructionDocument): void;
 }) {
+  const { locale, t } = useInterfaceLocale();
   const localValues = useRef(new WeakSet<object>());
   const editor = useEditor({
     extensions,
@@ -111,7 +113,7 @@ export function InstructionEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        "aria-label": "立言指令（可选）",
+        "aria-label": t("立言指令（可选）"),
         class: "liyan-instruction-editor__content",
         role: "textbox",
       },
@@ -121,7 +123,7 @@ export function InstructionEditor({
       localValues.current.add(next);
       onChange(next);
     },
-  }, [taskId]);
+  }, [locale, taskId]);
 
   useEffect(() => {
     editor?.setEditable(!disabled);
@@ -170,7 +172,7 @@ export function InstructionEditor({
   return (
     <div className="liyan-instruction-editor">
       <EditorContent editor={editor} />
-      <p className="form-hint">在知言报告中选择 F、V、L 或 I 项，可插入不可编辑的引用胶囊。</p>
+      <p className="form-hint">{t("在知言报告中选择 F、V、L 或 I 项，可插入不可编辑的引用胶囊。")}</p>
     </div>
   );
 }

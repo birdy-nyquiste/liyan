@@ -131,8 +131,10 @@ describe("LiyanPanel", () => {
   it("withholds publishing while the browser draft differs from the saved Revision", async () => {
     const current = revision(1, "已保存文章");
     respondWith(stateWithRevisions(current, [], null));
+    const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
+    await user.click(await screen.findByRole("button", { name: "草稿历史" }));
     expect(
       await screen.findByText("有未保存的修改，请先保存后再发布。"),
     ).toBeInTheDocument();
@@ -357,6 +359,7 @@ describe("LiyanPanel", () => {
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
     await user.click(screen.getByRole("button", { name: "保存草稿" }));
+    await user.click(await screen.findByRole("button", { name: "草稿历史" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post![0].url).toContain("/liyan-revisions");
@@ -389,6 +392,7 @@ describe("LiyanPanel", () => {
 
     expect(await screen.findByText("文章已有更新的 Revision，请先查看最新内容。")).toBeInTheDocument();
     expect(screen.getByDisplayValue("本地草稿标题")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "草稿历史" }));
     expect(screen.getByText("草稿 1")).toBeInTheDocument();
   });
 
@@ -398,8 +402,10 @@ describe("LiyanPanel", () => {
       revision(4, "第四版"),
       revision(3, "第三版"),
     ]));
+    const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
+    await user.click(await screen.findByRole("button", { name: "草稿历史" }));
     expect(await screen.findByText("草稿 6")).toBeInTheDocument();
     expect(screen.getByText("草稿 5：第五版")).toBeInTheDocument();
     expect(screen.getByText("草稿 3：第三版")).toBeInTheDocument();
@@ -422,6 +428,7 @@ describe("LiyanPanel", () => {
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
+    await user.click(await screen.findByRole("button", { name: "草稿历史" }));
     await user.click(await screen.findByRole("button", { name: "恢复为新草稿" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
@@ -431,8 +438,10 @@ describe("LiyanPanel", () => {
 
   it("reports the server's publication eligibility for the newest Revision", async () => {
     respondWith(stateWithRevisions(revision(1, "完整文章")));
+    const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
+    await user.click(await screen.findByRole("button", { name: "草稿历史" }));
     expect(await screen.findByText("草稿 1 可用于发布。")).toBeInTheDocument();
   });
 
@@ -442,6 +451,7 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await user.click(screen.getByRole("button", { name: "草稿历史" }));
 
     expect(await screen.findByText("有未保存的修改，请先保存后再发布。")).toBeInTheDocument();
     expect(screen.queryByText("草稿 1 可用于发布。")).not.toBeInTheDocument();
@@ -456,6 +466,7 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
+    await user.click(screen.getByRole("button", { name: "草稿历史" }));
     await screen.findByText("有未保存的修改，请先保存后再发布。");
     await user.click(screen.getByRole("button", { name: "恢复为新草稿" }));
 

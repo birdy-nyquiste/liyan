@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 
 import { ApiError, deleteTask, renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
+import { useInterfaceLocale } from "../interfaceLocale";
 import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
 import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
@@ -28,6 +29,7 @@ export function TaskCard({
   onPublicationChanged?(): void;
   onPublish?(taskId: string, revisionId: string): void;
 }) {
+  const { locale, t, dateLocale, domainMessage } = useInterfaceLocale();
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
@@ -62,12 +64,12 @@ export function TaskCard({
       setEditing(false);
       setError(null);
     } catch {
-      setError("重命名失败，请重试。");
+      setError(t("重命名失败，请重试。"));
     }
   }
 
   async function removeTask() {
-    if (!window.confirm("删除任务后将立即消失且无法恢复，确定删除吗？")) return;
+    if (!window.confirm(t("删除任务后将立即消失且无法恢复，确定删除吗？"))) return;
     setDeleting(true);
     try {
       await deleteTask(accessToken, task.id);
@@ -75,8 +77,8 @@ export function TaskCard({
     } catch (thrown) {
       setError(
         thrown instanceof ApiError && thrown.detail
-          ? thrown.detail
-          : "删除失败，请稍后重试。",
+          ? domainMessage(thrown.detail)
+          : t("删除失败，请稍后重试。"),
       );
       setDeleting(false);
     }
@@ -90,12 +92,12 @@ export function TaskCard({
   const sourceCount = task.additional_source_count + 1;
 
   const zhiyanSummary = zhiyan === null
-    ? "读取中"
+    ? t("读取中")
     : zhiyan.failed > 0
-      ? `${zhiyan.failed} 个来源分析失败`
+      ? locale === "en" ? `${zhiyan.failed} source analyses failed` : `${zhiyan.failed} 个来源分析失败`
       : zhiyan.done === zhiyan.total
-        ? `${zhiyan.total} 份报告已完成`
-        : `${zhiyan.done} / ${zhiyan.total} 份报告完成`;
+        ? locale === "en" ? `${zhiyan.total} reports complete` : `${zhiyan.total} 份报告已完成`
+        : locale === "en" ? `${zhiyan.done} / ${zhiyan.total} reports complete` : `${zhiyan.done} / ${zhiyan.total} 份报告完成`;
 
   const selectCapsule = (choice: CapsuleChoice) => {
     setCapsuleSelection((current) => ({ ...choice, nonce: (current?.nonce ?? 0) + 1 }));
@@ -110,19 +112,19 @@ export function TaskCard({
     <article
       ref={cardRef}
       className={`task-card ${opened ? "task-card--opened" : ""}`}
-      aria-label={opened ? `已打开任务 ${task.display_name}` : undefined}
+      aria-label={opened ? `${locale === "en" ? "Open task" : "已打开任务"} ${task.display_name}` : undefined}
       tabIndex={opened ? -1 : undefined}
     >
       <div className="task-card__number">#{task.number}</div>
       {editing ? (
         <form className="rename-form" onSubmit={(event) => void saveName(event)}>
-          <label htmlFor={`task-name-${task.id}`}>任务名称</label>
+          <label htmlFor={`task-name-${task.id}`}>{t("任务名称")}</label>
           <input
             id={`task-name-${task.id}`}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
-          <button className="button" type="submit">保存名称</button>
+          <button className="button" type="submit">{t("保存名称")}</button>
           {error ? (
             <p role="alert" className="form-error">{error}</p>
           ) : null}
@@ -133,11 +135,11 @@ export function TaskCard({
             <h3>{task.display_name}</h3>
             <p className="task-card__source">{task.first_source_title}</p>
             <p className="task-card__meta">
-              <span>共 {sourceCount} 个来源</span>
+              <span>{locale === "en" ? `${sourceCount} sources` : `共 ${sourceCount} 个来源`}</span>
               <span aria-hidden="true">·</span>
               <span>V{task.current_version_number}</span>
               <span aria-hidden="true">·</span>
-              <span>{new Date(task.created_at).toLocaleDateString("zh-CN")}</span>
+              <span>{new Date(task.created_at).toLocaleDateString(dateLocale)}</span>
             </p>
           </div>
           <div className="workspace__actions">
@@ -145,42 +147,42 @@ export function TaskCard({
               <button
                 className="button button--quiet"
                 type="button"
-                aria-label={`打开 ${task.display_name}`}
+                aria-label={`${t("打开")} ${task.display_name}`}
                 onClick={() => onOpen?.(task.id)}
               >
-                打开
+                {t("打开")}
               </button>
             )}
             <button
               className="button button--quiet"
               type="button"
-              aria-label={`重命名 ${task.display_name}`}
+              aria-label={`${t("重命名")} ${task.display_name}`}
               onClick={() => setEditing(true)}
             >
-              重命名
+              {t("重命名")}
             </button>
             <button
               className="button button--quiet"
               type="button"
-              aria-label={`删除 ${task.display_name}`}
+              aria-label={`${t("删除")} ${task.display_name}`}
               aria-describedby={
                 task.delete_disabled_reason ? `delete-reason-${task.id}` : undefined
               }
               disabled={!task.can_delete || deleting}
               onClick={() => void removeTask()}
             >
-              {deleting ? "删除中" : "删除"}
+              {deleting ? t("删除中") : t("删除")}
             </button>
           </div>
           {opened ? (
-            <div className="task-stage-tabs" role="tablist" aria-label="任务视图">
+            <div className="task-stage-tabs" role="tablist" aria-label={t("任务视图")}>
               <button
                 type="button"
                 role="tab"
                 aria-selected={focus === "sources"}
                 onClick={() => chooseFocus("sources")}
               >
-                来源
+                {t("来源")}
               </button>
               <button
                 type="button"
@@ -188,13 +190,13 @@ export function TaskCard({
                 aria-selected={focus === "work"}
                 onClick={() => chooseFocus("work")}
               >
-                知言 · 立言
+                {t("知言 · 立言")}
               </button>
             </div>
           ) : null}
           {task.delete_disabled_reason ? (
             <p className="form-hint" id={`delete-reason-${task.id}`}>
-              {task.delete_disabled_reason}
+              {domainMessage(task.delete_disabled_reason)}
             </p>
           ) : null}
           {error ? <p role="alert" className="form-error">{error}</p> : null}
@@ -205,8 +207,8 @@ export function TaskCard({
           {focus === "sources" ? (
             <section className="task-source-view" aria-labelledby={`sources-${task.id}-heading`}>
               <header className="task-pane-heading">
-                <h2 id={`sources-${task.id}-heading`}>来源</h2>
-                <span>{sourceCount} 个来源 · V{task.current_version_number}</span>
+                <h2 id={`sources-${task.id}-heading`}>{t("来源")}</h2>
+                <span>{locale === "en" ? `${sourceCount} sources` : `${sourceCount} 个来源`} · V{task.current_version_number}</span>
               </header>
               <TaskSourceVersions
                 accessToken={accessToken}
@@ -234,7 +236,7 @@ export function TaskCard({
 
             <section className="task-workspace-pane" aria-labelledby={`zhiyan-${task.id}-heading`}>
               <header className="task-pane-heading">
-                <h2 id={`zhiyan-${task.id}-heading`}>知言</h2>
+                <h2 id={`zhiyan-${task.id}-heading`}>{t("知言")}</h2>
                 <span>{zhiyanSummary}</span>
               </header>
               <TaskZhiyanArea
@@ -248,11 +250,11 @@ export function TaskCard({
 
             <section className="task-workspace-pane" aria-labelledby={`liyan-${task.id}-heading`}>
               <header className="task-pane-heading">
-                <h2 id={`liyan-${task.id}-heading`}>立言</h2>
+                <h2 id={`liyan-${task.id}-heading`}>{t("立言")}</h2>
                 <span>{
                 !viewingCurrent
-                  ? "历史版本只读"
-                  : liyanReady ? "可以撰写" : "等待知言完成"
+                  ? t("历史版本只读")
+                  : liyanReady ? t("可以撰写") : t("等待知言完成")
                 }</span>
               </header>
               {viewingCurrent && liyanReady ? (
@@ -269,8 +271,8 @@ export function TaskCard({
               ) : (
                 <p className="form-hint" role="status">
                   {!viewingCurrent
-                    ? "历史任务版本只读，恢复为当前版本后才能撰写立言。"
-                    : zhiyan?.liyanReason ?? "知言状态读取中。"}
+                    ? t("历史任务版本只读，恢复为当前版本后才能撰写立言。")
+                    : domainMessage(zhiyan?.liyanReason ?? "知言状态读取中。")}
                 </p>
               )}
             </section>

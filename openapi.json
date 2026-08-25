@@ -3925,6 +3925,10 @@
             "type": "string",
             "title": "Task Id"
           },
+          "task_display_name": {
+            "type": "string",
+            "title": "Task Display Name"
+          },
           "task_version_id": {
             "type": "string",
             "title": "Task Version Id"
@@ -4056,6 +4060,7 @@
           "id",
           "status",
           "task_id",
+          "task_display_name",
           "task_version_id",
           "revision_id",
           "revision_number",

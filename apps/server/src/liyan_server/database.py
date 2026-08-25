@@ -457,6 +457,7 @@ class PublishTask(Base):
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     task_id: Mapped[UUID] = mapped_column(Uuid)
+    task_display_name: Mapped[str] = mapped_column(String(255))
     task_version_id: Mapped[UUID] = mapped_column(Uuid)
     revision_id: Mapped[UUID] = mapped_column(Uuid)
     revision_number: Mapped[int] = mapped_column(Integer)

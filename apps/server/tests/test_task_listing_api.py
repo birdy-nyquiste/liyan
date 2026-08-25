@@ -9,6 +9,15 @@ from liyan_server.database import Database, Task
 from zhiyan_support import confirm_sources, zhiyan_client
 
 
+def test_task_list_rejects_a_malformed_cursor(tmp_path: Path) -> None:
+    client, headers, _ = zhiyan_client(tmp_path)
+
+    response = client.get("/tasks", headers=headers, params={"cursor": "a"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "The task cursor is invalid."
+
+
 def test_tasks_are_cursor_paginated_by_recent_activity_with_a_stable_boundary(
     tmp_path: Path,
 ) -> None:

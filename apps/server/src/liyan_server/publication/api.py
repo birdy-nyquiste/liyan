@@ -19,6 +19,7 @@ from that:
 """
 
 import base64
+import binascii
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -26,7 +27,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -173,6 +174,7 @@ class PublishTaskResponse(BaseModel):
     id: str
     status: PublishTaskStatus
     task_id: str
+    task_display_name: str
     task_version_id: str
     revision_id: str
     revision_number: int
@@ -199,6 +201,7 @@ class PublishTaskResponse(BaseModel):
             id=str(publish_task.id),
             status=publish_task.status,
             task_id=str(publish_task.task_id),
+            task_display_name=publish_task.task_display_name,
             task_version_id=str(publish_task.task_version_id),
             revision_id=str(publish_task.revision_id),
             revision_number=publish_task.revision_number,
@@ -251,7 +254,7 @@ def publication_router(
             if moment.tzinfo is None:
                 raise ValueError
             return moment, UUID(item_id)
-        except (ValueError, TypeError, json.JSONDecodeError) as error:
+        except (ValueError, TypeError, json.JSONDecodeError, binascii.Error) as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="The publication cursor is invalid.",
@@ -314,28 +317,49 @@ def publication_router(
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=50)] = 20,
     ) -> EligibleArticleListResponse:
-        tasks = session.scalars(
-            select(Task)
+        latest_revision_number = (
+            select(func.max(LiyanRevision.number))
+            .where(LiyanRevision.article_id == LiyanArticle.id)
+            .correlate(LiyanArticle)
+            .scalar_subquery()
+        )
+        query = (
+            select(Task, LiyanRevision)
+            .join(LiyanArticle, LiyanArticle.task_version_id == Task.current_version_id)
+            .join(
+                LiyanRevision,
+                and_(
+                    LiyanRevision.article_id == LiyanArticle.id,
+                    LiyanRevision.number == latest_revision_number,
+                ),
+            )
             .where(
                 Task.owner_id == user.id,
                 Task.number.is_not(None),
                 Task.deleted_at.is_(None),
             )
-            .order_by(Task.number.desc())
+        )
+        if cursor is not None:
+            saved_at, revision_id = decode_cursor(cursor)
+            query = query.where(
+                or_(
+                    LiyanRevision.created_at < saved_at,
+                    and_(
+                        LiyanRevision.created_at == saved_at,
+                        LiyanRevision.id < revision_id,
+                    ),
+                )
+            )
+        rows = session.execute(
+            query.order_by(LiyanRevision.created_at.desc(), LiyanRevision.id.desc())
+            .limit(limit + 1)
         ).all()
-        items: list[EligibleArticleResponse] = []
-        for task in tasks:
-            number = task.number
-            if task.current_version_id is None or number is None:
-                continue
-            revision = newest_saved(session, task.current_version_id)
-            if revision is None:
-                continue
-            items.append(
+        page_rows = rows[:limit]
+        items = [
                 EligibleArticleResponse(
                     task_id=str(task.id),
-                    task_number=number,
-                    task_display_name=task.display_name or f"任务 {number}",
+                    task_number=task.number,
+                    task_display_name=task.display_name or f"任务 {task.number}",
                     task_version_id=str(task.current_version_id),
                     revision_id=str(revision.id),
                     revision_number=revision.number,
@@ -344,20 +368,13 @@ def publication_router(
                     content_hash=revision.content_hash,
                     saved_at=aware_utc(revision.created_at),
                 )
-            )
-        items.sort(key=lambda item: (item.saved_at, item.revision_id), reverse=True)
-        if cursor is not None:
-            saved_at, revision_id = decode_cursor(cursor)
-            items = [
-                item for item in items
-                if (item.saved_at, UUID(item.revision_id)) < (saved_at, revision_id)
-            ]
-        page = items[:limit]
+            for task, revision in page_rows
+        ]
         return EligibleArticleListResponse(
-            items=page,
+            items=items,
             next_cursor=(
-                encode_cursor(page[-1].saved_at, UUID(page[-1].revision_id))
-                if len(items) > limit else None
+                encode_cursor(items[-1].saved_at, UUID(items[-1].revision_id))
+                if len(rows) > limit else None
             ),
         )
 
@@ -422,6 +439,7 @@ def publication_router(
         publish_task = PublishTask(
             owner_id=user.id,
             task_id=task.id,
+            task_display_name=task.display_name or f"任务 {task.number}",
             task_version_id=version.id,
             revision_id=revision.id,
             revision_number=revision.number,

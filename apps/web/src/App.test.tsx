@@ -175,4 +175,34 @@ describe("routed workbench shell", () => {
     expect(screen.getByRole("link", { name: "发布" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/task");
   });
+
+  it("renders the signed-out, task, and publication routes in English", async () => {
+    window.localStorage.setItem("liyan.locale", "en");
+    const authProvider: AuthProvider = {
+      getAccessToken: vi.fn().mockResolvedValue("token"),
+      sendEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
+      if (request.url.endsWith("/auth/me")) {
+        return Response.json({ id: "user-1", email: "writer@example.com" });
+      }
+      if (request.url.includes("/tasks")) return Response.json({ items: [], next_cursor: null });
+      if (request.url.includes("/publication/")) return Response.json({ items: [], next_cursor: null });
+      return new Response(null, { status: 404 });
+    }));
+    const user = userEvent.setup();
+
+    render(<App authProvider={authProvider} />);
+
+    expect(await screen.findByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "New task" })).toBeInTheDocument();
+    expect(screen.getByText("Organize task sources")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Publications" }));
+    expect(await screen.findByRole("heading", { name: "Publication center" })).toBeInTheDocument();
+    expect(screen.getByText("1 · Choose a draft")).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("en");
+  });
 });

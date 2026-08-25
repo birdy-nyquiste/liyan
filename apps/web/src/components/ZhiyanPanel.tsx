@@ -1,7 +1,9 @@
 import type { ZhiyanStateResponse } from "../api/client";
+import { useEffect, useRef, useState } from "react";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ZhiyanReportView } from "./ZhiyanReportView";
+import { useInterfaceLocale } from "../interfaceLocale";
 
 const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
   absent: "尚未分析",
@@ -28,6 +30,7 @@ export function ZhiyanPanel({
   taskVersionId?: string;
   onCapsuleSelect?: (choice: CapsuleChoice) => void;
 }) {
+  const { locale, t, dateLocale, domainMessage } = useInterfaceLocale();
   const { source_revision_id: revisionId, source_title: title, capabilities } = state;
   const countdown = useRetryCountdown(capabilities.retry.allowed_at, onRetryAllowed);
   const execution = state.execution;
@@ -37,27 +40,50 @@ export function ZhiyanPanel({
     ? null
     : countdown > 0
       ? exhausted
-        ? `重试次数已用完，${countdown} 秒后可再试。`
-        : `${countdown} 秒后可重试，还可重试 ${capabilities.retry.remaining} 次。`
+        ? locale === "en" ? `No retries remain; try again in ${countdown}s.` : `重试次数已用完，${countdown} 秒后可再试。`
+        : locale === "en" ? `Retry in ${countdown}s; ${capabilities.retry.remaining} retries remain.` : `${countdown} 秒后可重试，还可重试 ${capabilities.retry.remaining} 次。`
       : exhausted
-        ? "重试次数已用完，请稍后再试。"
+        ? t("重试次数已用完，请稍后再试。")
         : null;
+  const [expanded, setExpanded] = useState(
+    () => state.status === "succeeded" || state.status === "failed",
+  );
+  const previousStatus = useRef(state.status);
+  const manuallyChanged = useRef(false);
+  useEffect(() => {
+    const completed = state.status === "succeeded" || state.status === "failed";
+    if (previousStatus.current !== state.status && completed && !manuallyChanged.current) {
+      setExpanded(true);
+    }
+    previousStatus.current = state.status;
+  }, [state.status]);
 
   return (
     <section className="zhiyan-panel" aria-labelledby={`zhiyan-${revisionId}`}>
-      <div className="zhiyan-panel__heading">
+      <button
+        className="zhiyan-panel__heading zhiyan-panel__toggle"
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={`zhiyan-body-${revisionId}`}
+        onClick={() => {
+          manuallyChanged.current = true;
+          setExpanded((current) => !current);
+        }}
+      >
         <div>
-          <p className="section-kicker">知言报告</p>
+          <p className="section-kicker">{t("知言报告")}</p>
           <h3 id={`zhiyan-${revisionId}`}>{title}</h3>
         </div>
         <span className="source-operation__status">
-          <span>{STATUS_LABELS[state.status]}</span>
+          <span>{t(STATUS_LABELS[state.status])}</span>
         </span>
-      </div>
+      </button>
+
+      {expanded ? <div id={`zhiyan-body-${revisionId}`}>
 
       {unfinished && execution?.error ? (
         <p role="alert" className="form-error">
-          {execution.error.message}
+          {domainMessage(execution.error.message, execution.error.code)}
         </p>
       ) : null}
 
@@ -75,7 +101,7 @@ export function ZhiyanPanel({
             disabled={busy || !capabilities.can_start}
             onClick={() => onStart(revisionId)}
           >
-            {state.status === "absent" ? "开始知言分析" : "重试"}
+            {state.status === "absent" ? t("开始知言分析") : t("重试")}
           </button>
         )}
         {capabilities.can_cancel && execution ? (
@@ -85,7 +111,7 @@ export function ZhiyanPanel({
             disabled={busy}
             onClick={() => onCancel(execution.id)}
           >
-            终止分析
+            {t("终止分析")}
           </button>
         ) : null}
       </div>
@@ -99,8 +125,7 @@ export function ZhiyanPanel({
       {state.report ? (
         <>
           <p className="form-hint">
-            成功的知言报告不可编辑或重新生成。生成于{" "}
-            {new Date(state.report.created_at).toLocaleString("zh-CN")}。
+            {t("成功的知言报告不可编辑或重新生成。生成于")} {new Date(state.report.created_at).toLocaleString(dateLocale)}.
           </p>
           <ZhiyanReportView
             document={state.report.document}
@@ -112,6 +137,7 @@ export function ZhiyanPanel({
           />
         </>
       ) : null}
+      </div> : null}
     </section>
   );
 }

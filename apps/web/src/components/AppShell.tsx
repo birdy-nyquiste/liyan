@@ -1,7 +1,8 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpenText,
   ChevronLeft,
@@ -20,7 +21,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   Link,
   Navigate,
@@ -32,13 +34,15 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { deleteTask, getTask, listTaskPage, renameTask } from "../api/client";
+import { deleteTask, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
+import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocale";
+import { setHistoryGuard } from "../navigationGuard";
 import { PublicationCenter } from "./PublicationCenter";
 import { TaskCard } from "./TaskCard";
 import { TaskCreationSession } from "./TaskCreationSession";
 
-type Locale = "zh" | "en";
+type Locale = InterfaceLocale;
 type Theme = "light" | "dark" | "system";
 
 const copy = {
@@ -51,6 +55,7 @@ const copy = {
     expand: "展开侧栏",
     signOut: "退出登录",
     language: "中文",
+    theme: "主题",
     rename: "重命名",
     remove: "删除",
     deleteTitle: "永久删除这个任务？",
@@ -59,6 +64,18 @@ const copy = {
     confirmDelete: "删除任务",
     empty: "还没有立言任务",
     missing: "找不到这个任务",
+    creationKicker: "任务创建会话",
+    creationDescription: "添加一至三个来源，确认后才会创建正式任务。",
+    openNavigation: "打开导航",
+    closeNavigation: "关闭导航",
+    unavailable: "服务暂不可用，部分操作可能失败。",
+    renamed: "任务名称已更新",
+    renameFailed: "重命名失败，请稍后重试。",
+    deleted: "任务已删除",
+    deleteFailed: "删除失败，请稍后重试。",
+    operations: "操作",
+    loadMore: "加载更多",
+    unsavedNavigation: "未保存的创建内容或来源修改会被丢弃，确定离开吗？",
   },
   en: {
     navigation: "Primary navigation",
@@ -69,6 +86,7 @@ const copy = {
     expand: "Expand sidebar",
     signOut: "Sign out",
     language: "English",
+    theme: "Theme",
     rename: "Rename",
     remove: "Delete",
     deleteTitle: "Permanently delete this task?",
@@ -77,6 +95,18 @@ const copy = {
     confirmDelete: "Delete task",
     empty: "No tasks yet",
     missing: "This task could not be found",
+    creationKicker: "Task creation session",
+    creationDescription: "Add one to three sources. The task is created only after confirmation.",
+    openNavigation: "Open navigation",
+    closeNavigation: "Close navigation",
+    unavailable: "The service is temporarily unavailable. Some actions may fail.",
+    renamed: "Task name updated",
+    renameFailed: "Rename failed. Please try again later.",
+    deleted: "Task deleted",
+    deleteFailed: "Delete failed. Please try again later.",
+    operations: "actions",
+    loadMore: "Load more",
+    unsavedNavigation: "Unsaved creation content or source changes will be discarded. Leave this page?",
   },
 } as const;
 
@@ -106,6 +136,21 @@ function usePreferences() {
   return { locale, setLocale, theme, setTheme, text: copy[locale] };
 }
 
+function RailTooltip({ label, show, children }: { label: string; show: boolean; children: ReactElement }) {
+  if (!show) return children;
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content className="rail-tooltip" side="right" sideOffset={8}>
+          {label}
+          <Tooltip.Arrow className="rail-tooltip__arrow" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
 function SidebarTask({
   task,
   active,
@@ -129,6 +174,7 @@ function SidebarTask({
   const [name, setName] = useState(task.display_name);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const cancelRename = useRef(false);
 
   async function saveRename() {
@@ -150,6 +196,10 @@ function SidebarTask({
     try {
       onRenamed(await renameTask(accessToken, task.id, normalized));
       setEditing(false);
+      setMutationError(null);
+      toast.success(text.renamed);
+    } catch {
+      setMutationError(text.renameFailed);
     } finally {
       setBusy(false);
     }
@@ -182,21 +232,23 @@ function SidebarTask({
           onKeyDown={renameKeyDown}
         />
       ) : (
-        <Link
-          className="sidebar-task__link"
-          to={`/task/${task.id}`}
-          title={collapsed ? task.display_name : undefined}
-          aria-current={active ? "page" : undefined}
-          onClick={(event) => {
-            if (!onNavigate()) event.preventDefault();
-          }}
-        >
-          {collapsed ? <BookOpenText size={19} aria-hidden="true" /> : task.display_name}
-        </Link>
+        <RailTooltip label={task.display_name} show={collapsed}>
+          <Link
+            className="sidebar-task__link"
+            to={`/task/${task.id}`}
+            aria-label={collapsed ? task.display_name : undefined}
+            aria-current={active ? "page" : undefined}
+            onClick={(event) => {
+              if (!onNavigate()) event.preventDefault();
+            }}
+          >
+            {collapsed ? <BookOpenText size={19} aria-hidden="true" /> : task.display_name}
+          </Link>
+        </RailTooltip>
       )}
       {!collapsed ? (
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger className="icon-button sidebar-task__menu" aria-label={`${task.display_name} 操作`}>
+          <DropdownMenu.Trigger className="icon-button sidebar-task__menu" aria-label={`${task.display_name} ${text.operations}`}>
             <MoreHorizontal size={17} aria-hidden="true" />
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -224,18 +276,26 @@ function SidebarTask({
             <AlertDialog.Description>{text.deleteBody}</AlertDialog.Description>
             <div className="dialog-actions">
               <AlertDialog.Cancel className="button button--quiet">{text.cancel}</AlertDialog.Cancel>
-              <AlertDialog.Action
+              <button
                 className="button button--danger"
+                type="button"
                 onClick={() => {
                   setBusy(true);
                   void deleteTask(accessToken, task.id)
-                    .then(() => onDeleted(task.id))
+                    .then(() => {
+                      setMutationError(null);
+                      setDeleteOpen(false);
+                      onDeleted(task.id);
+                      toast.success(text.deleted);
+                    })
+                    .catch(() => setMutationError(text.deleteFailed))
                     .finally(() => setBusy(false));
                 }}
               >
                 {text.confirmDelete}
-              </AlertDialog.Action>
+              </button>
             </div>
+            {mutationError ? <p className="form-error" role="alert">{mutationError}</p> : null}
           </AlertDialog.Content>
         </AlertDialog.Portal>
       </AlertDialog.Root>
@@ -243,7 +303,7 @@ function SidebarTask({
   );
 }
 
-function LoadMoreTasks({ onVisible }: { onVisible(): void }) {
+function LoadMoreTasks({ onVisible, label }: { onVisible(): void; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = ref.current;
@@ -256,7 +316,7 @@ function LoadMoreTasks({ onVisible }: { onVisible(): void }) {
   }, [onVisible]);
   return (
     <div ref={ref} className="sidebar-load-trigger">
-      <button className="sidebar-load-more" type="button" onClick={onVisible}>加载更多</button>
+      <button className="sidebar-load-more" type="button" onClick={onVisible}>{label}</button>
     </div>
   );
 }
@@ -302,22 +362,29 @@ function Sidebar({
   const themeIcon = theme === "light" ? <Sun size={18} /> : <MoonStar size={18} />;
 
   return (
+    <Tooltip.Provider delayDuration={250}>
     <aside className="app-sidebar" data-collapsed={collapsed || undefined}>
       <div className="sidebar-brand">
         <img src="/liyan-mark.svg" alt="" />
         {!collapsed ? <strong>立言阁</strong> : null}
-        <button className="icon-button sidebar-collapse" type="button" aria-label={collapsed ? text.expand : text.collapse} onClick={onCollapse}>
-          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-        </button>
+        <RailTooltip label={collapsed ? text.expand : text.collapse} show>
+          <button className="icon-button sidebar-collapse" type="button" aria-label={collapsed ? text.expand : text.collapse} onClick={onCollapse}>
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </RailTooltip>
       </div>
 
       <nav className="sidebar-primary" aria-label={text.navigation}>
-        <NavLink className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
-          <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTask}</span> : null}
-        </NavLink>
-        <NavLink className="sidebar-nav-link" to="/publications" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
-          <Newspaper size={19} aria-hidden="true" /> {!collapsed ? <span>{text.publications}</span> : null}
-        </NavLink>
+        <RailTooltip label={text.newTask} show={collapsed}>
+          <NavLink aria-label={text.newTask} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
+            <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTask}</span> : null}
+          </NavLink>
+        </RailTooltip>
+        <RailTooltip label={text.publications} show={collapsed}>
+          <NavLink aria-label={text.publications} className="sidebar-nav-link" to="/publications" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
+            <Newspaper size={19} aria-hidden="true" /> {!collapsed ? <span>{text.publications}</span> : null}
+          </NavLink>
+        </RailTooltip>
       </nav>
 
       <section className="sidebar-tasks" aria-label={text.tasks}>
@@ -351,7 +418,7 @@ function Sidebar({
               />
             ))}
             {hasMore && !collapsed ? (
-              <LoadMoreTasks onVisible={onLoadMore} />
+              <LoadMoreTasks onVisible={onLoadMore} label={text.loadMore} />
             ) : null}
             {!collapsed && tasks.length === 0 ? <p className="sidebar-empty">{text.empty}</p> : null}
           </div>
@@ -359,21 +426,28 @@ function Sidebar({
       </section>
 
       <div className="sidebar-account">
-        <button className="sidebar-account__action" type="button" onClick={onTheme}>
-          {themeIcon} {!collapsed ? <span>{theme === "system" ? "System" : theme}</span> : null}
-        </button>
-        <button className="sidebar-account__action" type="button" onClick={onLocale}>
-          <Languages size={18} /> {!collapsed ? <span>{text.language}</span> : null}
-        </button>
+        <RailTooltip label={`${text.theme}: ${theme}`} show={collapsed}>
+          <button aria-label={`${text.theme}: ${theme}`} className="sidebar-account__action" type="button" onClick={onTheme}>
+            {themeIcon} {!collapsed ? <span>{theme === "system" ? "System" : theme}</span> : null}
+          </button>
+        </RailTooltip>
+        <RailTooltip label={text.language} show={collapsed}>
+          <button aria-label={text.language} className="sidebar-account__action" type="button" onClick={onLocale}>
+            <Languages size={18} /> {!collapsed ? <span>{text.language}</span> : null}
+          </button>
+        </RailTooltip>
         <div className="sidebar-identity">
           <span className="avatar" aria-hidden="true">{identity.email.charAt(0).toUpperCase()}</span>
           {!collapsed ? <span className="sidebar-identity__email">{identity.email}</span> : null}
         </div>
-        <button className="sidebar-account__action" type="button" onClick={onSignOut}>
-          <LogOut size={18} /> {!collapsed ? <span>{text.signOut}</span> : null}
-        </button>
+        <RailTooltip label={text.signOut} show={collapsed}>
+          <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={onSignOut}>
+            <LogOut size={18} /> {!collapsed ? <span>{text.signOut}</span> : null}
+          </button>
+        </RailTooltip>
       </div>
     </aside>
+    </Tooltip.Provider>
   );
 }
 
@@ -383,12 +457,14 @@ function TaskRoute({
   accessToken,
   onDeleted,
   onSourceEditing,
+  missingLabel,
 }: {
   tasks: TaskSummary[];
   identity: Identity;
   accessToken: string;
   onDeleted(taskId: string): void;
   onSourceEditing(dirty: boolean): void;
+  missingLabel: string;
 }) {
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -399,7 +475,7 @@ function TaskRoute({
     enabled: Boolean(taskId && !cached),
   });
   const task = cached ?? taskQuery.data;
-  if (!task) return <div className="route-empty"><h1>找不到这个任务</h1></div>;
+  if (!task) return <div className="route-empty"><h1>{missingLabel}</h1></div>;
   return (
     <TaskCard
       task={task}
@@ -417,11 +493,13 @@ export function AppShell({
   identity,
   accessToken,
   initialTasks,
+  serviceUnavailable = false,
   onSignOut,
 }: {
   identity: Identity;
   accessToken: string;
   initialTasks: TaskSummary[];
+  serviceUnavailable?: boolean;
   onSignOut(): Promise<void>;
 }) {
   const navigate = useNavigate();
@@ -432,6 +510,31 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creationDirty, setCreationDirty] = useState(false);
   const [sourceDirty, setSourceDirty] = useState(false);
+  const confirmDiscard = useCallback(() => {
+    if (!creationDirty && !sourceDirty) return false;
+    const allowed = window.confirm(preferences.text.unsavedNavigation);
+    if (allowed) {
+      setCreationDirty(false);
+      setSourceDirty(false);
+    }
+    return allowed;
+  }, [creationDirty, preferences.text.unsavedNavigation, sourceDirty]);
+  useLayoutEffect(() => {
+    if (!creationDirty && !sourceDirty) {
+      setHistoryGuard(null);
+      return;
+    }
+    setHistoryGuard({
+      confirm: () => window.confirm(preferences.text.unsavedNavigation),
+      onAllowed: () => {
+        setCreationDirty(false);
+        setSourceDirty(false);
+      },
+      protectedState: window.history.state,
+      protectedUrl: window.location.href,
+    });
+    return () => setHistoryGuard(null);
+  }, [creationDirty, preferences.text.unsavedNavigation, sourceDirty]);
   const taskQuery = useInfiniteQuery({
     queryKey: ["tasks", accessToken],
     queryFn: ({ pageParam }) => listTaskPage(accessToken, pageParam),
@@ -446,20 +549,41 @@ export function AppShell({
   const tasks = taskQuery.data.pages.flatMap((page) => page.items);
   const currentTaskId = /^\/task\/([^/]+)$/.exec(location.pathname)?.[1] ?? null;
 
-  function setTasks(next: TaskSummary[]) {
-    queryClient.setQueryData(["tasks", accessToken], {
-      pages: [{ items: next, next_cursor: null }],
-      pageParams: [null],
-    });
+  function promoteTask(task: TaskSummary) {
+    queryClient.setQueryData<InfiniteData<TaskListResponse, string | null>>(
+      ["tasks", accessToken],
+      (current) => current && ({
+        ...current,
+        pages: current.pages.map((page, index) => ({
+          ...page,
+          items: index === 0
+            ? [task, ...page.items.filter((item) => item.id !== task.id)]
+            : page.items.filter((item) => item.id !== task.id),
+        })),
+      }),
+    );
+  }
+
+  function removeTask(taskId: string) {
+    queryClient.setQueryData<InfiniteData<TaskListResponse, string | null>>(
+      ["tasks", accessToken],
+      (current) => current && ({
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((item) => item.id !== taskId),
+        })),
+      }),
+    );
   }
 
   function safeToNavigate() {
     if (!creationDirty && !sourceDirty) return true;
-    return window.confirm("未保存的创建内容或来源修改会被丢弃，确定离开吗？");
+    return confirmDiscard();
   }
 
   function deleted(taskId: string) {
-    setTasks(tasks.filter((task) => task.id !== taskId));
+    removeTask(taskId);
     if (currentTaskId === taskId) navigate("/task");
   }
 
@@ -479,7 +603,7 @@ export function AppShell({
       }}
       onLocale={() => preferences.setLocale(preferences.locale === "zh" ? "en" : "zh")}
       onTheme={() => preferences.setTheme(preferences.theme === "light" ? "dark" : preferences.theme === "dark" ? "system" : "light")}
-      onRenamed={(renamed) => setTasks([renamed, ...tasks.filter((task) => task.id !== renamed.id)])}
+      onRenamed={promoteTask}
       onDeleted={deleted}
       onSignOut={() => { if (safeToNavigate()) void onSignOut(); }}
       onNavigate={() => {
@@ -493,23 +617,25 @@ export function AppShell({
   );
 
   return (
+    <InterfaceLocaleProvider locale={preferences.locale}>
     <div className="app-frame" data-sidebar-collapsed={collapsed || undefined}>
       <div className="desktop-sidebar">{sidebar}</div>
       <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
-        <Dialog.Trigger className="mobile-menu-button" aria-label="打开导航">
+        <Dialog.Trigger className="mobile-menu-button" aria-label={preferences.text.openNavigation}>
           <Menu size={22} />
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay className="dialog-overlay" />
           <Dialog.Content className="mobile-drawer">
-            <Dialog.Title className="sr-only">主导航</Dialog.Title>
-            <Dialog.Close className="icon-button mobile-drawer__close" aria-label="关闭导航"><X size={20} /></Dialog.Close>
+            <Dialog.Title className="sr-only">{preferences.text.navigation}</Dialog.Title>
+            <Dialog.Close className="icon-button mobile-drawer__close" aria-label={preferences.text.closeNavigation}><X size={20} /></Dialog.Close>
             {sidebar}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
       <main className="route-surface">
+        {serviceUnavailable ? <div className="service-banner" role="alert">{preferences.text.unavailable}</div> : null}
         <Routes>
           <Route path="/" element={<Navigate to="/task" replace />} />
           <Route
@@ -517,18 +643,18 @@ export function AppShell({
             element={
               <div className="creation-page">
                 <header className="page-heading">
-                  <p className="section-kicker">任务创建会话</p>
-                  <h1>新建立言任务</h1>
-                  <p>添加一至三个来源，确认后才会创建正式任务。</p>
+                  <p className="section-kicker">{preferences.text.creationKicker}</p>
+                  <h1>{preferences.text.newTask}</h1>
+                  <p>{preferences.text.creationDescription}</p>
                 </header>
                 <TaskCreationSession
                   accessToken={accessToken}
                   onDirtyChange={setCreationDirty}
-                  onClose={() => undefined}
+                  onClose={() => navigate("/publications")}
                   onCreated={(task) => {
                     setCreationDirty(false);
-                    setTasks([task, ...tasks.filter((current) => current.id !== task.id)]);
-                    navigate(`/task/${task.id}`);
+                    promoteTask(task);
+                    window.setTimeout(() => navigate(`/task/${task.id}`), 0);
                   }}
                 />
               </div>
@@ -543,6 +669,7 @@ export function AppShell({
                 accessToken={accessToken}
                 onDeleted={deleted}
                 onSourceEditing={setSourceDirty}
+                missingLabel={preferences.text.missing}
               />
             }
           />
@@ -564,5 +691,6 @@ export function AppShell({
         </Routes>
       </main>
     </div>
+    </InterfaceLocaleProvider>
   );
 }

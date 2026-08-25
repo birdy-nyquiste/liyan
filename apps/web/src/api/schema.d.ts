@@ -1237,6 +1237,8 @@ export interface components {
             status: components["schemas"]["PublishTaskStatus"];
             /** Task Id */
             task_id: string;
+            /** Task Display Name */
+            task_display_name: string;
             /** Task Version Id */
             task_version_id: string;
             /** Revision Id */

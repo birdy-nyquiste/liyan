@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -145,7 +146,7 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
             if moment.tzinfo is None:
                 raise ValueError
             return moment, UUID(task_id)
-        except (ValueError, TypeError, json.JSONDecodeError) as error:
+        except (ValueError, TypeError, json.JSONDecodeError, binascii.Error) as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="The task cursor is invalid.",

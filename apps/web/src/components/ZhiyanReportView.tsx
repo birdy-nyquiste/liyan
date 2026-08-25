@@ -1,5 +1,6 @@
 import type { components } from "../api/schema";
 import type { CapsuleChoice } from "./InstructionEditor";
+import { useInterfaceLocale } from "../interfaceLocale";
 
 export type ZhiyanReportDocument = components["schemas"]["ZhiyanReportDocument"];
 type FactItem = components["schemas"]["FactItem"];
@@ -43,7 +44,8 @@ function Section({
 
 /** §4.1: a section with no content states why, rather than disappearing. */
 function EmptyState({ items, reason }: { items: number; reason: string | null }) {
-  return items === 0 ? <p className="zhiyan-empty">{reason ?? "本部分没有内容。"}</p> : null;
+  const { t } = useInterfaceLocale();
+  return items === 0 ? <p className="zhiyan-empty">{reason ?? t("本部分没有内容。")}</p> : null;
 }
 
 function Quote({ text }: { text: string }) {
@@ -77,12 +79,13 @@ function CapsuleButton({
   reportId?: string;
   onSelect?: (choice: CapsuleChoice) => void;
 }) {
+  const { locale, t } = useInterfaceLocale();
   if (!taskVersionId || !reportId || !onSelect) return null;
   return (
     <button
       className="zhiyan-capsule-button"
       type="button"
-      aria-label={`插入 ${itemId} 到立言指令`}
+      aria-label={locale === "en" ? `Insert ${itemId} into the Liyan instruction` : `插入 ${itemId} 到立言指令`}
       onClick={() => onSelect({
         label: `${sourceTitle} · ${itemId}`,
         reference: {
@@ -93,7 +96,7 @@ function CapsuleButton({
         },
       })}
     >
-      加入指令
+      {t("加入指令")}
     </button>
   );
 }
@@ -114,15 +117,16 @@ export function ZhiyanReportView({
   reportId?: string;
   onCapsuleSelect?: (choice: CapsuleChoice) => void;
 }) {
+  const { locale, t } = useInterfaceLocale();
   return (
-    <article className="zhiyan-report" aria-label={`知言报告 ${sourceTitle}`}>
-      <Section id={`${idPrefix}-overview`} heading="概要">
+    <article className="zhiyan-report" aria-label={`${t("知言报告")} ${sourceTitle}`}>
+      <Section id={`${idPrefix}-overview`} heading={t("概要")}>
         <dl className="zhiyan-detail-list">
-          <dt>内容概要</dt>
+          <dt>{t("内容概要")}</dt>
           <dd>{report.overview.content_summary}</dd>
-          <dt>核查概况</dt>
+          <dt>{t("核查概况")}</dt>
           <dd>{report.overview.fact_check_summary}</dd>
-          <dt>阅读提示</dt>
+          <dt>{t("阅读提示")}</dt>
           <dd>{report.overview.reading_note}</dd>
         </dl>
         {report.overview.key_findings.length > 0 ? (
@@ -137,20 +141,20 @@ export function ZhiyanReportView({
         ) : null}
       </Section>
 
-      <Section id={`${idPrefix}-source`} heading="“知”来源">
+      <Section id={`${idPrefix}-source`} heading={t("“知”来源")}>
         <dl className="zhiyan-detail-list">
-          <dt>体裁</dt>
+          <dt>{t("体裁")}</dt>
           <dd>{report.source.genre}</dd>
-          <dt>出处性质</dt>
+          <dt>{t("出处性质")}</dt>
           <dd>{report.source.provenance}</dd>
-          <dt>完整性</dt>
+          <dt>{t("完整性")}</dt>
           <dd>{report.source.completeness}</dd>
-          <dt>来源说明</dt>
+          <dt>{t("来源说明")}</dt>
           <dd>{report.source.note}</dd>
         </dl>
       </Section>
 
-      <Section id={`${idPrefix}-facts`} heading="“知”事实">
+      <Section id={`${idPrefix}-facts`} heading={t("“知”事实")}>
         <EmptyState items={report.facts.items.length} reason={report.facts.empty_state} />
         <ul className="zhiyan-items">
           {report.facts.items.map((fact) => (
@@ -171,13 +175,13 @@ export function ZhiyanReportView({
               <Quote text={fact.quote} />
               <p className="zhiyan-item__claim">{fact.claim}</p>
               <p>{fact.explanation}</p>
-              <Refs label="依据：" refs={fact.evidence_ids} />
+              <Refs label={t("依据：")} refs={fact.evidence_ids} />
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-viewpoints`} heading="“知”观点">
+      <Section id={`${idPrefix}-viewpoints`} heading={t("“知”观点")}>
         <EmptyState
           items={report.viewpoints.items.length}
           reason={report.viewpoints.empty_state}
@@ -204,7 +208,7 @@ export function ZhiyanReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-logic`} heading="“知”逻辑">
+      <Section id={`${idPrefix}-logic`} heading={t("“知”逻辑")}>
         <p className="zhiyan-argument-chain">{report.logic.argument_chain}</p>
         <EmptyState items={report.logic.items.length} reason={report.logic.empty_state} />
         <ul className="zhiyan-items">
@@ -223,17 +227,17 @@ export function ZhiyanReportView({
               <Quote text={item.quote} />
               <p className="zhiyan-item__claim">{item.judgment}</p>
               <p>{item.explanation}</p>
-              <Refs label="关联：" refs={item.related_ids} />
+              <Refs label={t("关联：")} refs={item.related_ids} />
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-intent`} heading="“知”意图">
+      <Section id={`${idPrefix}-intent`} heading={t("“知”意图")}>
         <dl className="zhiyan-detail-list">
-          <dt>明确目的</dt>
+          <dt>{t("明确目的")}</dt>
           <dd>{report.intent.explicit_purpose}</dd>
-          <dt>目标受众</dt>
+          <dt>{t("目标受众")}</dt>
           <dd>{report.intent.target_audience}</dd>
         </dl>
         {report.intent.expression_methods.length > 0 ? (
@@ -265,7 +269,7 @@ export function ZhiyanReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-evidence`} heading="“知”依据">
+      <Section id={`${idPrefix}-evidence`} heading={t("“知”依据")}>
         <EmptyState items={report.evidence.items.length} reason={report.evidence.empty_state} />
         <ul className="zhiyan-items">
           {report.evidence.items.map((evidence) => {
@@ -284,7 +288,7 @@ export function ZhiyanReportView({
                 ) : (
                   <>
                     <p className="zhiyan-item__claim">{evidence.title}</p>
-                    <p className="zhiyan-empty">该依据地址不可作为链接打开：{evidence.url}</p>
+                    <p className="zhiyan-empty">{locale === "en" ? `This evidence address cannot be opened as a link: ${evidence.url}` : `该依据地址不可作为链接打开：${evidence.url}`}</p>
                   </>
                 )}
                 <p>{evidence.explanation}</p>

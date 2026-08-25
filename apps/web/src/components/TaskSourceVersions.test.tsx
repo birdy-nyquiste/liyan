@@ -72,6 +72,7 @@ describe("来源 editing and 任务版本 history", () => {
     const alpha = screen.getByRole("group", { name: "来源 Alpha" });
     await user.clear(within(alpha).getByLabelText("来源标题"));
     await user.type(within(alpha).getByLabelText("来源标题"), "Alpha edited");
+    await user.click(screen.getByRole("button", { name: /Beta/ }));
     await user.click(screen.getByRole("button", { name: "删除来源 Beta" }));
 
     const event = new Event("beforeunload", { cancelable: true });

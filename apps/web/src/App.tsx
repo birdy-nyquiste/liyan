@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import { ApiError, loadTaskWorkspace, serverIsAlive } from "./api/client";
@@ -8,6 +8,8 @@ import { type AuthProvider, supabaseAuthProvider } from "./auth/provider";
 import type { AuthViewState, SignedOutState } from "./auth/state";
 import { AuthPanel } from "./components/AuthPanel";
 import { AppShell } from "./components/AppShell";
+import { InterfaceLocaleProvider, type InterfaceLocale } from "./interfaceLocale";
+import { installHistoryGuard } from "./navigationGuard";
 import "./styles.css";
 
 type HealthState = "checking" | "available" | "unavailable";
@@ -21,7 +23,7 @@ const signedOut = (message: string | null = null): SignedOutState => ({
   message,
 });
 
-export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
+function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
   const [health, setHealth] = useState<HealthState>("checking");
   const [auth, setAuth] = useState<AuthViewState>({ screen: "checking" });
 
@@ -117,11 +119,13 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
     }
   }
 
+  const signedOutLocale = (window.localStorage.getItem("liyan.locale") === "en" ? "en" : "zh") as InterfaceLocale;
   const content = auth.screen === "workspace" ? (
     <AppShell
       identity={auth.identity}
       accessToken={auth.accessToken}
       initialTasks={auth.tasks}
+      serviceUnavailable={health === "unavailable"}
       onSignOut={async () => {
         await authProvider.signOut();
         queryClient.clear();
@@ -135,12 +139,12 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
           <img className="masthead__mark" src="/liyan-mark.svg" alt="" />
           <div>
             <h1>立言阁</h1>
-            <p className="subtitle">有感而发，知言而立</p>
-            <p className="signed-out-hero__description">从来源中辨明事实与观点，再写成由你定调的文章。</p>
+            <p className="subtitle">{signedOutLocale === "en" ? "Write from insight, stand through understanding" : "有感而发，知言而立"}</p>
+            <p className="signed-out-hero__description">{signedOutLocale === "en" ? "Separate facts from viewpoints in your sources, then write an article in your own voice." : "从来源中辨明事实与观点，再写成由你定调的文章。"}</p>
           </div>
         </div>
       </header>
-      {health === "unavailable" ? <div className="service-banner" role="alert">服务暂不可用，部分操作可能失败。</div> : null}
+      {health === "unavailable" ? <div className="service-banner" role="alert">{signedOutLocale === "en" ? "The service is temporarily unavailable. Some actions may fail." : "服务暂不可用，部分操作可能失败。"}</div> : null}
       <AuthPanel
         state={auth}
         onEmailChange={(email) => setAuth({ ...auth, email })}
@@ -151,9 +155,19 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
     </main>
   );
 
+  return <InterfaceLocaleProvider locale={signedOutLocale}>{content}</InterfaceLocaleProvider>;
+}
+
+export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
+  const router = useMemo(() => {
+    installHistoryGuard();
+    return createBrowserRouter([
+      { path: "*", element: <AppWorkspace authProvider={authProvider} /> },
+    ]);
+  }, [authProvider]);
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>{content}</BrowserRouter>
+      <RouterProvider router={router} />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );

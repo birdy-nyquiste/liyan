@@ -32,6 +32,21 @@ def test_only_targets_the_server_authorized_for_this_user_are_selectable(
     assert [item["key"] for item in theirs.json()["items"]] == ["lsforum", "lsforum-cn"]
 
 
+def test_publication_lists_reject_a_malformed_cursor(tmp_path: Path) -> None:
+    client, headers, _ = publication_client(tmp_path)
+
+    eligible = client.get(
+        "/publication/eligible-articles", headers=headers, params={"cursor": "a"}
+    )
+    history = client.get(
+        "/publication/publish-tasks", headers=headers, params={"cursor": "a"}
+    )
+
+    assert eligible.status_code == 422
+    assert history.status_code == 422
+    assert eligible.json()["detail"] == "The publication cursor is invalid."
+
+
 def test_a_target_never_exposes_the_credential_the_server_publishes_with(
     tmp_path: Path,
 ) -> None:

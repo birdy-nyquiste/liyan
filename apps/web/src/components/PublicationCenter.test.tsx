@@ -108,6 +108,7 @@ describe("PublicationCenter", () => {
           id: "publish-1",
           status: "succeeded",
           task_id: "deleted-task",
+          task_display_name: "已删除任务",
           task_version_id: "version-1",
           revision_id: "revision-2",
           revision_number: 2,
@@ -125,6 +126,7 @@ describe("PublicationCenter", () => {
           created_at: "2026-08-23T10:00:00Z",
           completed_at: "2026-08-23T10:01:00Z",
           execution: null,
+          attempts: [],
         }] });
       }
       return new Response(null, { status: 404 });
@@ -144,6 +146,7 @@ describe("PublicationCenter", () => {
     id: "publish-1",
     status,
     task_id: "task-1",
+    task_display_name: "四天工作制",
     task_version_id: "version-1",
     revision_id: "revision-2",
     revision_number: 2,
@@ -239,5 +242,35 @@ describe("PublicationCenter", () => {
 
     expect(await screen.findByText("四天工作制的真问题")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重试本次提交" })).not.toBeInTheDocument();
+  });
+
+  it("explains a failed publication with its localized status and attempt evidence", async () => {
+    listing([record("failed", {
+      failure_message: "发布未能启动，请稍后重试。",
+      attempts: [{
+        id: "execution-1",
+        operation: "publish_preview",
+        status: "failed",
+        attempt: 1,
+        input_version: 1,
+        trace_id: "trace-publication-1",
+        created_at: "2026-08-23T10:00:00Z",
+        started_at: "2026-08-23T10:00:01Z",
+        finished_at: "2026-08-23T10:00:02Z",
+        cancellation_requested_at: null,
+        result_id: null,
+        error: { code: "dispatch_failed", message: "发布未能启动，请稍后重试。" },
+      }],
+    })]);
+    const user = userEvent.setup();
+
+    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+
+    await user.click(await screen.findByText("四天工作制的真问题"));
+    expect(screen.getAllByText("提交失败").length).toBeGreaterThan(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("发布未能启动，请稍后重试。");
+    expect(screen.getAllByText("发布未能启动，请稍后重试。")).toHaveLength(2);
+    expect(screen.getByText("trace-publication-1")).toBeInTheDocument();
+    expect(screen.getByText("dispatch_failed")).toBeInTheDocument();
   });
 });

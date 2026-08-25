@@ -45,8 +45,8 @@ from liyan_server.liyan.revisions import (
 )
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
-from liyan_server.task_api import version_source_revisions
 from liyan_server.task_activity import record_task_activity
+from liyan_server.task_api import version_source_revisions
 from liyan_server.task_creation.contracts import (
     ExecutionError,
     ExecutionResponse,

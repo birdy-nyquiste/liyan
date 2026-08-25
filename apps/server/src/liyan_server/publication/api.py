@@ -587,9 +587,13 @@ def publication_router(
                     and_(PublishTask.created_at == created_at, PublishTask.id < publish_task_id),
                 )
             )
-        publish_tasks = list(session.scalars(
-            statement.order_by(PublishTask.created_at.desc(), PublishTask.id.desc()).limit(limit + 1)
-        ).all())
+        publish_tasks = list(
+            session.scalars(
+                statement.order_by(PublishTask.created_at.desc(), PublishTask.id.desc()).limit(
+                    limit + 1
+                )
+            ).all()
+        )
         page = publish_tasks[:limit]
         return PublishTaskListResponse(
             items=[

@@ -31,8 +31,8 @@ from liyan_server.hashing import canonical_hash as _hash
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content
-from liyan_server.task_api import version_source_revisions
 from liyan_server.task_activity import record_task_activity
+from liyan_server.task_api import version_source_revisions
 from liyan_server.task_creation.confirmation import SourceInput
 from liyan_server.zhiyan.orchestration import queue_initial_runs
 from liyan_server.zhiyan.runs import ZHIYAN_OPERATION

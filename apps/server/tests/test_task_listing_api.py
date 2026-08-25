@@ -4,9 +4,9 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from zhiyan_support import confirm_sources, zhiyan_client
 
 from liyan_server.database import Database, Task
-from zhiyan_support import confirm_sources, zhiyan_client
 
 
 def test_task_list_rejects_a_malformed_cursor(tmp_path: Path) -> None:

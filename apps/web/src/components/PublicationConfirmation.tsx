@@ -5,6 +5,7 @@ import {
   confirmPublication,
   getPublishTask,
   listPublicationTargets,
+  refusalWithoutTiming,
   retryPublication,
   type PublicationTargetResponse,
   type PublishTaskResponse,
@@ -15,8 +16,8 @@ import {
   PRECONDITION_FAILED,
   RETRY_FAILED,
 } from "./publicationMessages";
+import { EXECUTION_POLL_MS } from "./pollIntervals";
 
-const DEFAULT_POLL_INTERVAL_MS = 2000;
 const CONFLICT = 409;
 const AUTHOR_LIMIT = 100;
 const AUTHOR_KEY = "liyan:publication-author:v1";
@@ -72,7 +73,7 @@ export function PublicationConfirmation({
   accessToken,
   article,
   workingCopyHash = null,
-  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  pollIntervalMs = EXECUTION_POLL_MS,
   onStatusChange,
   onClose,
 }: {
@@ -174,9 +175,10 @@ export function PublicationConfirmation({
         return;
       }
       setError(
-        thrown instanceof ApiError && thrown.status === CONFLICT
-          ? (thrown.detail ?? "该文章已不可发布，请保存最新 Revision 后重试。")
-          : "发布未能提交，请稍后重试。",
+        refusalWithoutTiming(thrown) ??
+          (thrown instanceof ApiError && thrown.status === CONFLICT
+            ? (thrown.detail ?? "该文章已不可发布，请保存最新 Revision 后重试。")
+            : "发布未能提交，请稍后重试。"),
       );
     } finally {
       setBusy(false);
@@ -208,7 +210,8 @@ export function PublicationConfirmation({
         return;
       }
       setError(
-        thrown instanceof ApiError && thrown.detail ? thrown.detail : RETRY_FAILED,
+        refusalWithoutTiming(thrown) ??
+          (thrown instanceof ApiError && thrown.detail ? thrown.detail : RETRY_FAILED),
       );
     } finally {
       setBusy(false);

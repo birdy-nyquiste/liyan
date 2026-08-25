@@ -25,6 +25,7 @@ from liyan_server.database import (
     aware_utc,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
 from liyan_server.liyan.acceptance import unsupported_article_markdown
 from liyan_server.liyan.instruction import (
@@ -508,6 +509,7 @@ def liyan_router(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=RETRY_INPUT_MISMATCH,
                 )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         execution = queue_run(
             session,
             article,

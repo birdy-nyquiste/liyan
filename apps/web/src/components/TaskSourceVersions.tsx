@@ -15,6 +15,7 @@ import {
   type TaskVersionSnapshot,
   type VersionSource,
 } from "../api/client";
+import { EXECUTION_POLL_MS } from "./pollIntervals";
 
 type DraftSource = {
   key: string;
@@ -150,7 +151,7 @@ export function TaskSourceVersions({
             : draft;
         }));
       });
-    }, 2000);
+    }, EXECUTION_POLL_MS);
     return () => window.clearTimeout(timer);
   }, [accessToken, drafts, editSessionId]);
 

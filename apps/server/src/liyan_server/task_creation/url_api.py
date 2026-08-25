@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import (
     ACTIVE_EXECUTION_STATUSES,
     SourcePreparationStatus,
@@ -268,6 +269,7 @@ def url_source_router(
             identity_column=SourcePreparation.normalized_url,
             identity=normalized_url,
         )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         now = datetime.now(UTC)
         source = SourcePreparation(
             owner_id=user.id,
@@ -343,6 +345,7 @@ def url_source_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This source is not eligible for retry.",
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         now = datetime.now(UTC)
         execution = new_url_fetch_execution(
             source,
@@ -430,6 +433,7 @@ def url_source_router(
             identity=normalized_url,
             excluding_source_id=source.id,
         )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         now = datetime.now(UTC)
         current_execution = (
             session.get(Execution, source.active_execution_id)

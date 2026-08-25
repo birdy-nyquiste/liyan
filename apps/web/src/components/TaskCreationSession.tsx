@@ -11,6 +11,7 @@ import {
   editPastedSource,
   editUrlSourceContent,
   getTaskCreationSession,
+  refusalWithoutTiming,
   replaceFileSource,
   replaceUrlSource,
   retryFileSource,
@@ -20,6 +21,7 @@ import {
   type TaskCreationSessionResponse,
 } from "../api/client";
 import type { TaskSummary } from "../auth/state";
+import { SOURCE_PREPARATION_POLL_MS } from "./pollIntervals";
 
 type DraftSource = { title: string; body: string; provenance: string };
 const emptyDraft: DraftSource = { title: "", body: "", provenance: "" };
@@ -234,9 +236,9 @@ export function TaskCreationSession({
       } catch {
         setError("暂时无法更新来源状态，正在自动重试。");
       }
-      if (!stopped) timer = window.setTimeout(() => void poll(), 750);
+      if (!stopped) timer = window.setTimeout(() => void poll(), SOURCE_PREPARATION_POLL_MS);
     };
-    timer = window.setTimeout(() => void poll(), 750);
+    timer = window.setTimeout(() => void poll(), SOURCE_PREPARATION_POLL_MS);
     return () => {
       stopped = true;
       window.clearTimeout(timer);
@@ -272,8 +274,11 @@ export function TaskCreationSession({
         setFile(null);
       }
       await refresh();
-    } catch {
-      setError("添加来源失败。请检查内容是否重复、格式是否支持，或是否已达到三个来源。");
+    } catch (thrown) {
+      setError(
+        refusalWithoutTiming(thrown) ??
+          "添加来源失败。请检查内容是否重复、格式是否支持，或是否已达到三个来源。",
+      );
     } finally {
       setBusy(false);
     }
@@ -312,8 +317,8 @@ export function TaskCreationSession({
       );
       onCreated(task);
       onClose();
-    } catch {
-      setError("创建失败，来源仍保留在此会话中。请重试。");
+    } catch (thrown) {
+      setError(refusalWithoutTiming(thrown) ?? "创建失败，来源仍保留在此会话中。请重试。");
     } finally {
       setBusy(false);
     }

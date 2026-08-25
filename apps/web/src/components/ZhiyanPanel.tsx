@@ -66,6 +66,12 @@ export function ZhiyanPanel({
           <button
             className="button"
             type="button"
+            // A disabled button is skipped by keyboard navigation, so the hint
+            // explaining it has to be announced with the button rather than
+            // left to be found further down the reading order.
+            aria-describedby={
+              !capabilities.can_start && retryHint ? `zhiyan-retry-${revisionId}` : undefined
+            }
             disabled={busy || !capabilities.can_start}
             onClick={() => onStart(revisionId)}
           >
@@ -85,7 +91,9 @@ export function ZhiyanPanel({
       </div>
 
       {retryHint ? (
-        <p className="form-hint" role="status">{retryHint}</p>
+        <p className="form-hint" role="status" id={`zhiyan-retry-${revisionId}`}>
+          {retryHint}
+        </p>
       ) : null}
 
       {state.report ? (

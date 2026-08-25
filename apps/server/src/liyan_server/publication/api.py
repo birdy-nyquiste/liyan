@@ -41,6 +41,7 @@ from liyan_server.database import (
     aware_utc,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import PublishTaskStatus
 from liyan_server.liyan.revisions import UNSAVED_EDITS, load_history
 from liyan_server.publication.blog import POST_TYPE, PREVIEW_STATUS, UNKNOWN_OUTCOME_MESSAGE
@@ -376,6 +377,7 @@ def publication_router(
                 status_code=status.HTTP_412_PRECONDITION_FAILED,
                 detail=EXISTING_PREVIEW_WARNING,
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         now = datetime.now(UTC)
         publish_task = PublishTask(
             owner_id=user.id,
@@ -475,6 +477,7 @@ def publication_router(
                 status_code=status.HTTP_412_PRECONDITION_FAILED,
                 detail=EXISTING_PREVIEW_WARNING,
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         attempts = publish_executions(session, publish_task)
         now = datetime.now(UTC)
         execution = new_publish_execution(

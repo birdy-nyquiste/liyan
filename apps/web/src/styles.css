@@ -243,6 +243,10 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Wrap, because these rows grow: three workspace actions already overflow a
+     375px viewport, and every one of them is a way out of somewhere. A row
+     that pushes its last button off the side takes 退出登录 with it. */
+  flex-wrap: wrap;
 }
 
 .source-kind-tabs {

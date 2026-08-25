@@ -18,6 +18,11 @@ htmlcov/
 # belonging to one machine, not to the project.
 celerybeat-schedule*
 
+# What a browser-test run leaves behind: traces, screenshots, and the HTML
+# report. Evidence about one run on one machine, not about the project.
+apps/web/test-results/
+apps/web/playwright-report/
+
 # Where Playwright's browsers land when installed into the project, which is
 # how they survive from a Render build into the running service.
 .playwright/

@@ -30,6 +30,7 @@ from liyan_server.database import (
     aware_utc,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
 from liyan_server.settings import Settings
 from liyan_server.task_api import version_source_revisions
@@ -320,6 +321,7 @@ def zhiyan_router(
                 detail=RATE_LIMITED_MESSAGE,
                 headers=_retry_after(retry, now),
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         execution = queue_run(
             session,
             revision,

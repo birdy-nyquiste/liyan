@@ -5,14 +5,14 @@ import {
   cancelExecution,
   getTaskZhiyan,
   getTaskVersionZhiyan,
+  refusalWithoutTiming,
   startZhiyanRun,
   type TaskVersionZhiyanResponse,
 } from "../api/client";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { ZhiyanPanel } from "./ZhiyanPanel";
-
-const POLL_INTERVAL_MS = 2000;
+import { EXECUTION_POLL_MS } from "./pollIntervals";
 
 const LOAD_FAILED = "知言状态加载失败，请稍后重试。";
 const START_FAILED = "知言分析未能启动，请稍后重试。";
@@ -40,7 +40,7 @@ export function TaskZhiyanArea({
   accessToken,
   taskId,
   versionId,
-  pollIntervalMs = POLL_INTERVAL_MS,
+  pollIntervalMs = EXECUTION_POLL_MS,
   onZhiyanState,
   onCapsuleSelect,
 }: {
@@ -112,15 +112,21 @@ export function TaskZhiyanArea({
   const act = useCallback(
     async (action: () => Promise<unknown>, failure: string) => {
       setBusy(true);
+      let refusal: string | null = null;
       try {
         await action();
-        setError(null);
       } catch (thrown) {
         // A refused retry is not a fault: the reloaded countdown already says why.
         const rateLimited = thrown instanceof ApiError && thrown.status === TOO_MANY_REQUESTS;
-        setError(rateLimited ? null : failure);
-      } finally {
+        refusal = refusalWithoutTiming(thrown) ?? (rateLimited ? null : failure);
+      }
+      // After the reload, not before it: a successful load clears the error,
+      // so a refusal set first is wiped by the very reload that shows what the
+      // refusal did — which is nothing, because the request was refused.
+      try {
         await load();
+        if (refusal) setError(refusal);
+      } finally {
         setBusy(false);
       }
     },

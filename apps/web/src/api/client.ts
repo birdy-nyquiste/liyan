@@ -31,6 +31,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly detail: string | null = null,
+    /** Seconds the server told us to wait, when it owns the timing. */
+    public readonly retryAfterSeconds: number | null = null,
   ) {
     super(`API request failed with status ${status}.`);
   }
@@ -39,10 +41,29 @@ export class ApiError extends Error {
 /** An ApiError carrying whatever the server said, when the message is the point. */
 function refusalOf(result: { error?: unknown; response: Response }): ApiError {
   const error = result.error as { detail?: unknown } | undefined;
+  const retryAfter = Number(result.response.headers.get("Retry-After"));
   return new ApiError(
     result.response.status,
     typeof error?.detail === "string" ? error.detail : null,
+    Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
   );
+}
+
+/**
+ * The refusal to show when the server refused for a reason only it can see.
+ *
+ * Two different 429s reach the workbench. One is retry timing the server owns
+ * (知言 and 立言 backoff), which carries `Retry-After` and is already shown as a
+ * countdown beside the button — a message would say the same thing twice. The
+ * other is the per-user ceiling on work in flight, which carries no timing
+ * because the wait is "until one of your own runs finishes". That one has
+ * nothing else to display it, so its message is the only thing the user gets,
+ * and swallowing it leaves a button that does nothing when pressed.
+ */
+export function refusalWithoutTiming(thrown: unknown): string | null {
+  if (!(thrown instanceof ApiError)) return null;
+  if (thrown.status !== 429 || thrown.retryAfterSeconds !== null) return null;
+  return thrown.detail;
 }
 
 export async function serverIsAlive(): Promise<boolean> {
@@ -76,7 +97,7 @@ export async function loadTaskWorkspace(accessToken: string) {
 
 export async function listTasks(accessToken: string): Promise<TaskSummaryResponse[]> {
   const result = await authenticatedApi(accessToken).GET("/tasks");
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data.items;
 }
 
@@ -102,7 +123,7 @@ export async function confirmTaskCreationSession(
       accepted_warning_versions: acceptedWarningVersions,
     },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data.task;
 }
 
@@ -114,7 +135,7 @@ export async function getTaskCreationSession(
     "/task-creation/sessions/{client_session_id}",
     { params: { path: { client_session_id: clientSessionId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -131,7 +152,7 @@ export async function createPastedSource(
       ...source,
     },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -144,7 +165,7 @@ export async function editPastedSource(
     "/task-creation/pasted-sources/{source_id}",
     { params: { path: { source_id: sourceId } }, body: source },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -156,7 +177,7 @@ export async function deleteTaskCreationSource(
     "/task-creation/sources/{source_id}",
     { params: { path: { source_id: sourceId } } },
   );
-  if (!result.response.ok) throw new ApiError(result.response.status);
+  if (!result.response.ok) throw refusalOf(result);
 }
 
 export async function renameTask(
@@ -168,7 +189,7 @@ export async function renameTask(
     params: { path: { task_id: taskId } },
     body: { display_name: displayName },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -199,7 +220,7 @@ export async function createUrlSource(
       url,
     },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -211,7 +232,7 @@ export async function getUrlSource(
     "/task-creation/url-sources/{source_id}",
     { params: { path: { source_id: sourceId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -223,7 +244,7 @@ export async function retryUrlSource(
     "/task-creation/url-sources/{source_id}/retry",
     { params: { path: { source_id: sourceId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -236,7 +257,7 @@ export async function replaceUrlSource(
     "/task-creation/url-sources/{source_id}",
     { params: { path: { source_id: sourceId } }, body: { url } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -249,7 +270,7 @@ export async function editUrlSourceContent(
     "/task-creation/url-sources/{source_id}/content",
     { params: { path: { source_id: sourceId } }, body: source },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -261,7 +282,7 @@ export async function cancelExecution(
     "/executions/{execution_id}/cancel",
     { params: { path: { execution_id: executionId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
 }
 
 export async function createFileSource(
@@ -282,7 +303,7 @@ export async function createFileSource(
     },
     bodySerializer: () => form,
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -294,7 +315,7 @@ export async function getFileSource(
     "/task-creation/file-sources/{source_id}",
     { params: { path: { source_id: sourceId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -313,7 +334,7 @@ export async function replaceFileSource(
       bodySerializer: () => form,
     },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -325,7 +346,7 @@ export async function retryFileSource(
     "/task-creation/file-sources/{source_id}/retry",
     { params: { path: { source_id: sourceId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -338,7 +359,7 @@ export async function editFileSourceContent(
     "/task-creation/file-sources/{source_id}/content",
     { params: { path: { source_id: sourceId } }, body: source },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -349,7 +370,7 @@ export async function getTaskZhiyan(
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/zhiyan", {
     params: { path: { task_id: taskId } },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -362,7 +383,7 @@ export async function getTaskVersionZhiyan(
     "/tasks/{task_id}/versions/{version_id}/zhiyan",
     { params: { path: { task_id: taskId, version_id: versionId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -373,7 +394,7 @@ export async function listTaskVersions(
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/versions", {
     params: { path: { task_id: taskId } },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -385,7 +406,7 @@ export async function createSourceEditSession(
     "/tasks/{task_id}/source-edit-sessions",
     { params: { path: { task_id: taskId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -398,7 +419,7 @@ export async function saveSourceEditSession(
     "/source-edit-sessions/{edit_id}/save",
     { params: { path: { edit_id: editSessionId } }, body: request },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -432,7 +453,7 @@ export async function restoreTaskVersion(
       body: { idempotency_key: idempotencyKey },
     },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -444,7 +465,7 @@ export async function startZhiyanRun(
     "/source-revisions/{source_revision_id}/zhiyan-runs",
     { params: { path: { source_revision_id: sourceRevisionId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -459,7 +480,7 @@ export async function getTaskLiyan(
       query: workingCopyHash ? { working_copy_hash: workingCopyHash } : {},
     },
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -472,7 +493,7 @@ export async function saveLiyanRevision(
     params: { path: { task_id: taskId } },
     body: request,
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -489,7 +510,7 @@ export async function restoreLiyanRevision(
       body: { idempotency_key: idempotencyKey },
     },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -502,7 +523,7 @@ export async function startLiyanRun(
     params: { path: { task_id: taskId } },
     body: request,
   });
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
@@ -510,7 +531,7 @@ export async function listPublicationTargets(
   accessToken: string,
 ): Promise<PublicationTargetResponse[]> {
   const result = await authenticatedApi(accessToken).GET("/publication/targets");
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data.items;
 }
 
@@ -518,7 +539,7 @@ export async function listEligibleArticles(
   accessToken: string,
 ): Promise<EligibleArticleResponse[]> {
   const result = await authenticatedApi(accessToken).GET("/publication/eligible-articles");
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data.items;
 }
 
@@ -564,12 +585,12 @@ export async function getPublishTask(
     "/publication/publish-tasks/{publish_task_id}",
     { params: { path: { publish_task_id: publishTaskId } } },
   );
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
 export async function listPublishTasks(accessToken: string): Promise<PublishTaskResponse[]> {
   const result = await authenticatedApi(accessToken).GET("/publication/publish-tasks");
-  if (!result.data) throw new ApiError(result.response.status);
+  if (!result.data) throw refusalOf(result);
   return result.data.items;
 }

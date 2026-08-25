@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from liyan_server.authentication import CurrentUserDependency
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES, SourcePreparationStatus
 from liyan_server.object_storage import (
     UNCONFIGURED_MESSAGE,
@@ -354,6 +355,8 @@ def file_source_router(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Client source identity is required.",
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
+        # Before the bytes are read and stored: a refused upload must not pay R2.
         upload = await _read_validated_upload(file, max_bytes=settings.file_max_bytes)
         try:
             ensure_session_capacity(
@@ -465,6 +468,7 @@ def file_source_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cancel active parsing before replacing this source.",
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         upload = await _read_validated_upload(file, max_bytes=settings.file_max_bytes)
         try:
             ensure_unique_identity(
@@ -539,6 +543,7 @@ def file_source_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This source is not eligible for retry.",
             )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
         execution = _new_file_execution(source, attempt=current.attempt + 1)
         session.add(execution)
         session.flush()

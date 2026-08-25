@@ -98,3 +98,36 @@ npm run lint:web
 npm run typecheck:web
 npm run api:check                 # OpenAPI and generated types must not drift
 ```
+
+Everything above is deterministic and offline, which is what makes it worth
+running on every change — and also what stops it from telling you that DeepSeek
+answers or that a Supabase project is configured. Those checks are opt-in, and
+[docs/operations/release-gate.md](docs/operations/release-gate.md) is the order
+to run them in before a release, with what each one is allowed to prove.
+
+### The browser suite
+
+```bash
+npm run test:e2e --workspace @liyan/web
+```
+
+Starts a disposable server (`scripts/e2e_server.py`: the real application, a
+throwaway database, identity and the paid providers substituted) and a Vite dev
+server, then drives the whole workflow through Chromium. Point it at a real
+deployment instead with `LIYAN_E2E_BASE_URL`, `LIYAN_E2E_EMAIL`, and
+`LIYAN_E2E_OTP`; the release gate document explains why that run is the one that
+counts.
+
+The browsers are a separate install, once:
+
+```bash
+npx playwright install chromium --workspace @liyan/web
+```
+
+### Limits and accessibility
+
+[docs/operations/limits.md](docs/operations/limits.md) states what bounds one
+user's share of the single worker slot, and how to measure it with
+`scripts/load_check.py`.
+[docs/operations/accessibility.md](docs/operations/accessibility.md) states the
+eight thresholds a release is gated on, and which two are still checked by hand.

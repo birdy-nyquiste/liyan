@@ -4,6 +4,7 @@ import {
   ApiError,
   cancelExecution,
   getTaskLiyan,
+  refusalWithoutTiming,
   restoreLiyanRevision,
   saveLiyanRevision,
   startLiyanRun,
@@ -27,8 +28,8 @@ import {
   saveWorkingCopy,
   type LiyanWorkingCopy,
 } from "./workingCopyStorage";
+import { EXECUTION_POLL_MS } from "./pollIntervals";
 
-const DEFAULT_POLL_INTERVAL_MS = 2000;
 const TOO_MANY_REQUESTS = 429;
 const CONFLICT = 409;
 const STALE_BASE = "文章已有更新的 Revision，请先查看最新内容。";
@@ -48,7 +49,7 @@ export function LiyanPanel({
   taskId,
   taskLabel = "",
   capsuleSelection = null,
-  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  pollIntervalMs = EXECUTION_POLL_MS,
   onPublicationChanged,
 }: {
   userId: string;
@@ -165,12 +166,15 @@ export function LiyanPanel({
       applyStartedResult(next);
       setError(null);
     } catch (thrown) {
-      setError(
-        thrown instanceof ApiError && thrown.status === TOO_MANY_REQUESTS
+      const refusal =
+        refusalWithoutTiming(thrown) ??
+        (thrown instanceof ApiError && thrown.status === TOO_MANY_REQUESTS
           ? null
-          : "立言生成未能启动，请稍后重试。",
-      );
+          : "立言生成未能启动，请稍后重试。");
+      // The reload has to come first: it clears the error on success, so a
+      // refusal set before it would be wiped by the read that follows it.
       await load();
+      if (refusal) setError(refusal);
     } finally {
       setBusy(false);
     }
@@ -253,6 +257,23 @@ export function LiyanPanel({
     workingCopyHash,
     state?.revisions.current?.content_hash ?? null,
   );
+  /**
+   * Why 保存 Revision cannot be pressed, in the user's terms.
+   *
+   * Three different states disable one button, and "nothing changed" is by far
+   * the most common — a user who has just saved and presses it again deserves
+   * to be told that rather than left with a dead control.
+   */
+  const saveBlockedReason = !workingCopy
+    ? null
+    : !state?.capabilities.can_save
+      ? (state?.capabilities.unavailable_reason ?? "当前无法保存 Revision。")
+      : !unsavedEdits
+        ? "没有未保存的修改。"
+        : null;
+  // One expression decides both, so the button and its explanation cannot
+  // drift into disagreeing about why it is dead.
+  const saveDisabled = busy || saveBlockedReason !== null;
   const publishableRevisionId = unsavedEdits
     ? null
     : state?.capabilities.publishable_revision_id ?? null;
@@ -300,13 +321,23 @@ export function LiyanPanel({
         <p role="status" className="form-hint">{failureMessage}</p>
       ) : null}
       {state?.capabilities.unavailable_reason ? (
-        <p role="status" className="form-hint">{state.capabilities.unavailable_reason}</p>
+        <p role="status" className="form-hint" id={`liyan-blocked-${taskId}`}>
+          {state.capabilities.unavailable_reason}
+        </p>
       ) : null}
 
       <div className="button-row">
         <button
           className="button"
           type="button"
+          // The reason 立言 is closed is already on screen; a disabled button is
+          // skipped by keyboard navigation, so it is named here as well rather
+          // than left somewhere in the reading order to be found.
+          aria-describedby={
+            !state?.capabilities.can_generate && state?.capabilities.unavailable_reason
+              ? `liyan-blocked-${taskId}`
+              : undefined
+          }
           disabled={busy || !state?.capabilities.can_generate}
           onClick={() => void generate()}
         >
@@ -316,7 +347,8 @@ export function LiyanPanel({
           <button
             className="button button--quiet"
             type="button"
-            disabled={busy || !state?.capabilities.can_save || !unsavedEdits}
+            aria-describedby={saveBlockedReason ? `liyan-save-blocked-${taskId}` : undefined}
+            disabled={saveDisabled}
             onClick={() => void save()}
           >
             保存 Revision
@@ -343,6 +375,10 @@ export function LiyanPanel({
           </button>
         ) : null}
       </div>
+
+      {saveBlockedReason ? (
+        <p className="form-hint" id={`liyan-save-blocked-${taskId}`}>{saveBlockedReason}</p>
+      ) : null}
 
       {retry && retry.remaining === 0 ? (
         <p className="form-hint">重试次数已用完，请稍后再试。</p>

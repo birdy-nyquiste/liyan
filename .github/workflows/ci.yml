@@ -73,3 +73,14 @@ jobs:
 
       - name: Check generated OpenAPI contract
         run: npm run api:check
+
+      # The browser half of the release gate, in the run that proves the
+      # workbench rather than a deployment: a real Chromium against the real
+      # application on a disposable database, with identity and the paid
+      # providers substituted (`scripts/e2e_server.py`). The Staging run is
+      # what a release turns on, and it cannot happen here — this is what keeps
+      # the same specs from rotting between releases.
+      - name: Check the workbench in a browser
+        run: |
+          npm exec --workspace @liyan/web -- playwright install --with-deps chromium
+          npm run test:e2e --workspace @liyan/web

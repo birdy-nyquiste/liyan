@@ -21,6 +21,7 @@ from liyan_server.database import (
     User,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_api import TaskSummary, task_summary
@@ -226,6 +227,8 @@ def task_creation_router(
                 source_revision=existing_revisions[0],
                 source_revisions=existing_revisions,
             )
+
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
 
         if request.source is None:
             session_sources = session.scalars(

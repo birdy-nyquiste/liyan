@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     stalled_execution_timeout_minutes: int = 30
     unclaimed_execution_timeout_minutes: int = 30
     stalled_sweep_interval_seconds: int = 300
+    #: How many Executions one user may hold in flight at once, across every
+    #: operation; 0 disables the ceiling, which is what Local wants. What it
+    #: protects and how the number was chosen are in
+    #: `docs/operations/limits.md`; why a batch that starts under it is
+    #: admitted whole is in `execution_limits.py`.
+    max_active_executions_per_user: int = 6
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.
     worker_name: str = "celery-worker"

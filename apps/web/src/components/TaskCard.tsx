@@ -153,6 +153,9 @@ export function TaskCard({
               className="button button--quiet"
               type="button"
               aria-label={`删除 ${task.display_name}`}
+              aria-describedby={
+                task.delete_disabled_reason ? `delete-reason-${task.id}` : undefined
+              }
               disabled={!task.can_delete || deleting}
               onClick={() => void removeTask()}
             >
@@ -160,7 +163,9 @@ export function TaskCard({
             </button>
           </div>
           {task.delete_disabled_reason ? (
-            <p className="form-hint">{task.delete_disabled_reason}</p>
+            <p className="form-hint" id={`delete-reason-${task.id}`}>
+              {task.delete_disabled_reason}
+            </p>
           ) : null}
           {error ? <p role="alert" className="form-error">{error}</p> : null}
         </div>

@@ -606,6 +606,47 @@ describe("TaskZhiyanArea", () => {
     expect(screen.queryByText("知言分析未能启动，请稍后重试。")).not.toBeInTheDocument();
   });
 
+  it("shows the ceiling's own reason when a refusal carries no retry timing", async () => {
+    // The other 429 — the server-owned backoff — is displayed as a countdown
+    // beside the button. This one has no timing to count down to, so the
+    // message is all the user gets, and swallowing it leaves a dead button.
+    const failed = overviewResponse(
+      [
+        stateResponse({
+          status: "failed",
+          report: null,
+          execution: execution({ status: "failed" }),
+          capabilities: {
+            can_start: true,
+            can_cancel: false,
+            retry: { allowed: true, remaining: 1, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_INCOMPLETE,
+    );
+    const atCapacity = "你已有较多工作正在进行，请等其中一项完成后再发起新的。";
+    type FetchCall = (target: unknown, options?: unknown) => Promise<Response>;
+    const fetchMock = vi.fn<FetchCall>(async (target, options) => {
+      if (requestMethod(target, options) === "POST") {
+        return new Response(JSON.stringify({ detail: atCapacity }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(failed), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: "重试" }));
+
+    expect(await screen.findByText(atCapacity)).toBeInTheDocument();
+  });
+
   it("holds focus on 知言 while any report is missing", async () => {
     respondWith(
       overviewResponse(

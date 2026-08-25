@@ -840,8 +840,21 @@
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--space-2xs) var(--space-sm);
+}
+
+.liyan-panel__toolbar-slot:empty {
+  display: none;
+}
+
+.liyan-panel__meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
   gap: var(--space-2xs);
 }
 
@@ -2612,6 +2625,7 @@ a.source-meta:focus-visible .source-meta__value {
   margin: 0;
   color: var(--ink-faint);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .liyan-working-copy__title {
@@ -2679,27 +2693,23 @@ a.source-meta:focus-visible .source-meta__value {
   max-width: 68ch;
 }
 
-/* Formatting stays reachable in a long article instead of scrolling away. */
+/* In the header, beside the article's other actions. */
 .liyan-toolbar {
-  position: sticky;
-  z-index: 1;
-  top: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  margin: 6px 0 10px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--rule-soft);
-  background: var(--surface);
+  gap: 1px;
 }
 
 .liyan-toolbar__button {
-  min-height: 28px;
-  padding: 4px 8px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
+  place-items: center;
   color: var(--ink-muted);
-  font-size: 0.8rem;
 }
 
 .liyan-toolbar__button:hover:not(:disabled) {

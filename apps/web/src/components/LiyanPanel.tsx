@@ -96,6 +96,8 @@ export function LiyanPanel({
   // Overwriting unsaved edits asks first — in the page, because a native
   // confirm() the browser suppresses returns false and silently cancels.
   const [restoringRevisionId, setRestoringRevisionId] = useState<string | null>(null);
+  // The header lends the editor a place for its formatting controls.
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLDivElement | null>(null);
 
   const updateWorkingCopy = useCallback((next: LiyanWorkingCopy) => {
     setWorkingCopy(next);
@@ -334,11 +336,18 @@ export function LiyanPanel({
        */}
       <h3 className="sr-only" id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
       <header className="liyan-panel__head">
-        {/* Whether the draft on screen has been saved, said once, where the
-            actions that save it are. */}
-        <p className="liyan-panel__state">
-          {workingCopy ? (unsavedEdits ? t("未保存的草稿") : t("已保存的草稿")) : null}
-        </p>
+        {/* Formatting the article and acting on it are one row: both are things
+            done to the article, and the toolbar was a band of its own above the
+            text saying so a second time. */}
+        <div className="liyan-panel__toolbar-slot" ref={setToolbarSlot} />
+        {/* The state and the actions are one cluster: they wrap together to the
+            next line rather than the state stranding the actions below it. */}
+        <div className="liyan-panel__meta">
+          {/* Whether the draft on screen has been saved, said once, where the
+              actions that save it are. */}
+          <p className="liyan-panel__state">
+            {workingCopy ? (unsavedEdits ? t("未保存的草稿") : t("已保存的草稿")) : null}
+          </p>
         {/* What can be done to the article, beside the article. The composer
             below holds only what is needed to ask for one. */}
         <div className="liyan-panel__actions">
@@ -371,6 +380,7 @@ export function LiyanPanel({
               {t("发布")}
             </button>
           ) : null}
+          </div>
         </div>
       </header>
 
@@ -476,6 +486,7 @@ export function LiyanPanel({
           value={workingCopy}
           disabled={active || busy}
           onChange={updateWorkingCopy}
+          toolbarSlot={toolbarSlot}
         />
       ) : null}
 

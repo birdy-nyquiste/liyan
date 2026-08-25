@@ -172,7 +172,7 @@ export function InstructionEditor({
   return (
     <div className="liyan-instruction-editor">
       <EditorContent editor={editor} />
-      <p className="form-hint">{t("在知言报告中选择 F、V、L 或 I 项，可插入不可编辑的引用胶囊。")}</p>
+      <p className="form-hint">{t("可从知言报告中引用内容")}</p>
     </div>
   );
 }

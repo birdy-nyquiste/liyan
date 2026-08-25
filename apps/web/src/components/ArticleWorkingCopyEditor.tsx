@@ -91,8 +91,7 @@ export function ArticleWorkingCopyEditor({
   };
 
   return (
-    <article className="liyan-working-copy" aria-label={t("未保存 Working Copy")}>
-      <p className="liyan-working-copy__state">{t("未保存 Working Copy")}</p>
+    <article className="liyan-working-copy" aria-label={t("未保存的草稿")}>
       {/* A document's title is its title, not a labelled field in a form. The
           label stays for anyone who cannot see where the caret is. */}
       <label className="sr-only" htmlFor={`liyan-title-${taskId}`}>{t("文章标题")}</label>
@@ -117,9 +116,6 @@ export function ArticleWorkingCopyEditor({
         {action(t("分隔线"), () => editor?.chain().focus().setHorizontalRule().run())}
       </div>
       <EditorContent editor={editor} />
-      <p className="form-hint">
-        {t("仅保存在当前浏览器；退出登录、换设备或清除浏览器数据后无法恢复。")}
-      </p>
     </article>
   );
 }

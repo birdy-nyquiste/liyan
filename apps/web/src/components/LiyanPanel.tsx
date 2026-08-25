@@ -325,8 +325,19 @@ export function LiyanPanel({
 
   return (
     <section className="zhiyan-panel liyan-panel" aria-labelledby={`liyan-${taskId}`}>
+      {/*
+       * The pane's own heading already says 立言 and what state it is in, so the
+       * article does not announce itself a second line later. The heading stays
+       * for a screen reader and as the target focus moves to when an article
+       * arrives.
+       */}
+      <h3 className="sr-only" id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
       <header className="liyan-panel__head">
-        <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
+        {/* Whether the draft on screen has been saved, said once, where the
+            actions that save it are. */}
+        <p className="liyan-panel__state">
+          {workingCopy ? (unsavedEdits ? t("未保存的草稿") : t("已保存的草稿")) : null}
+        </p>
         {/* What can be done to the article, beside the article. The composer
             below holds only what is needed to ask for one. */}
         <div className="liyan-panel__actions">

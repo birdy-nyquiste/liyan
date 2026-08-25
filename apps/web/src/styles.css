@@ -2504,10 +2504,10 @@ a.source-meta:focus-visible .source-meta__value {
 }
 
 .liyan-instruction-label,
-.liyan-working-copy__state {
+.liyan-panel__state {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
 .liyan-working-copy__title {

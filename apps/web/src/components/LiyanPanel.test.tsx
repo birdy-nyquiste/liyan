@@ -109,7 +109,7 @@ describe("LiyanPanel", () => {
     await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post).toBeDefined();
     const body = JSON.parse(await post![0].clone().text()) as {
@@ -147,10 +147,10 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     expect(await screen.findByText("有一份已完成的立言结果可载入。")) .toBeInTheDocument();
-    expect(screen.queryByText("未保存 Working Copy")).not.toBeInTheDocument();
+    expect(screen.queryByText("未保存的草稿")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "载入为未保存草稿" }));
 
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
   });
 
@@ -251,7 +251,7 @@ describe("LiyanPanel", () => {
     await user.click(await screen.findByRole("button", { name: "默认生成" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
   });
 
@@ -323,7 +323,8 @@ describe("LiyanPanel", () => {
     expect(await screen.findByDisplayValue("浏览器恢复标题")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "文章正文" })).toHaveTextContent("Recovered body.");
     expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
-    expect(screen.getByText("仅保存在当前浏览器；退出登录、换设备或清除浏览器数据后无法恢复。")).toBeInTheDocument();
+    // The draft came back from the browser, and says it is unsaved.
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
   });
 
   it("isolates browser-local Working Copies by authenticated user and task", async () => {

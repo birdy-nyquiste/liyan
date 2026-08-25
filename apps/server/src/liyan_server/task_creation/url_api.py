@@ -529,7 +529,11 @@ def url_source_router(
             else None
         )
         message = cancelled_message(execution.operation)
-        if execution.status == "queued":
+        # Source preparation has no external side effect to reconcile. Ending it
+        # here immediately releases the creation workflow even when the worker
+        # has already disappeared; any late worker result is refused because a
+        # cancelled Execution is terminal.
+        if execution.status == "queued" or execution.operation in SOURCE_PREPARATION_OPERATIONS:
             execution.status = "cancelled"
             execution.finished_at = now
             # A cancellation is why this run ended, whatever kind of work it was.

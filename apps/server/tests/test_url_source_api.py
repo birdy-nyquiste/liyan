@@ -283,6 +283,34 @@ def test_worker_result_becomes_editable_ready_content_with_execution_trace(tmp_p
     assert execution["error"] is None
 
 
+def test_extracted_nul_bytes_cannot_break_source_persistence(tmp_path: Path) -> None:
+    client, headers, dispatcher = authenticated_client(tmp_path)
+    dispatcher.deterministic_fetcher.outcomes.append(
+        UrlExtraction(
+            title="Extracted\x00 title",
+            body="Before NUL\x00after NUL.",
+            metadata={"description": "Provider\x00 metadata"},
+        )
+    )
+    created = client.post(
+        "/task-creation/url-sources",
+        headers=headers,
+        json={
+            "client_session_id": "session-1",
+            "client_source_id": "source-1",
+            "url": "https://example.com/article",
+        },
+    ).json()
+
+    dispatcher.run_next()
+
+    source = client.get(f"/task-creation/url-sources/{created['id']}", headers=headers)
+    assert source.status_code == 200
+    assert source.json()["status"] == "warning"
+    assert source.json()["title"] == "Extracted title"
+    assert source.json()["body"] == "Before NULafter NUL."
+
+
 def test_missing_title_and_short_extraction_are_visible_non_blocking_warnings(
     tmp_path: Path,
 ) -> None:
@@ -378,7 +406,7 @@ def test_running_url_must_be_cancelled_before_it_can_be_replaced(
             assert replaced.status_code == 409
             cancelled = client.post(f"/executions/{old_execution_id}/cancel", headers=headers)
             assert cancelled.status_code == 202
-            assert cancelled.json()["status"] == "cancel_requested"
+            assert cancelled.json()["status"] == "cancelled"
             return UrlExtraction(
                 title="Late old title",
                 body="Late old body that must never be accepted.",
@@ -399,7 +427,7 @@ def test_running_url_must_be_cancelled_before_it_can_be_replaced(
     old_execution = client.get(f"/executions/{old_execution_id}", headers=headers).json()
     assert old_execution["status"] == "cancelled"
     assert old_execution["cancellation_requested_at"] is not None
-    assert old_execution["result_id"] is not None
+    assert old_execution["result_id"] is None
 
     replaced = client.put(
         f"/task-creation/url-sources/{created['id']}",
@@ -435,7 +463,7 @@ def test_cancelling_a_running_fetch_prevents_late_result_acceptance(tmp_path: Pa
         def fetch(self, url: str) -> UrlExtraction:
             cancelled = client.post(f"/executions/{execution_id}/cancel", headers=headers)
             assert cancelled.status_code == 202
-            assert cancelled.json()["status"] == "cancel_requested"
+            assert cancelled.json()["status"] == "cancelled"
             return UrlExtraction(
                 title="Late title",
                 body="Late body that must remain trace-only.",
@@ -457,7 +485,7 @@ def test_cancelling_a_running_fetch_prevents_late_result_acceptance(tmp_path: Pa
     assert source["body"] is None
     execution = client.get(f"/executions/{execution_id}", headers=headers).json()
     assert execution["status"] == "cancelled"
-    assert execution["result_id"] is not None
+    assert execution["result_id"] is None
     assert execution["cancellation_requested_at"] is not None
 
 
@@ -491,8 +519,8 @@ def test_failure_returned_after_cancellation_remains_cancelled(tmp_path: Path) -
     execution = client.get(f"/executions/{execution_id}", headers=headers).json()
     assert execution["status"] == "cancelled"
     assert execution["error"] == {
-        "code": "inaccessible_url",
-        "message": "Provider failed after cancellation.",
+        "code": "cancelled",
+        "message": "Fetching was cancelled. Retry it or replace this source.",
     }
 
 

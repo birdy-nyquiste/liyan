@@ -11,6 +11,7 @@ from liyan_server.database import Database, Execution, SourcePreparation, UrlFet
 from liyan_server.execution_states import surrendered
 from liyan_server.observability import log_execution_failed
 from liyan_server.source_preparation import source_warnings
+from liyan_server.source_text import without_nul, without_nul_in_mapping
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class UrlFetchFailure(Exception):
 
 
 def _normalize_title(title: str | None, normalized_url: str) -> tuple[str, list[dict[str, str]]]:
-    normalized_title = " ".join(title.split()) if title else ""
+    normalized_title = " ".join(without_nul(title).split()) if title else ""
     if normalized_title:
         return normalized_title, []
     fallback = urlsplit(normalized_url).hostname or normalized_url
@@ -46,7 +47,7 @@ def _normalize_title(title: str | None, normalized_url: str) -> tuple[str, list[
 
 
 def _normalize_body(body: str) -> str:
-    normalized = body.replace("\r\n", "\n").replace("\r", "\n").strip()
+    normalized = without_nul(body).replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
         raise UrlFetchFailure(
             "empty_body",
@@ -174,7 +175,7 @@ def process_url_fetch(
                 title=normalized_title,
                 body=normalized_body,
                 provenance=snapshot_url,
-                page_metadata=extraction.metadata,
+                page_metadata=without_nul_in_mapping(extraction.metadata),
                 content_hash=hashlib.sha256(normalized_body.encode()).hexdigest(),
                 created_at=now,
             )

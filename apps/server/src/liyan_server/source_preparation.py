@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException, status
 
+from liyan_server.source_text import without_nul
+
 
 @dataclass(frozen=True)
 class NormalizedSource:
@@ -16,9 +18,11 @@ def normalize_source_content(
     body: str,
     provenance: str | None,
 ) -> NormalizedSource:
-    normalized_title = " ".join(title.split())
-    normalized_body = body.replace("\r\n", "\n").replace("\r", "\n").strip()
-    normalized_provenance = " ".join(provenance.split()) if provenance else ""
+    normalized_title = " ".join(without_nul(title).split())
+    normalized_body = (
+        without_nul(body).replace("\r\n", "\n").replace("\r", "\n").strip()
+    )
+    normalized_provenance = " ".join(without_nul(provenance).split()) if provenance else ""
     errors: list[dict[str, str]] = []
     if not normalized_title:
         errors.append({"field": "title", "message": "A source title is required."})

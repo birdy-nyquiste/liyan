@@ -64,6 +64,27 @@ def test_prepares_a_normalized_source_with_non_blocking_warnings(tmp_path: Path)
     }
 
 
+def test_preparation_removes_nul_bytes_from_all_source_text(tmp_path: Path) -> None:
+    client, headers = authenticated_client(tmp_path)
+
+    response = client.post(
+        "/task-creation/prepare",
+        headers=headers,
+        json={
+            "title": "A\x00 title",
+            "body": "Before\x00after.",
+            "provenance": "Note\x00book",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == {
+        "title": "A title",
+        "body": "Beforeafter.",
+        "provenance": "Notebook",
+    }
+
+
 def test_prepare_blocks_blank_required_source_fields(tmp_path: Path) -> None:
     client, headers = authenticated_client(tmp_path)
 

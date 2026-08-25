@@ -6,10 +6,12 @@ from typing import Any, BinaryIO
 from uuid import UUID
 from zipfile import ZipFile
 
+import pytest
 from database_support import migrated_database
 from docx import Document
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from liyan_server.app import create_app
 from liyan_server.auth import InvalidAccessToken, VerifiedIdentity
@@ -36,6 +38,27 @@ class DeterministicJwtVerifier:
             return identities[token]
         except KeyError as error:
             raise InvalidAccessToken from error
+
+
+def pdf_with_text(content: bytes) -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 10 100 Td (" + content + b") Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
 
 
 class MemoryObjectStorage(ObjectStorage):
@@ -193,6 +216,29 @@ def test_text_parse_result_is_editable_and_owner_isolated(tmp_path: Path) -> Non
     )
 
 
+def test_pdf_with_nul_bytes_becomes_safe_editable_source_content(tmp_path: Path) -> None:
+    client, headers, dispatcher, _ = authenticated_client(tmp_path)
+    created = client.post(
+        "/task-creation/file-sources",
+        headers=headers,
+        data={"client_session_id": "session-1", "client_source_id": "source-1"},
+        files={
+            "file": (
+                "report.pdf",
+                pdf_with_text(b"Before NUL\\000after NUL."),
+                "application/pdf",
+            )
+        },
+    ).json()
+
+    dispatcher.run_next()
+
+    source = client.get(f"/task-creation/file-sources/{created['id']}", headers=headers)
+    assert source.status_code == 200
+    assert source.json()["status"] == "ready"
+    assert source.json()["body"] == "Before NULafter NUL."
+
+
 def test_declared_and_actual_file_type_must_agree_before_storage(tmp_path: Path) -> None:
     client, headers, dispatcher, storage = authenticated_client(tmp_path)
 
@@ -303,7 +349,9 @@ def test_empty_and_oversized_normalized_text_fail_at_the_parse_boundary(
     assert large_result["failure"]["code"] == "normalized_text_too_large"
 
 
-def test_cancelling_a_running_parse_prevents_late_result_acceptance(tmp_path: Path) -> None:
+def test_cancelled_running_parse_can_be_deleted_before_its_late_result(
+    tmp_path: Path,
+) -> None:
     client, headers, dispatcher, storage = authenticated_client(tmp_path)
     created = client.post(
         "/task-creation/file-sources",
@@ -316,18 +364,52 @@ def test_cancelling_a_running_parse_prevents_late_result_acceptance(tmp_path: Pa
     def cancel() -> None:
         response = client.post(f"/executions/{execution_id}/cancel", headers=headers)
         assert response.status_code == 202
-        assert response.json()["status"] == "cancel_requested"
+        assert response.json()["status"] == "cancelled"
+        deleted = client.delete(f"/task-creation/sources/{created['id']}", headers=headers)
+        assert deleted.status_code == 204
 
     storage.on_open_read = cancel
     dispatcher.run_next()
 
+    assert (
+        client.get(f"/task-creation/file-sources/{created['id']}", headers=headers).status_code
+        == 404
+    )
+    assert storage.objects == {}
+
+
+def test_cancel_releases_a_source_after_its_worker_disappears(tmp_path: Path) -> None:
+    client, headers, dispatcher, storage = authenticated_client(tmp_path)
+    created = client.post(
+        "/task-creation/file-sources",
+        headers=headers,
+        data={"client_session_id": "session-1", "client_source_id": "source-1"},
+        files={"file": ("notes.txt", b"Useful source body.", "text/plain")},
+    ).json()
+    execution_id = created["active_execution"]["id"]
+
+    class WorkerDisappeared(BaseException):
+        pass
+
+    def disappear() -> None:
+        raise WorkerDisappeared
+
+    storage.on_open_read = disappear
+    with pytest.raises(WorkerDisappeared):
+        dispatcher.run_next()
+
+    cancelled = client.post(f"/executions/{execution_id}/cancel", headers=headers)
+    assert cancelled.status_code == 202
+    assert cancelled.json()["status"] == "cancelled"
+
     source = client.get(f"/task-creation/file-sources/{created['id']}", headers=headers).json()
     assert source["status"] == "failure"
     assert source["failure"]["code"] == "cancelled"
-    assert source["title"] is None
-    assert source["body"] is None
-    assert source["active_execution"]["status"] == "cancelled"
-    assert source["active_execution"]["result_id"] is not None
+    assert source["capabilities"]["can_cancel"] is False
+
+    deleted = client.delete(f"/task-creation/sources/{created['id']}", headers=headers)
+    assert deleted.status_code == 204
+    assert storage.objects == {}
 
 
 def test_encrypted_and_damaged_docx_files_get_source_specific_failures(tmp_path: Path) -> None:

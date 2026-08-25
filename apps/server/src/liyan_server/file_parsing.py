@@ -13,6 +13,8 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
 
+from liyan_server.source_text import without_nul
+
 
 class FileParseFailure(Exception):
     def __init__(self, code: str, message: str, internal_error: str | None = None) -> None:
@@ -73,7 +75,7 @@ def _check_deadline(started_at: float, timeout_seconds: int) -> None:
 
 
 def _normalize_body(body: str, *, max_characters: int) -> str:
-    normalized = body.replace("\r\n", "\n").replace("\r", "\n").strip()
+    normalized = without_nul(body).replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
         raise FileParseFailure(
             "empty_document",

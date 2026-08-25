@@ -23,13 +23,13 @@ type TestSource = {
   client_source_id: string;
   kind: "pasted" | "url" | "file";
   input_version: number;
-  status: "ready" | "warning";
+  status: "processing" | "ready" | "warning" | "failure";
   title: string;
   body: string;
   provenance: string | null;
   warnings: { code: string; message: string }[];
-  failure: null;
-  active_execution: null;
+  failure: { code: string; message: string } | null;
+  active_execution: { id: string; status: string } | null;
   capabilities: {
     can_retry: boolean;
     can_replace: boolean;
@@ -235,6 +235,61 @@ describe("task creation session", () => {
     renderSession();
 
     expect(await screen.findByRole("status")).toHaveTextContent("正在处理来源…");
+  });
+
+  it("leaves no processing dead end after a source is cancelled", async () => {
+    const processing: TestSource = {
+      id: "file-1",
+      client_source_id: "client-file",
+      kind: "file",
+      input_version: 1,
+      status: "processing",
+      title: "report.pdf",
+      body: "",
+      provenance: "report.pdf",
+      warnings: [],
+      failure: null,
+      active_execution: { id: "execution-1", status: "running" },
+      capabilities: {
+        can_retry: false,
+        can_replace: false,
+        can_edit: false,
+        can_delete: false,
+        can_cancel: true,
+      },
+    };
+    const cancelled: TestSource = {
+      ...processing,
+      status: "failure",
+      failure: { code: "cancelled", message: "Parsing was cancelled. Retry it or replace this source." },
+      active_execution: { id: "execution-1", status: "cancelled" },
+      capabilities: {
+        can_retry: true,
+        can_replace: true,
+        can_edit: false,
+        can_delete: true,
+        can_cancel: false,
+      },
+    };
+    let source = processing;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      if (request.method === "GET") return Response.json(sessionResponse([source]));
+      if (request.method === "POST" && request.url.endsWith("/executions/execution-1/cancel")) {
+        source = cancelled;
+        return Response.json(cancelled.active_execution, { status: 202 });
+      }
+      return new Response(null, { status: 404 });
+    }));
+    const user = userEvent.setup();
+
+    renderSession();
+    await user.click(await screen.findByRole("button", { name: "编辑来源 report.pdf" }));
+    await user.click(screen.getByRole("button", { name: "取消处理" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("处理已取消，请重试或替换来源。");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消处理" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除来源" })).toBeEnabled();
   });
 
   it("keeps every retained source after confirmation fails", async () => {

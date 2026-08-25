@@ -400,8 +400,9 @@
   font-size: 0.8rem;
 }
 
-.publication-candidates--selectable > li[data-selected] {
-  border-color: var(--accent);
+.publication-candidates--selectable > li[data-selected],
+.publication-candidates--selectable > li[data-selected]:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--rule));
   background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
@@ -599,12 +600,6 @@
 }
 
 .creation-session,
-.publication-center {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
 .task-card.task-card--opened {
   display: block;
   min-height: 100vh;
@@ -2307,9 +2302,11 @@ a.source-meta:focus-visible .source-meta__value {
 /*
  * These forms wrap their controls in the label (`<label>来源标题<input/></label>`)
  * and carried no styling at all, so every field fell back to an inline browser
- * default: a 177px input welded to the end of its own label.
+ * default: a 177px input welded to the end of its own label. `.field`, on the
+ * publication screen, had no rule of any kind.
  */
-.source-fields > label {
+.source-fields > label,
+.field {
   display: grid;
   gap: 6px;
   color: var(--ink);
@@ -2317,8 +2314,14 @@ a.source-meta:focus-visible .source-meta__value {
   font-weight: var(--weight-strong);
 }
 
+.field {
+  max-width: 32rem;
+}
+
 .source-fields input:not([type="checkbox"]):not([type="file"]),
-.source-fields textarea {
+.source-fields textarea,
+.field input,
+.field select {
   width: 100%;
   padding: 10px 13px;
   border: 1px solid var(--field-border);
@@ -2329,7 +2332,9 @@ a.source-meta:focus-visible .source-meta__value {
   font-weight: var(--weight-normal);
 }
 
-.source-fields input:not([type="checkbox"]):not([type="file"]) {
+.source-fields input:not([type="checkbox"]):not([type="file"]),
+.field input,
+.field select {
   min-height: 44px;
 }
 
@@ -2340,7 +2345,9 @@ a.source-meta:focus-visible .source-meta__value {
 }
 
 .source-fields input:not([type="checkbox"]):focus-visible,
-.source-fields textarea:focus-visible {
+.source-fields textarea:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 0 3px rgb(133 107 55 / 18%);
@@ -3024,12 +3031,75 @@ a.source-meta:focus-visible .source-meta__value {
  * and the Preview URL is the one element the page leads to.
  */
 .publication-confirmation,
-.publication-center {
-  margin-top: 22px;
-  padding: 18px;
+/* Sections of a page, not a stack of kickers: each opens with a heading and the
+   rule under it does the separating the numbers used to. */
+.publication-section {
+  margin: var(--space-2xl) 0 var(--space-sm);
+  padding-bottom: var(--space-2xs);
+  border-bottom: 1px solid var(--rule);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: 1.15rem;
+}
+
+.publication-section:first-of-type {
+  margin-top: var(--space-lg);
+}
+
+.publication-history-entry {
+  display: grid;
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+}
+
+.publication-history-entry__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 12px 14px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.publication-history-entry__summary:hover {
   background: var(--surface-sunk);
+}
+
+.publication-history-entry__summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.publication-history-entry__summary > svg {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+}
+
+.publication-history-entry__name {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.publication-history-entry__name .form-hint {
+  margin: 0;
+}
+
+.publication-history-entry__summary .source-chip {
+  margin-left: auto;
+}
+
+.publication-history-entry__body {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--rule-soft);
+  margin-top: -1px;
+  padding-top: var(--space-sm);
 }
 
 .publication-confirmation h3 {
@@ -3091,12 +3161,27 @@ a.source-meta:focus-visible .source-meta__value {
   list-style: none;
 }
 
-.publication-candidates li,
-.publication-history li {
+/* A candidate is a row you can pick, so it looks like one: bordered like a
+   history record, and lit when it is the one chosen. */
+.publication-candidates li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
-  border-top: 1px solid var(--rule-soft);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-2xs);
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.publication-candidates--selectable > li:hover {
+  background: var(--surface-sunk);
+}
+
+.publication-history li {
+  margin-bottom: var(--space-2xs);
+}
+
+.publication-candidate-choice .source-chip {
+  justify-self: start;
 }

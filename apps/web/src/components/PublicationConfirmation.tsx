@@ -225,7 +225,10 @@ export function PublicationConfirmation({
 
   return (
     <section className="publication-confirmation" aria-labelledby="publication-confirm-heading">
-      <h3 id="publication-confirm-heading">{t("确认发布")}</h3>
+      {/* The 立言 pane and the publication page both title this region before
+          reaching it; the heading stays as the region's name rather than
+          printing 确认发布 twice, one line apart. */}
+      <h3 className="sr-only" id="publication-confirm-heading">{t("确认发布")}</h3>
 
       <dl className="publication-locked">
         <div>

@@ -776,7 +776,6 @@ export function AppShell({
               <PublicationCenter
                 userId={identity.id}
                 accessToken={accessToken}
-                onClose={() => navigate("/task")}
                 onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
                 initialTaskId={new URLSearchParams(location.search).get("taskId")}
                 initialRevisionId={new URLSearchParams(location.search).get("revisionId")}

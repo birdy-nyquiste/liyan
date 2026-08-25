@@ -324,8 +324,8 @@ describe("routed workbench shell", () => {
     expect(await screen.findByRole("heading", { name: "New task" })).toBeInTheDocument();
     expect(screen.getByText("Add 1–3 sources")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "Publications" }));
-    expect(await screen.findByRole("heading", { name: "Publication center" })).toBeInTheDocument();
-    expect(screen.getByText("1 · Choose a draft")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Publish", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose a draft" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
   });
 });

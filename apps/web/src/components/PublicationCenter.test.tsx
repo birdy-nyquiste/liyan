@@ -62,7 +62,7 @@ describe("PublicationCenter", () => {
     const requests = respondWith();
     const user = userEvent.setup();
     render(
-      <PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />,
+      <PublicationCenter userId="user-1" accessToken="token" />,
     );
 
     await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
@@ -86,7 +86,7 @@ describe("PublicationCenter", () => {
     const requests = respondWith();
     const user = userEvent.setup();
     render(
-      <PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />,
+      <PublicationCenter userId="user-1" accessToken="token" />,
     );
 
     await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
@@ -132,9 +132,11 @@ describe("PublicationCenter", () => {
       return new Response(null, { status: 404 });
     }));
 
-    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
 
-    expect(await screen.findByText("仍可追溯的文章")).toBeInTheDocument();
+    // A record's evidence is behind its own row now: opening one is what shows
+    // the attempts, the payload, and the Preview it produced.
+    await userEvent.click(await screen.findByRole("button", { name: /仍可追溯的文章/ }));
     expect(screen.getByRole("link", { name: "打开 Blog Preview" })).toHaveAttribute(
       "href",
       "https://lsforum.example/preview/kept",
@@ -186,8 +188,9 @@ describe("PublicationCenter", () => {
     const requests = listing([record("failed")]);
     const user = userEvent.setup();
 
-    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
 
+    await user.click(await screen.findByRole("button", { name: /发布失败的文章|草稿/ }));
     await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
 
     const retried = requests.find((request) => request.url.endsWith("/retry"));
@@ -219,8 +222,10 @@ describe("PublicationCenter", () => {
     }));
     const user = userEvent.setup();
 
-    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
 
+    // The record has to be open before its retry can be pressed.
+    await user.click(await screen.findByRole("button", { name: /草稿/ }));
     await user.click(await screen.findByRole("button", { name: "重试本次提交" }));
     expect(await screen.findByText(/继续发布会新建另一条 Blog 内容/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "仍要发布" }));
@@ -238,7 +243,7 @@ describe("PublicationCenter", () => {
   it("offers no resend for an outcome nobody can confirm", async () => {
     listing([record("outcome_unknown")]);
 
-    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
 
     expect(await screen.findByText("四天工作制的真问题")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重试本次提交" })).not.toBeInTheDocument();
@@ -264,7 +269,7 @@ describe("PublicationCenter", () => {
     })]);
     const user = userEvent.setup();
 
-    render(<PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />);
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
 
     await user.click(await screen.findByText("四天工作制的真问题"));
     expect(screen.getAllByText("提交失败").length).toBeGreaterThan(0);

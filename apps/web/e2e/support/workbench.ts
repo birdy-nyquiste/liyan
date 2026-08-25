@@ -226,7 +226,7 @@ export async function createTaskWithReport(page: Page, title: string): Promise<v
   await page.getByLabel("出处（可选）").fill("https://press.example/four-day-week");
   await page.getByRole("button", { name: "添加来源" }).click();
   await expect(page.getByText("已就绪", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "确认并创建任务" }).click();
+  await page.getByRole("button", { name: "创建任务" }).click();
 
   // A confirmed 立言任务 opens itself: the user just told the product what they
   // want to work on, and asking them to click it again would be a second ask.

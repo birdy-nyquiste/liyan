@@ -1,10 +1,8 @@
-import { useState } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { TaskWorkspace } from "./TaskWorkspace";
-import type { TaskSummary } from "../auth/state";
+import { TaskCreationSession } from "./TaskCreationSession";
 
 const formalTask = {
   id: "task-1",
@@ -61,30 +59,27 @@ function sessionResponse(sources: TestSource[]) {
   };
 }
 
-function renderWorkspace(onTaskCreated = vi.fn()) {
-  function StatefulWorkspace() {
-    const [tasks, setTasks] = useState<TaskSummary[]>([]);
-    return (
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={tasks}
-        onTaskCreated={(task) => {
-          setTasks((current) => [task, ...current]);
-          onTaskCreated(task);
-        }}
-        onSignOut={vi.fn()}
-      />
-    );
-  }
-  render(<StatefulWorkspace />);
-  return onTaskCreated;
+/**
+ * The creation session is what these tests are about; the route that hosts it
+ * only ever handed it an access token and took the finished task back.
+ */
+function renderSession(onCreated = vi.fn()) {
+  render(
+    <TaskCreationSession
+      accessToken="access-token"
+      onCreated={onCreated}
+      onDirtyChange={vi.fn()}
+    />,
+  );
+  return onCreated;
 }
 
 describe("task creation session", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     window.sessionStorage.clear();
+    // The creation session id now outlives a reload, so it must not outlive a test.
+    window.localStorage.clear();
   });
 
   it("retains three mixed sources and confirms their accepted snapshot in order", async () => {
@@ -166,10 +161,9 @@ describe("task creation session", () => {
       return new Response(null, { status: 404 });
     });
     vi.stubGlobal("fetch", fetch);
-    const onTaskCreated = renderWorkspace();
+    const onCreated = renderSession();
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
     await screen.findByText("请先添加来源。");
     await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.type(screen.getByLabelText("来源标题"), "Pasted source");
@@ -177,7 +171,9 @@ describe("task creation session", () => {
     await user.click(screen.getByRole("button", { name: "添加来源" }));
 
     expect(await screen.findByText("粘贴文本 · Pasted source")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "确认并创建任务" })).toBeDisabled();
+    // A warning no longer holds the task back; it is shown on the source itself.
+    expect(screen.getByText("缺少出处信息；仍可继续创建任务。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "创建任务" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.click(screen.getByRole("button", { name: "公共文章链接" }));
@@ -196,23 +192,17 @@ describe("task creation session", () => {
     expect(screen.getByText("已达到三个来源上限；删除一个来源后可继续添加。")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "编辑来源 Pasted source" }));
-    const warningCheckbox = screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" });
-    await user.click(warningCheckbox);
     const pastedCard = screen.getByText("粘贴文本 · Pasted source").closest("article");
     expect(pastedCard).not.toBeNull();
     const pastedTitle = within(pastedCard!).getByDisplayValue("Pasted source");
     await user.clear(pastedTitle);
     await user.type(pastedTitle, "Edited pasted source");
-    expect(screen.getByRole("button", { name: "确认并创建任务" })).toBeDisabled();
-    expect(screen.getByText("请先保存所有来源编辑。")).toBeInTheDocument();
-    await user.click(within(pastedCard!).getByRole("button", { name: "保存此来源" }));
+    // Leaving the field is what commits it; there is no save button to press.
+    await user.tab();
     expect(await screen.findByText("粘贴文本 · Edited pasted source")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" })).not.toBeChecked();
-    await user.click(screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" }));
-    await user.click(screen.getByRole("button", { name: "确认并创建任务" }));
+    await user.click(await screen.findByRole("button", { name: "创建任务" }));
 
-    expect(onTaskCreated).toHaveBeenCalledWith({ ...formalTask, additional_source_count: 2 });
-    expect(screen.getByRole("article", { name: "已打开任务 First source" })).toHaveFocus();
+    expect(onCreated).toHaveBeenCalledWith({ ...formalTask, additional_source_count: 2 });
     const confirmationRequest = fetch.mock.calls
       .map(([request]) => request as Request)
       .find((request) => request.url.endsWith("/task-creation/confirm"));
@@ -223,6 +213,28 @@ describe("task creation session", () => {
     };
     expect(confirmation.source_ids).toEqual(["pasted-1", "url-1", "file-1"]);
     expect(confirmation.accepted_warning_versions).toEqual({ "pasted-1": 2 });
+  });
+
+  it("says a source is being read while it is being prepared", async () => {
+    const preparing: TestSource = {
+      id: "url-1",
+      client_source_id: "client-url",
+      kind: "url",
+      input_version: 1,
+      status: "processing" as TestSource["status"],
+      title: "Fetching article",
+      body: "",
+      provenance: "https://example.com/article",
+      warnings: [],
+      failure: null,
+      active_execution: null,
+      capabilities,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([preparing]))));
+
+    renderSession();
+
+    expect(await screen.findByRole("status")).toHaveTextContent("正在处理来源…");
   });
 
   it("keeps every retained source after confirmation fails", async () => {
@@ -245,9 +257,8 @@ describe("task creation session", () => {
       return Response.json({ detail: "Temporary failure" }, { status: 503 });
     }));
     const user = userEvent.setup();
-    renderWorkspace();
-    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.click(await screen.findByRole("button", { name: "确认并创建任务" }));
+    renderSession();
+    await user.click(await screen.findByRole("button", { name: "创建任务" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，来源仍保留在此会话中。请重试。");
     expect(screen.getByText("粘贴文本 · Retained source")).toBeInTheDocument();
@@ -255,97 +266,38 @@ describe("task creation session", () => {
     expect(screen.getByDisplayValue("Retained body.")).toBeInTheDocument();
   });
 
+  it("returns to the same creation session after a reload", async () => {
+    const sources: TestSource[] = [];
+    const requestedSessions: string[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      if (request.method === "GET") {
+        requestedSessions.push(request.url.split("/").pop()!);
+        return Response.json(sessionResponse(sources));
+      }
+      return new Response(null, { status: 404 });
+    }));
+
+    renderSession();
+    await screen.findByText("请先添加来源。");
+    cleanup();
+
+    // A reload must reach the sources already added, not strand them in a
+    // session nothing can name any more.
+    renderSession();
+    await screen.findByText("请先添加来源。");
+
+    expect(new Set(requestedSessions).size).toBe(1);
+  });
+
   it("warns before leaving a dirty creation session", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([]))));
     const user = userEvent.setup();
-    renderWorkspace();
-    await user.click(screen.getByRole("button", { name: "新建立言任务" }));
-    await user.click(screen.getByRole("button", { name: "添加来源" }));
+    renderSession();
+    await user.click(await screen.findByRole("button", { name: "添加来源" }));
     await user.type(screen.getByLabelText("来源正文"), "Unsaved text");
 
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
-  });
-});
-
-describe("立言任务 list", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("shows recognition fields and renames without changing source recognition", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...formalTask, display_name: "Renamed" })));
-    const user = userEvent.setup();
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[formalTask]}
-        onTaskCreated={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
-
-    const taskCard = screen.getByRole("article");
-    expect(within(taskCard).getByText("#1")).toBeInTheDocument();
-    expect(within(taskCard).getByText("First source", { selector: ".task-card__source" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "重命名 First source" }));
-    const input = screen.getByLabelText("任务名称");
-    await user.clear(input);
-    await user.type(input, "Renamed");
-    await user.click(screen.getByRole("button", { name: "保存名称" }));
-
-    expect(await screen.findByRole("heading", { name: "Renamed" })).toBeInTheDocument();
-    expect(screen.getByText("First source", { selector: ".task-card__source" })).toBeInTheDocument();
-  });
-
-  it("requires confirmation and removes a deliberately deleted task", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetch);
-    const user = userEvent.setup();
-
-    function DeletableWorkspace() {
-      const [tasks, setTasks] = useState<TaskSummary[]>([formalTask]);
-      return (
-        <TaskWorkspace
-          identity={{ id: "user-1", email: "writer@example.com" }}
-          accessToken="access-token"
-          tasks={tasks}
-          onTaskCreated={vi.fn()}
-          onTaskDeleted={(taskId) => setTasks((items) => items.filter((item) => item.id !== taskId))}
-          onSignOut={vi.fn()}
-        />
-      );
-    }
-    render(<DeletableWorkspace />);
-
-    await user.click(screen.getByRole("button", { name: "删除 First source" }));
-
-    expect(confirm).toHaveBeenCalledWith("删除任务后将立即消失且无法恢复，确定删除吗？");
-    expect(fetch).toHaveBeenCalledOnce();
-    const request = fetch.mock.calls[0]![0] as Request;
-    expect(request.method).toBe("DELETE");
-    expect(JSON.parse(await request.text())).toEqual({ confirmed: true });
-    expect(await screen.findByText("还没有立言任务")).toBeInTheDocument();
-  });
-
-  it("explains why a task with an unfinished publication cannot be deleted", () => {
-    render(
-      <TaskWorkspace
-        identity={{ id: "user-1", email: "writer@example.com" }}
-        accessToken="access-token"
-        tasks={[{
-          ...formalTask,
-          can_delete: false,
-          delete_disabled_reason: "关联的发布任务仍在执行，结束后才能删除立言任务。",
-        }]}
-        onTaskCreated={vi.fn()}
-        onTaskDeleted={vi.fn()}
-        onSignOut={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "删除 First source" })).toBeDisabled();
-    expect(screen.getByText("关联的发布任务仍在执行，结束后才能删除立言任务。")).toBeInTheDocument();
   });
 });

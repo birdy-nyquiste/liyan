@@ -287,7 +287,7 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" />);
 
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    expect(within(await screen.findByRole("tabpanel")).getByText("分析已完成")).toBeInTheDocument();
     expect(screen.getByText(/不可编辑或重新生成/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /重试|终止|开始/ })).not.toBeInTheDocument();
     expect(
@@ -350,10 +350,18 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" />);
 
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    // Two sources means two tabs: the first report is on screen, and the state
+    // of the other is on its tab rather than hidden until you scroll to it.
+    const tabs = await screen.findByRole("tablist", { name: "知言报告" });
+    expect(within(tabs).getAllByRole("tab")).toHaveLength(2);
     const succeeded = screen.getByLabelText("知言报告 城市空气质量年度回顾");
     expect(within(succeeded).getAllByText("F-01")).not.toHaveLength(0);
-    expect(screen.getByText("分析未完成")).toBeInTheDocument();
+
+    const failedTab = within(tabs).getByRole("tab", { name: /四天工作制已经没有争议/ });
+    expect(failedTab).toHaveTextContent("分析未完成");
+
+    await userEvent.click(failedTab);
+    expect(await screen.findByText("分析服务暂时不可用。")).toBeInTheDocument();
   });
 
   it("shows the one failure message the server allows, and offers a retry", async () => {
@@ -473,7 +481,10 @@ describe("TaskZhiyanArea", () => {
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
     await userEvent.click(await screen.findByRole("button", { name: "重试" }));
 
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    // Waits inside the panel: the run polls through 分析进行中 before it lands.
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已完成"),
+    ).toBeInTheDocument();
     const started = fetchMock.mock.calls.find(
       ([target, options]) => requestMethod(target, options) === "POST",
     );
@@ -517,16 +528,119 @@ describe("TaskZhiyanArea", () => {
     );
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
-    await userEvent.click(await screen.findByRole("button", { name: /城市空气质量年度回顾/ }));
+    // A single report is not behind a toggle any more; it is simply the report.
     await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
 
-    expect(await screen.findByText("分析已取消")).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已取消"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("知言分析已取消，可重新发起。");
     expect(
       fetchMock.mock.calls.find(([target]) =>
         requestUrl(target).includes("/executions/execution-1/cancel"),
       ),
     ).toBeDefined();
+  });
+
+  it("folds a report section without losing it", async () => {
+    respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+    const overview = await screen.findByRole("button", { name: "概要" });
+
+    expect(overview).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).toBeVisible();
+
+    await userEvent.click(overview);
+    expect(overview).toHaveAttribute("aria-expanded", "false");
+    // hidden, not unmounted: reopening must not re-fetch or re-render the report.
+    expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).not.toBeVisible();
+
+    await userEvent.click(overview);
+    expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).toBeVisible();
+  });
+
+  it("says a report is being written where the report will appear", async () => {
+    const running = overviewResponse(
+      [
+        stateResponse({
+          status: "running",
+          report: null,
+          execution: execution(),
+          capabilities: {
+            can_start: false,
+            can_cancel: true,
+            retry: { allowed: false, remaining: 2, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_WAITING,
+    );
+    respondWith(running, running);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+
+    // The same notice every provider-paced run shows, so it is learned once.
+    expect(await screen.findByRole("status")).toHaveTextContent("正在生成知言报告…");
+  });
+
+  it("says a run is stopping the moment it is asked, not a poll later", async () => {
+    const running = overviewResponse(
+      [
+        stateResponse({
+          status: "running",
+          report: null,
+          execution: execution(),
+          capabilities: {
+            can_start: false,
+            can_cancel: true,
+            retry: { allowed: false, remaining: 2, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_WAITING,
+    );
+    // The server still answers "running": the worker stops at its next
+    // checkpoint, and the poll after the request has nothing new to say yet.
+    respondWith(running, { id: "execution-1", status: "running" }, running, running);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+    await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
+
+    expect(await screen.findByText("正在终止")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "正在终止…" })).toBeDisabled();
+  });
+
+  it("says a run is stopping once the server has the request", async () => {
+    // The worker stops at its next checkpoint, so the run keeps reporting
+    // "running" for a while. Without reading the execution, 终止分析 looked like
+    // it had done nothing at all.
+    const stopping = overviewResponse(
+      [
+        stateResponse({
+          status: "running",
+          report: null,
+          execution: execution({
+            status: "cancel_requested",
+            cancellation_requested_at: "2026-08-22T18:00:30Z",
+          }),
+          capabilities: {
+            can_start: false,
+            can_cancel: true,
+            retry: { allowed: false, remaining: 2, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_WAITING,
+    );
+    respondWith(stopping, stopping);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+
+    expect(await screen.findByText("正在终止")).toBeInTheDocument();
+    expect(screen.getByText("已请求终止，正在等待当前调用结束。")).toBeInTheDocument();
+    // Pressing it again would only repeat a request the server already holds.
+    expect(screen.getByRole("button", { name: "正在终止…" })).toBeDisabled();
   });
 
   it("keeps polling after a poll fails", async () => {
@@ -560,8 +674,12 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
 
-    expect(await screen.findByText("分析进行中")).toBeInTheDocument();
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    // The failed poll in the middle does not stop the next one: the run is seen
+    // running, and then seen finishing.
+    expect(within(await screen.findByRole("tabpanel")).getByText("分析进行中")).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已完成"),
+    ).toBeInTheDocument();
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -677,7 +795,7 @@ describe("TaskZhiyanArea", () => {
     const fetchMock = respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
-    await screen.findByText("分析已完成");
+    await within(await screen.findByRole("tabpanel")).findByText("分析已完成");
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));

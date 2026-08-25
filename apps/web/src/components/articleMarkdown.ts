@@ -140,9 +140,25 @@ export function canonicalMarkdownToTiptap(markdown: string): JSONContent {
   return { type: "doc", content: content.length ? content : [{ type: "paragraph" }] };
 }
 
+const isWordCharacter = (character: string | undefined): boolean =>
+  character !== undefined && /[\p{L}\p{N}]/u.test(character);
+
+/**
+ * Escape what markdown would otherwise read as syntax — but not an underscore
+ * inside a word, which markdown does not read as emphasis either.
+ *
+ * Escaping it anyway broke the round trip: `**base_url**` serialised to
+ * `**base\_url**`, whose escape splits the bold span when it is parsed back, so
+ * the next save wrote `**base****\_****url**` and the article rendered as
+ * base**_**url. Every save degraded it further.
+ */
 const escapeText = (text: string): string => text
   .replace(/\\/g, "\\\\")
-  .replace(/([*_])/g, "\\$1")
+  .replace(/\*/g, "\\*")
+  .replace(/_/g, (underscore, offset: number, whole: string) =>
+    isWordCharacter(whole[offset - 1]) && isWordCharacter(whole[offset + 1])
+      ? underscore
+      : `\\${underscore}`)
   .replace(/\[/g, "\\[")
   .replace(/]/g, "\\]");
 

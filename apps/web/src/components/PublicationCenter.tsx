@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import {
   ApiError,
@@ -36,10 +37,17 @@ const publicationArticle = (article: EligibleArticleResponse): PublicationArticl
  * The article page preselects its own Revision; here the user chooses one. Both
  * end in one flow so publication cannot acquire two behaviours.
  */
+/** A submission's state, in the chip vocabulary the rest of the workbench uses. */
+const PUBLICATION_TONES: Record<string, string> = {
+  succeeded: "succeeded",
+  published: "succeeded",
+  failed: "failed",
+  unknown: "warning",
+};
+
 export function PublicationCenter({
   userId,
   accessToken,
-  onClose,
   onPublicationChanged,
   onOpenTask,
   initialTaskId,
@@ -47,7 +55,6 @@ export function PublicationCenter({
 }: {
   userId: string;
   accessToken: string;
-  onClose(): void;
   onPublicationChanged?(): void;
   onOpenTask?(taskId: string): void;
   initialTaskId?: string | null;
@@ -61,6 +68,8 @@ export function PublicationCenter({
   const [selected, setSelected] = useState<EligibleArticleResponse | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One record open at a time: each carries attempts, evidence, and a payload.
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [warning, setWarning] = useState<{ message: string; publishTaskId: string } | null>(
     null,
@@ -193,18 +202,19 @@ export function PublicationCenter({
 
   return (
     <section className="publication-center" aria-labelledby="publication-center-heading">
-      <div className="workspace__heading">
-        <h2 id="publication-center-heading">{t("发布中心")}</h2>
-        <button className="button button--quiet" type="button" onClick={onClose}>
-          {t("关闭")}
-        </button>
-      </div>
+      {/* A route, so it is a page rather than a card with a way out of itself.
+          The numbers the three sections used to carry said what the headings
+          say, and the middle one only becomes available once a draft is
+          chosen — which the section itself is what tells you. */}
+      <header className="page-heading">
+        <h1 id="publication-center-heading">{t("发布")}</h1>
+      </header>
 
       {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
 
-      <p className="section-kicker">{t("1 · 选择草稿")}</p>
+      <h2 className="publication-section">{t("选择草稿")}</h2>
       {articles && articles.length === 0 ? (
-        <p className="form-hint">
+        <p className="creation-hint">
           {t("还没有可发布的文章。保存某个任务当前版本的立言文章后，它会出现在这里。")}
         </p>
       ) : null}
@@ -226,7 +236,9 @@ export function PublicationCenter({
                   {article.task_display_name} · {t("草稿")} {article.revision_number} · {new Date(article.saved_at).toLocaleString(dateLocale)}
                 </span>
                 <span className="publication-candidate-preview">{article.body_markdown.slice(0, 120)}</span>
-                <span className="form-hint">{isSelected ? t("已选择，再次点击可取消") : t("可发布")}</span>
+                <span className={`source-chip${isSelected ? " source-chip--ready" : ""}`}>
+                  {isSelected ? t("已选择，再次点击可取消") : t("可发布")}
+                </span>
               </button>
               {onOpenTask ? (
                 <button className="button button--quiet" type="button" onClick={() => onOpenTask(article.task_id)}>
@@ -239,7 +251,7 @@ export function PublicationCenter({
       </ul>
       {articleCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreArticles()}>{t("加载更多草稿")}</button> : null}
 
-      <p className="section-kicker">{t("2 · Publishing")}</p>
+      <h2 className="publication-section">{t("确认发布")}</h2>
       {selected && draftHash ? (
         <PublicationConfirmation
           userId={userId}
@@ -252,22 +264,38 @@ export function PublicationCenter({
             void load();
           }}
         />
-      ) : <p className="form-hint">{t("选择一个草稿后，可配置发布目标与作者并确认锁定快照。")}</p>}
+      ) : <p className="creation-hint">{t("选择一个草稿后，可配置发布目标与作者并确认锁定快照。")}</p>}
 
-      <p className="section-kicker">{t("3 · 发布历史")}</p>
+      <h2 className="publication-section">{t("发布历史")}</h2>
       {records && records.length === 0 ? (
-        <p className="form-hint">{t("还没有发布记录。")}</p>
+        <p className="creation-hint">{t("还没有发布记录。")}</p>
       ) : null}
       <ul className="publication-candidates">
         {(records ?? []).map((record) => (
           <li key={record.id}>
-            <details className="publication-history-entry">
-              <summary>
-                <span className="liyan-revision__title">{record.title}</span>
-                <span className="form-hint">
-                  {t("草稿")} {record.revision_number} · {record.target.display_name} · {publicationStatus(record.status)}
+            <article className="publication-history-entry">
+              <button
+                className="publication-history-entry__summary"
+                type="button"
+                aria-expanded={openRecordId === record.id}
+                aria-controls={`publication-record-${record.id}`}
+                onClick={() => setOpenRecordId((current) => current === record.id ? null : record.id)}
+              >
+                {openRecordId === record.id
+                  ? <ChevronDown size={15} aria-hidden="true" />
+                  : <ChevronRight size={15} aria-hidden="true" />}
+                <span className="publication-history-entry__name">
+                  <span className="liyan-revision__title">{record.title}</span>
+                  <span className="form-hint">
+                    {t("草稿")} {record.revision_number} · {record.target.display_name}
+                  </span>
                 </span>
-              </summary>
+                <span className={`source-chip source-chip--${PUBLICATION_TONES[record.status] ?? "processing"}`}>
+                  {publicationStatus(record.status)}
+                </span>
+              </button>
+              {openRecordId === record.id ? (
+              <div className="publication-history-entry__body" id={`publication-record-${record.id}`}>
               <dl className="publication-locked">
                 <div><dt>{t("任务")}</dt><dd>{record.task_display_name}</dd></div>
                 <div><dt>{t("作者")}</dt><dd>{record.author}</dd></div>
@@ -343,7 +371,9 @@ export function PublicationCenter({
                 </button>
               </div>
             ) : null}
-            </details>
+              </div>
+              ) : null}
+            </article>
           </li>
         ))}
       </ul>

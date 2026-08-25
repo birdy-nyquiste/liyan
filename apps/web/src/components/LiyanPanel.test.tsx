@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -109,7 +109,7 @@ describe("LiyanPanel", () => {
     await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post).toBeDefined();
     const body = JSON.parse(await post![0].clone().text()) as {
@@ -147,11 +147,23 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
     expect(await screen.findByText("有一份已完成的立言结果可载入。")) .toBeInTheDocument();
-    expect(screen.queryByText("未保存 Working Copy")).not.toBeInTheDocument();
+    expect(screen.queryByText("未保存的草稿")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "载入为未保存草稿" }));
 
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
+  });
+
+  it("says a run is under way where the article will appear", async () => {
+    respondWith(state("running"));
+    render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
+
+    // A run takes minutes with nothing arriving on screen; the sign of one is
+    // not left to a grey line among other grey lines.
+    expect(await screen.findByRole("status")).toHaveTextContent("正在生成立言文章…");
+    expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
+    // And it is not also announced as an unavailable reason underneath.
+    expect(screen.queryByText("立言文章正在生成中。")).not.toBeInTheDocument();
   });
 
   it("projects canonical Markdown through the constrained Tiptap editor", async () => {
@@ -251,7 +263,7 @@ describe("LiyanPanel", () => {
     await user.click(await screen.findByRole("button", { name: "默认生成" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
-    expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
     expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
   });
 
@@ -323,7 +335,8 @@ describe("LiyanPanel", () => {
     expect(await screen.findByDisplayValue("浏览器恢复标题")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "文章正文" })).toHaveTextContent("Recovered body.");
     expect(screen.queryByText("有一份已完成的立言结果可载入。")).not.toBeInTheDocument();
-    expect(screen.getByText("仅保存在当前浏览器；退出登录、换设备或清除浏览器数据后无法恢复。")).toBeInTheDocument();
+    // The draft came back from the browser, and says it is unsaved.
+    expect(screen.getByText("未保存的草稿")).toBeInTheDocument();
   });
 
   it("isolates browser-local Working Copies by authenticated user and task", async () => {
@@ -460,8 +473,6 @@ describe("LiyanPanel", () => {
     const fetchMock = respondWith(
       stateWithRevisions(revision(2, "第二版"), [revision(1, "第一版")]),
     );
-    const confirmed = vi.fn(() => false);
-    vi.stubGlobal("confirm", confirmed);
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
@@ -470,7 +481,12 @@ describe("LiyanPanel", () => {
     await screen.findByText("有未保存的修改，请先保存后再发布。");
     await user.click(screen.getByRole("button", { name: "恢复为新草稿" }));
 
-    expect(confirmed).toHaveBeenCalledOnce();
+    // Asked in the page, and nothing restored until it is answered.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("恢复历史 Revision 会覆盖当前未保存的修改");
+    expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
+
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
     expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
   });
 });

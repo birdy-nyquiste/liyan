@@ -78,11 +78,11 @@ describe("来源 editing and 任务版本 history", () => {
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
-    expect(screen.getByText("当前任务版本仍是 V1；保存前的改动不会进入历史。"))
+    expect(screen.getByText("当前版本仍是 V1；保存前的改动不会进入历史。"))
       .toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "保存来源修改" }));
-    expect(await screen.findByText("当前任务版本 V2")).toBeInTheDocument();
+    expect(await screen.findByText("当前版本 V2")).toBeInTheDocument();
     const saveRequest = fetch.mock.calls
       .map(([request]) => request as Request)
       .find((request) => request.url.endsWith("/source-edit-sessions/edit-1/save"));
@@ -108,7 +108,6 @@ describe("来源 editing and 任务版本 history", () => {
       },
     };
     let restoredCurrent = false;
-    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
       if (request.method === "GET") {
         return Response.json({
@@ -146,11 +145,16 @@ describe("来源 editing and 任务版本 history", () => {
       />,
     );
 
-    await user.selectOptions(await screen.findByLabelText("任务版本"), "version-1");
+    await user.selectOptions(await screen.findByLabelText("版本"), "version-1");
     expect(screen.getByText("只读历史 V1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "编辑来源" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "恢复为当前版本" }));
-    expect(await screen.findByText("当前任务版本 V1")).toBeInTheDocument();
+    // The confirmation is a dialog in the page, not a native confirm() the
+    // browser is free to suppress.
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "恢复为当前版本" }),
+    );
+    expect(await screen.findByText("当前版本 V1")).toBeInTheDocument();
     expect(fetch.mock.calls.some(([request]) => (request as Request).method === "POST"))
       .toBe(true);
   });
@@ -205,7 +209,7 @@ describe("来源 editing and 任务版本 history", () => {
     await user.click(screen.getByRole("button", { name: "保存来源修改" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("来源修改保存失败");
     await user.click(screen.getByRole("button", { name: "保存来源修改" }));
-    expect(await screen.findByText("当前任务版本 V2")).toBeInTheDocument();
+    expect(await screen.findByText("当前版本 V2")).toBeInTheDocument();
     const saves = fetch.mock.calls
       .map(([request]) => request as Request)
       .filter((request) => request.url.endsWith("/source-edit-sessions/edit-retry/save"));

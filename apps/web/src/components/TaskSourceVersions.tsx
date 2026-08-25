@@ -1,4 +1,8 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+
+import { ConfirmDialog } from "./ConfirmDialog";
+import { RunningNotice } from "./RunningNotice";
 
 import {
   createPastedSource,
@@ -18,6 +22,13 @@ import {
 import { EXECUTION_POLL_MS } from "./pollIntervals";
 import { useInterfaceLocale } from "../interfaceLocale";
 
+const PREPARED_STATUS_LABELS = {
+  processing: "处理中",
+  ready: "已就绪",
+  warning: "有警告",
+  failure: "处理失败",
+} as const;
+
 type DraftSource = {
   key: string;
   sourceId?: string;
@@ -29,14 +40,13 @@ type DraftSource = {
   title: string;
   body: string;
   provenance: string;
-  warningAccepted: boolean;
   preparedKind?: "pasted" | "url" | "file";
 };
 
-const LOAD_FAILED = "任务版本加载失败，请稍后重试。";
+const LOAD_FAILED = "版本加载失败，请稍后重试。";
 const EDIT_FAILED = "暂时无法进入来源编辑，请稍后重试。";
-const SAVE_FAILED = "来源修改保存失败；当前任务版本没有改变。";
-const RESTORE_FAILED = "任务版本恢复失败，请稍后重试。";
+const SAVE_FAILED = "来源修改保存失败；当前版本没有改变。";
+const RESTORE_FAILED = "版本恢复失败，请稍后重试。";
 const ignoreEditingChange = () => undefined;
 
 function draftOf(source: VersionSource): DraftSource {
@@ -47,7 +57,6 @@ function draftOf(source: VersionSource): DraftSource {
     title: source.title,
     body: source.body,
     provenance: source.provenance ?? "",
-    warningAccepted: true,
   };
 }
 
@@ -78,6 +87,8 @@ export function TaskSourceVersions({
   const [newUrl, setNewUrl] = useState("");
   const [newFile, setNewFile] = useState<File | null>(null);
   const [replaceKey, setReplaceKey] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [confirming, setConfirming] = useState<"discard" | "restore" | null>(null);
   const [openSourceKey, setOpenSourceKey] = useState<string | null>(null);
   const [saveIdempotencyKey, setSaveIdempotencyKey] = useState<string | null>(null);
   const editingChangeRef = useRef(onEditingChange);
@@ -215,7 +226,6 @@ export function TaskSourceVersions({
         title: prepared.title ?? (newMode === "url" ? newUrl : newFile?.name ?? newTitle),
         body: prepared.body ?? "",
         provenance: prepared.provenance ?? "",
-        warningAccepted: prepared.warnings.length === 0,
         preparedKind: newMode,
       };
       setDrafts((current) => replaceKey
@@ -235,6 +245,7 @@ export function TaskSourceVersions({
       setNewUrl("");
       setNewFile(null);
       setReplaceKey(null);
+      setAdding(false);
       setError(null);
     } catch {
       setError("新增来源失败，请重试。");
@@ -292,12 +303,10 @@ export function TaskSourceVersions({
     }
   }
 
+  // A staged input must have finished preparing; its warnings are shown on the
+  // source rather than gated behind an acknowledgement, as in task creation.
   const stagedReady = drafts.every((source) =>
-    !source.prepared
-    || (
-      ["ready", "warning"].includes(source.prepared.status)
-      && (source.prepared.warnings.length === 0 || source.warningAccepted)
-    ),
+    !source.prepared || ["ready", "warning"].includes(source.prepared.status),
   );
   const hasChanges = selected !== null && (
     drafts.length !== selected.sources.length
@@ -314,7 +323,6 @@ export function TaskSourceVersions({
 
   async function discard() {
     if (!editSessionId) return;
-    if (!window.confirm(t("未保存的来源修改会被丢弃，确定放弃吗？"))) return;
     setBusy(true);
     try {
       await discardSourceEditSession(accessToken, editSessionId);
@@ -341,9 +349,7 @@ export function TaskSourceVersions({
   }
 
   async function restore() {
-    if (!selected || !window.confirm(locale === "en"
-      ? `Restore V${selected.number} as the current version?`
-      : `确定将 V${selected.number} 恢复为当前版本吗？`)) return;
+    if (!selected) return;
     setBusy(true);
     try {
       const restored = await restoreTaskVersion(
@@ -364,23 +370,58 @@ export function TaskSourceVersions({
     }
   }
 
+  /*
+   * The fields a staged input needs, shared by adding a source and replacing
+   * one. A plain function rather than a nested component: a component declared
+   * here would be a new type on every render, remounting these inputs and
+   * dropping focus on every keystroke.
+   */
+  function stagingFields() {
+    return (
+      <>
+        <div className="source-kind-tabs" aria-label={t("来源类型")}>
+          <button type="button" className={`button ${newMode === "pasted" ? "" : "button--quiet"}`} onClick={() => setNewMode("pasted")}>{t("粘贴文本")}</button>
+          <button type="button" className={`button ${newMode === "url" ? "" : "button--quiet"}`} onClick={() => setNewMode("url")}>{t("公共文章链接")}</button>
+          <button type="button" className={`button ${newMode === "file" ? "" : "button--quiet"}`} onClick={() => setNewMode("file")}>{t("上传文件")}</button>
+        </div>
+        {newMode === "pasted" ? (
+          <>
+            <label>{t("新来源标题")}<input required value={newTitle} onChange={(event) => setNewTitle(event.target.value)} /></label>
+            <label>{t("新来源正文")}<textarea required value={newBody} onChange={(event) => setNewBody(event.target.value)} /></label>
+            <label>{t("新来源信息")}<input value={newProvenance} onChange={(event) => setNewProvenance(event.target.value)} /></label>
+          </>
+        ) : newMode === "url" ? (
+          <label>{t("新来源网址")}<input type="url" required value={newUrl} onChange={(event) => setNewUrl(event.target.value)} /></label>
+        ) : (
+          <>
+            <label>{t("新来源文件")}<input type="file" required accept=".pdf,.docx,.txt,.md" onChange={(event) => setNewFile(event.target.files?.[0] ?? null)} /></label>
+            <p className="form-hint">{t("支持 PDF、DOCX、TXT 和 Markdown；扫描件不支持 OCR。")}</p>
+          </>
+        )}
+      </>
+    );
+  }
+
   if (!selected) {
-    return <p role={error ? "alert" : undefined}>{error ?? t("任务版本加载中")}</p>;
+    return <p role={error ? "alert" : undefined}>{error ?? t("版本加载中")}</p>;
   }
 
   return (
     <section className="source-versions" aria-labelledby={`sources-${taskId}`}>
-      <div className="source-versions__heading">
-        <div>
-          <p className="section-kicker">{t("来源")}</p>
-          <h3 id={`sources-${taskId}`}>
-            {selected.is_current
-              ? locale === "en" ? `Current task version V${selected.number}` : `当前任务版本 V${selected.number}`
-              : locale === "en" ? `Read-only history V${selected.number}` : `只读历史 V${selected.number}`}
-          </h3>
-        </div>
-        <label>
-          {t("任务版本")}
+      {/*
+       * One row where there were three. 来源 was printed twice and the version
+       * three times — as a heading, as a count suffix, and inside the control
+       * that sets it — while the two actions sat at the far bottom of the page.
+       * What is left is the version being shown and what can be done to it.
+       */}
+      <h3 className="sr-only" id={`sources-${taskId}`}>
+        {selected.is_current
+          ? locale === "en" ? `Current version V${selected.number}` : `当前版本 V${selected.number}`
+          : locale === "en" ? `Read-only history V${selected.number}` : `只读历史 V${selected.number}`}
+      </h3>
+      <div className="source-toolbar">
+        <label className="source-toolbar__version">
+          <span className="sr-only">{t("版本")}</span>
           <select
             value={selected.id}
             disabled={editSessionId !== null}
@@ -391,122 +432,182 @@ export function TaskSourceVersions({
           >
             {versions.map((version) => (
               <option key={version.id} value={version.id}>
-                V{version.number}{version.is_current ? t("（当前）") : t("（历史）")}
+                {t("版本")} V{version.number}{version.is_current ? t("（当前）") : t("（历史）")}
               </option>
             ))}
           </select>
         </label>
+        {!selected.is_current ? <span className="source-chip">{t("只读")}</span> : null}
+        <div className="source-toolbar__actions">
+          {!editSessionId && selected.capabilities.can_edit ? (
+            <button className="button button--quiet" type="button" disabled={busy} onClick={() => void beginEditing()}>
+              {t("编辑来源")}
+            </button>
+          ) : null}
+          {!editSessionId && selected.capabilities.can_restore ? (
+            <button className="button" type="button" disabled={busy} onClick={() => setConfirming("restore")}>
+              {t("恢复为当前版本")}
+            </button>
+          ) : null}
+        </div>
       </div>
       {error ? <p role="alert" className="form-error">{t(error)}</p> : null}
       {editSessionId ? (
         <>
           <p className="form-hint">
-            {locale === "en" ? `The current task version remains V${selected.number}; changes enter history only when saved.` : `当前任务版本仍是 V${selected.number}；保存前的改动不会进入历史。`}
+            {locale === "en" ? `The current version remains V${selected.number}; changes enter history only when saved.` : `当前版本仍是 V${selected.number}；保存前的改动不会进入历史。`}
           </p>
-          {drafts.map((source) => (
-            <section className="source-accordion" key={source.key}>
-              <button
-                className="source-accordion__trigger"
-                type="button"
-                aria-expanded={openSourceKey === source.key}
-                aria-controls={`source-editor-${source.key}`}
-                onClick={() => setOpenSourceKey((current) => current === source.key ? null : source.key)}
-              >
-                <span>{source.title || t("未命名来源")}</span>
-                <span>{openSourceKey === source.key ? t("收起") : t("编辑")}</span>
-              </button>
-              {openSourceKey === source.key ? (
-                <fieldset id={`source-editor-${source.key}`} aria-label={`${t("来源")} ${source.title}`}>
-                  <label>
-                    {t("来源标题")}
-                    <input
-                      value={source.title}
-                      onChange={(event) => updateDraft(source.key, { title: event.target.value })}
-                    />
-                  </label>
-                  <label>
-                    {t("来源正文")}
-                    <textarea
-                      value={source.body}
-                      onChange={(event) => updateDraft(source.key, { body: event.target.value })}
-                    />
-                  </label>
-                  <label>
-                    {t("来源信息")}
-                    <input
-                      value={source.provenance}
-                      onChange={(event) => updateDraft(source.key, { provenance: event.target.value })}
-                    />
-                  </label>
+          <p className="section-kicker">{t("添加 1-3 个来源")}</p>
+
+          {/* The same list, items, and add-a-source flow as task creation: a
+              writer edits sources in one place whether the task exists yet or
+              not. What differs is only when it commits — here, on 保存来源修改. */}
+          <ol className="source-list">
+            {drafts.map((source, position) => (
+              <li key={source.key}>
+                <article
+                  className={`source-operation${source.prepared ? ` source-operation--${source.prepared.status}` : ""}`}
+                >
                   <button
-                    className="button button--quiet"
+                    className="source-operation__summary"
                     type="button"
-                    disabled={drafts.length === 1}
-                    aria-label={`${t("删除来源")} ${source.title}`}
-                    onClick={() => void removeDraft(source)}
+                    aria-expanded={openSourceKey === source.key}
+                    aria-controls={`source-editor-${source.key}`}
+                    aria-label={`${t("编辑来源")} ${source.title || t("未命名来源")}`}
+                    onClick={() => setOpenSourceKey((current) => current === source.key ? null : source.key)}
                   >
-                    {t("删除来源")}
+                    <span className="source-operation__status">
+                      <strong>
+                        <span className="source-operation__index">{position + 1}</span>
+                        {openSourceKey === source.key
+                          ? <ChevronDown size={15} aria-hidden="true" />
+                          : <ChevronRight size={15} aria-hidden="true" />}
+                        {source.title || t("未命名来源")}
+                      </strong>
+                      {source.prepared ? (
+                        <span className={`source-chip source-chip--${source.prepared.status}`}>
+                          {t(PREPARED_STATUS_LABELS[source.prepared.status])}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
-                  <button
-                    className="button button--quiet"
-                    type="button"
-                    aria-label={`${t("替换来源")} ${source.title}`}
-                    onClick={() => setReplaceKey(source.key)}
-                  >
-                    {t("替换来源")}
-                  </button>
-                  {source.prepared ? (
-                    <p className="form-hint">
-                      {t("替换输入：")}{t({ processing: "处理中", ready: "已就绪", warning: "已就绪，有警告", failure: "处理失败" }[source.prepared.status])}
-                    </p>
+
+                  {source.prepared?.status === "processing" ? (
+                    <RunningNotice label={t("正在处理来源…")} />
                   ) : null}
                   {source.prepared?.warnings.map((warning) => (
-                    <p className="warning" key={warning.code}>{domainMessage(warning.message, warning.code)}</p>
+                    <p className="source-note source-note--warning" key={warning.code}>
+                      {domainMessage(warning.message, warning.code)}
+                    </p>
                   ))}
-                  {source.prepared?.warnings.length ? (
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={source.warningAccepted}
-                        onChange={(event) => updateDraft(source.key, { warningAccepted: event.target.checked })}
-                      />
-                      {t("我已检查并接受此来源的警告")}
-                    </label>
+
+                  {replaceKey === source.key ? (
+                    <form className="source-operation__editor source-fields" onSubmit={(event) => void stageInput(event)}>
+                      {stagingFields()}
+                      <div className="button-row">
+                        <button className="button" type="submit" disabled={busy}>{t("确认替换")}</button>
+                        <button className="button button--quiet" type="button" onClick={() => setReplaceKey(null)}>
+                          {t("取消替换")}
+                        </button>
+                      </div>
+                    </form>
+                  ) : openSourceKey === source.key ? (
+                    <fieldset className="source-operation__editor source-fields" id={`source-editor-${source.key}`} aria-label={`${t("来源")} ${source.title}`}>
+                      <label>
+                        {t("来源标题")}
+                        <input
+                          value={source.title}
+                          onChange={(event) => updateDraft(source.key, { title: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("来源正文")}
+                        <textarea
+                          value={source.body}
+                          onChange={(event) => updateDraft(source.key, { body: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("来源信息")}
+                        <input
+                          value={source.provenance}
+                          onChange={(event) => updateDraft(source.key, { provenance: event.target.value })}
+                        />
+                      </label>
+                      <div className="button-row">
+                        {/* Kept, unlike in creation: replacing preserves the source's
+                            identity across task versions, which delete-then-add loses. */}
+                        <button
+                          className="button button--quiet"
+                          type="button"
+                          aria-label={`${t("替换来源")} ${source.title}`}
+                          onClick={() => {
+                            setAdding(false);
+                            setReplaceKey(source.key);
+                          }}
+                        >
+                          {t("替换来源")}
+                        </button>
+                        <button
+                          className="button button--quiet button--quiet-danger"
+                          type="button"
+                          disabled={drafts.length === 1}
+                          aria-label={`${t("删除来源")} ${source.title}`}
+                          onClick={() => void removeDraft(source)}
+                        >
+                          {t("删除来源")}
+                        </button>
+                      </div>
+                    </fieldset>
                   ) : null}
-                </fieldset>
-              ) : null}
-            </section>
-          ))}
-          {drafts.length < 3 || replaceKey ? (
-            <form className="source-add-form" onSubmit={(event) => void stageInput(event)}>
-              <h4>{replaceKey ? t("替换来源") : t("新增来源")}</h4>
-              <div className="workspace__actions">
-                <button type="button" className={`button ${newMode === "pasted" ? "" : "button--quiet"}`} onClick={() => setNewMode("pasted")}>{t("粘贴文本")}</button>
-                <button type="button" className={`button ${newMode === "url" ? "" : "button--quiet"}`} onClick={() => setNewMode("url")}>{t("公共文章链接")}</button>
-                <button type="button" className={`button ${newMode === "file" ? "" : "button--quiet"}`} onClick={() => setNewMode("file")}>{t("上传文件")}</button>
-              </div>
-              {newMode === "pasted" ? (
-                <>
-                  <label>{t("新来源标题")}<input required value={newTitle} onChange={(event) => setNewTitle(event.target.value)} /></label>
-                  <label>{t("新来源正文")}<textarea required value={newBody} onChange={(event) => setNewBody(event.target.value)} /></label>
-                  <label>{t("新来源信息")}<input value={newProvenance} onChange={(event) => setNewProvenance(event.target.value)} /></label>
-                </>
-              ) : newMode === "url" ? (
-                <label>{t("新来源网址")}<input type="url" required value={newUrl} onChange={(event) => setNewUrl(event.target.value)} /></label>
-              ) : (
-                <label>{t("新来源文件")}<input type="file" required accept=".pdf,.docx,.txt,.md" onChange={(event) => setNewFile(event.target.files?.[0] ?? null)} /></label>
-              )}
-              <button className="button button--quiet" type="submit" disabled={busy}>
-                {replaceKey ? t("确认替换") : t("添加来源")}
+                </article>
+              </li>
+            ))}
+
+            {adding ? (
+              <li>
+                <article className="source-operation source-operation--draft">
+                  <p className="source-operation__summary source-operation__summary--draft">
+                    <strong>
+                      <span className="source-operation__index">{drafts.length + 1}</span>
+                      {t("新来源")}
+                    </strong>
+                    <span className="source-operation__pending">{t("尚未添加")}</span>
+                  </p>
+                  <form className="source-operation__editor source-fields" onSubmit={(event) => void stageInput(event)}>
+                    {stagingFields()}
+                    <div className="button-row">
+                      <button className="button" type="submit" disabled={busy}>{t("添加来源")}</button>
+                      <button className="button button--quiet" type="button" disabled={busy} onClick={() => setAdding(false)}>
+                        {t("取消")}
+                      </button>
+                    </div>
+                  </form>
+                </article>
+              </li>
+            ) : null}
+          </ol>
+
+          {drafts.length < 3 ? (
+            !adding && !replaceKey ? (
+              <button
+                className="add-source-button"
+                type="button"
+                onClick={() => {
+                  setOpenSourceKey(null);
+                  setAdding(true);
+                }}
+              >
+                <Plus size={18} aria-hidden="true" /> {t("添加来源")}
               </button>
-              {replaceKey ? <button type="button" className="button button--quiet" onClick={() => setReplaceKey(null)}>{t("取消替换")}</button> : null}
-            </form>
-          ) : null}
+            ) : null
+          ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
+
           <div className="workspace__actions">
             <button className="button" type="button" disabled={busy || !stagedReady || !hasChanges} onClick={() => void save()}>
               {t("保存来源修改")}
             </button>
-            <button className="button button--quiet" type="button" disabled={busy} onClick={() => void discard()}>
+            <button className="button button--quiet" type="button" disabled={busy} onClick={() => setConfirming("discard")}>
               {t("放弃编辑")}
             </button>
           </div>
@@ -536,21 +637,29 @@ export function TaskSourceVersions({
               </article>
             ))}
           </div>
-          {selected.capabilities.can_edit ? (
-            <button className="button button--quiet" type="button" disabled={busy} onClick={() => void beginEditing()}>
-              {t("编辑来源")}
-            </button>
-          ) : null}
-          {selected.capabilities.can_restore ? (
-            <button className="button" type="button" disabled={busy} onClick={() => void restore()}>
-              {t("恢复为当前版本")}
-            </button>
-          ) : null}
           {selected.capabilities.unavailable_reason ? (
             <p className="form-hint">{domainMessage(selected.capabilities.unavailable_reason)}</p>
           ) : null}
         </>
       )}
+      <ConfirmDialog
+        open={confirming === "discard"}
+        title={t("放弃这次来源编辑？")}
+        body={t("未保存的来源修改会被丢弃，且无法恢复。")}
+        confirmLabel={t("放弃编辑")}
+        danger
+        onOpenChange={(open) => setConfirming(open ? "discard" : null)}
+        onConfirm={() => void discard()}
+      />
+      <ConfirmDialog
+        open={confirming === "restore"}
+        title={locale === "en"
+          ? `Restore V${selected.number} as the current version?`
+          : `确定将 V${selected.number} 恢复为当前版本吗？`}
+        confirmLabel={t("恢复为当前版本")}
+        onOpenChange={(open) => setConfirming(open ? "restore" : null)}
+        onConfirm={() => void restore()}
+      />
     </section>
   );
 }

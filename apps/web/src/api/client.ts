@@ -271,19 +271,6 @@ export async function retryUrlSource(
   return result.data;
 }
 
-export async function replaceUrlSource(
-  accessToken: string,
-  sourceId: string,
-  url: string,
-): Promise<UrlSourceResponse> {
-  const result = await authenticatedApi(accessToken).PUT(
-    "/task-creation/url-sources/{source_id}",
-    { params: { path: { source_id: sourceId } }, body: { url } },
-  );
-  if (!result.data) throw refusalOf(result);
-  return result.data;
-}
-
 export async function editUrlSourceContent(
   accessToken: string,
   sourceId: string,
@@ -337,25 +324,6 @@ export async function getFileSource(
   const result = await authenticatedApi(accessToken).GET(
     "/task-creation/file-sources/{source_id}",
     { params: { path: { source_id: sourceId } } },
-  );
-  if (!result.data) throw refusalOf(result);
-  return result.data;
-}
-
-export async function replaceFileSource(
-  accessToken: string,
-  sourceId: string,
-  file: File,
-): Promise<FileSourceResponse> {
-  const form = new FormData();
-  form.set("file", file);
-  const result = await authenticatedApi(accessToken).PUT(
-    "/task-creation/file-sources/{source_id}",
-    {
-      params: { path: { source_id: sourceId } },
-      body: { file: file.name },
-      bodySerializer: () => form,
-    },
   );
   if (!result.data) throw refusalOf(result);
   return result.data;

@@ -149,9 +149,14 @@ export function TaskZhiyanArea({
     [act, accessToken],
   );
 
+  // Remembered locally so the panel can say 正在终止 the moment it is asked,
+  // rather than after the next poll answers.
+  const [cancelRequestedFor, setCancelRequestedFor] = useState<string | null>(null);
   const cancel = useCallback(
-    (executionId: string) =>
-      void act(() => cancelExecution(accessToken, executionId), CANCEL_FAILED),
+    (executionId: string) => {
+      setCancelRequestedFor(executionId);
+      void act(() => cancelExecution(accessToken, executionId), CANCEL_FAILED);
+    },
     [act, accessToken],
   );
 
@@ -215,6 +220,7 @@ export function TaskZhiyanArea({
                 busy={busy}
                 onStart={start}
                 onCancel={cancel}
+                cancelRequested={cancelRequestedFor === source.execution?.id}
                 onRetryAllowed={() => void load()}
                 taskVersionId={overview.task_version_id}
                 onCapsuleSelect={onCapsuleSelect}

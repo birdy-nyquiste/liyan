@@ -11,6 +11,7 @@ export function ZhiyanPanel({
   busy = false,
   onStart,
   onCancel,
+  cancelRequested = false,
   onRetryAllowed,
   taskVersionId,
   onCapsuleSelect,
@@ -19,6 +20,8 @@ export function ZhiyanPanel({
   busy?: boolean;
   onStart(sourceRevisionId: string): void;
   onCancel(executionId: string): void;
+  /** True once this browser has asked to stop the run and is awaiting the poll. */
+  cancelRequested?: boolean;
   onRetryAllowed(): void;
   taskVersionId?: string;
   onCapsuleSelect?: (choice: CapsuleChoice) => void;
@@ -32,7 +35,15 @@ export function ZhiyanPanel({
   // request as `cancel_requested`, and until this read it, a writer who pressed
   // 终止分析 saw a panel that still said 分析进行中 and a button that still
   // invited them to press it again.
-  const stopping = execution?.status === "cancel_requested";
+  // The server's own word for it, or the request this browser just made and is
+  // waiting for the next poll to confirm. Without the second, pressing 终止分析
+  // changed nothing on screen for up to a full poll interval, which reads as a
+  // button that did nothing.
+  const active = state.status === "running";
+  // Only while the run is still going: a request this browser made must not
+  // outlive the run it was made about, or the panel would say 正在终止 for ever
+  // — the very stuckness this is here to prevent.
+  const stopping = active && (execution?.status === "cancel_requested" || cancelRequested);
   const unfinished = state.status === "failed" || state.status === "cancelled";
   const exhausted = capabilities.retry.remaining === 0;
   const retryHint = !unfinished
@@ -70,8 +81,8 @@ export function ZhiyanPanel({
         </p>
       ) : null}
 
-      <div className="button-row">
-        {state.status === "succeeded" ? null : (
+      <div className="button-row zhiyan-actions">
+        {state.status === "succeeded" || active ? null : (
           <button
             className="button"
             type="button"

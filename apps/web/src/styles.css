@@ -2519,6 +2519,22 @@ a.source-meta:focus-visible .source-meta__value {
   background: var(--danger);
 }
 
+/* A report's actions are secondary to the report; at full control height a
+   disabled 重试 sat there as a grey slab beside it. */
+.zhiyan-actions .button {
+  min-height: 30px;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 0.86rem;
+}
+
+.zhiyan-actions .button:disabled {
+  background: transparent;
+  color: var(--ink-faint);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  opacity: 1;
+}
+
 .zhiyan-panel__heading {
   display: flex;
   align-items: flex-start;

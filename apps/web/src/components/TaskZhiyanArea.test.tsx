@@ -531,7 +531,9 @@ describe("TaskZhiyanArea", () => {
     // A single report is not behind a toggle any more; it is simply the report.
     await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
 
-    expect(within(await screen.findByRole("tabpanel")).getByText("分析已取消")).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已取消"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("知言分析已取消，可重新发起。");
     expect(
       fetchMock.mock.calls.find(([target]) =>
@@ -580,6 +582,33 @@ describe("TaskZhiyanArea", () => {
 
     // The same notice every provider-paced run shows, so it is learned once.
     expect(await screen.findByRole("status")).toHaveTextContent("正在生成知言报告…");
+  });
+
+  it("says a run is stopping the moment it is asked, not a poll later", async () => {
+    const running = overviewResponse(
+      [
+        stateResponse({
+          status: "running",
+          report: null,
+          execution: execution(),
+          capabilities: {
+            can_start: false,
+            can_cancel: true,
+            retry: { allowed: false, remaining: 2, allowed_at: null },
+          },
+        }),
+      ],
+      LIYAN_WAITING,
+    );
+    // The server still answers "running": the worker stops at its next
+    // checkpoint, and the poll after the request has nothing new to say yet.
+    respondWith(running, { id: "execution-1", status: "running" }, running, running);
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+    await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
+
+    expect(await screen.findByText("正在终止")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "正在终止…" })).toBeDisabled();
   });
 
   it("says a run is stopping once the server has the request", async () => {

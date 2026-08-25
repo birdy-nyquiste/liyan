@@ -23,6 +23,8 @@ import {
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
+import { ArrowUp, Square } from "lucide-react";
+
 import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
 import { canonicalizeArticleMarkdown } from "./articleMarkdown";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -323,16 +325,44 @@ export function LiyanPanel({
 
   return (
     <section className="zhiyan-panel liyan-panel" aria-labelledby={`liyan-${taskId}`}>
-      <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
+      <header className="liyan-panel__head">
+        <h3 id={`liyan-${taskId}`} ref={heading} tabIndex={-1}>{t("立言文章")}</h3>
+        {/* What can be done to the article, beside the article. The composer
+            below holds only what is needed to ask for one. */}
+        <div className="liyan-panel__actions">
+          {workingCopy ? (
+            <button
+              className="button button--quiet"
+              type="button"
+              aria-describedby={saveBlockedReason ? `liyan-save-blocked-${taskId}` : undefined}
+              disabled={saveDisabled}
+              onClick={() => void save()}
+            >
+              {t("保存草稿")}
+            </button>
+          ) : null}
+          {state ? (
+            <button ref={historyTriggerRef} className="button button--quiet" type="button" onClick={() => setHistoryOpen(true)}>
+              {t("草稿历史")}
+            </button>
+          ) : null}
+          {publicationArticle && !publishing ? (
+            <button
+              className="button button--quiet"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (onPublish) onPublish(publicationArticle.taskId, publicationArticle.revisionId);
+                else setPublishing(true);
+              }}
+            >
+              {t("发布")}
+            </button>
+          ) : null}
+        </div>
+      </header>
 
-      <p className="liyan-instruction-label">{t("立言指令（可选）")}</p>
-      <InstructionEditor
-        taskId={taskId}
-        value={instruction}
-        disabled={busy}
-        selection={capsuleSelection}
-        onChange={setInstruction}
-      />
+      <div className="liyan-panel__document">
 
       {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
       {state?.status === "failed" && failureMessage ? (
@@ -346,62 +376,6 @@ export function LiyanPanel({
           {domainMessage(state.capabilities.unavailable_reason)}
         </p>
       ) : null}
-
-      <div className="button-row">
-        <button
-          className="button button--quiet"
-          type="button"
-          // The reason 立言 is closed is already on screen; a disabled button is
-          // skipped by keyboard navigation, so it is named here as well rather
-          // than left somewhere in the reading order to be found.
-          aria-describedby={
-            !state?.capabilities.can_generate && state?.capabilities.unavailable_reason
-              ? `liyan-blocked-${taskId}`
-              : undefined
-          }
-          disabled={busy || active || composerHasContent || !state?.capabilities.can_generate}
-          onClick={() => void generate(true)}
-        >
-          {t("默认生成")}
-        </button>
-        <button
-          className="button"
-          type="button"
-          disabled={busy || (!active && state?.status !== "failed" && (!composerHasContent || !state?.capabilities.can_generate))}
-          onClick={() => void (active ? cancel() : generate())}
-        >
-          {active ? t("停止") : state?.status === "failed" ? t("重试") : t("发送")}
-        </button>
-        {workingCopy ? (
-          <button
-            className="button button--quiet"
-            type="button"
-            aria-describedby={saveBlockedReason ? `liyan-save-blocked-${taskId}` : undefined}
-            disabled={saveDisabled}
-            onClick={() => void save()}
-          >
-            {t("保存草稿")}
-          </button>
-        ) : null}
-        {state ? (
-          <button ref={historyTriggerRef} className="button button--quiet" type="button" onClick={() => setHistoryOpen(true)}>
-            {t("草稿历史")}
-          </button>
-        ) : null}
-        {publicationArticle && !publishing ? (
-          <button
-            className="button button--quiet"
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (onPublish) onPublish(publicationArticle.taskId, publicationArticle.revisionId);
-              else setPublishing(true);
-            }}
-          >
-            {t("发布")}
-          </button>
-        ) : null}
-      </div>
 
       {saveBlockedReason ? (
         <p className="form-hint" id={`liyan-save-blocked-${taskId}`}>{domainMessage(saveBlockedReason)}</p>
@@ -477,6 +451,59 @@ export function LiyanPanel({
           onChange={updateWorkingCopy}
         />
       ) : null}
+
+      </div>
+
+      {/*
+       * The composer holds the foot of the pane and does not scroll with the
+       * article: asking for a rewrite is what a writer returns to, and it had
+       * been sitting below the fold, off the bottom of the screen.
+       */}
+      <form
+        className="liyan-composer"
+        // The box is one field as far as a writer is concerned; the editable
+        // line inside it is 24px tall, and clicking the rest of the box — the
+        // padding, the hint — did nothing at all.
+        onMouseDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (target.closest("button, .liyan-instruction-editor__content")) return;
+          event.preventDefault();
+          event.currentTarget.querySelector<HTMLElement>(".liyan-instruction-editor__content")?.focus();
+        }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void (active ? cancel() : generate(!composerHasContent));
+        }}
+      >
+        <InstructionEditor
+          taskId={taskId}
+          value={instruction}
+          disabled={busy || active}
+          selection={capsuleSelection}
+          onChange={setInstruction}
+        />
+        <button
+          className="liyan-composer__send"
+          type="submit"
+          // An empty composer still has something to send: 立言 with the default
+          // instruction. The label says which of the two this press will do, and
+          // names the reason when it can do neither.
+          aria-label={
+            active ? t("停止")
+              : composerHasContent ? t("发送")
+              : state?.status === "failed" ? t("重试")
+              : t("默认生成")
+          }
+          aria-describedby={
+            !state?.capabilities.can_generate && state?.capabilities.unavailable_reason
+              ? `liyan-blocked-${taskId}`
+              : undefined
+          }
+          disabled={busy || (!active && state?.status !== "failed" && !state?.capabilities.can_generate)}
+        >
+          {active ? <Square size={15} aria-hidden="true" /> : <ArrowUp size={18} aria-hidden="true" />}
+        </button>
+      </form>
 
       <ConfirmDialog
         open={restoringRevisionId !== null}

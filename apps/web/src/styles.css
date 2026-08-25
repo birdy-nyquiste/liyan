@@ -829,38 +829,134 @@
   background: transparent;
 }
 
-/* Keep the document as the main artifact and anchor the direction composer at
-   the foot of the independent 立言 pane. Source order remains semantic; flex
-   order only shapes the desktop document workspace. */
+/* The 立言 pane in three parts: the article's title and actions, the article
+   itself, and the composer. Only the middle one scrolls. */
 .task-workspace-pane > .liyan-panel {
-  min-height: 100%;
   display: flex;
+  min-height: 0;
   flex-direction: column;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
-.task-workspace-pane > .liyan-panel > h3 {
-  order: 0;
+.liyan-panel__head {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2xs);
 }
 
-.task-workspace-pane > .liyan-panel > .liyan-working-copy,
-.task-workspace-pane > .liyan-panel > .liyan-result-offer,
-.task-workspace-pane > .liyan-panel > .publication-confirmation,
-.task-workspace-pane > .liyan-panel > .liyan-revisions {
-  order: 1;
+.liyan-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs);
 }
 
-.task-workspace-pane > .liyan-panel > .liyan-instruction-label,
-.task-workspace-pane > .liyan-panel > .liyan-instruction-editor,
-.task-workspace-pane > .liyan-panel > .button-row,
-.task-workspace-pane > .liyan-panel > .form-hint,
-.task-workspace-pane > .liyan-panel > .form-error {
-  order: 2;
+.liyan-panel__actions .button {
+  min-height: 30px;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.86rem;
 }
 
-.task-workspace-pane > .liyan-panel > .liyan-instruction-label {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid var(--rule);
+.liyan-panel__document {
+  min-height: 0;
+  flex: 1;
+  padding: var(--space-2xs) 0 var(--space-sm);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/*
+ * One field and one button, the way a chat composer is shaped: the button sits
+ * inside the field's box at its trailing edge, and carries the single action
+ * available at that moment — send, or stop what is running.
+ */
+.liyan-composer {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-sm);
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: border-color var(--duration) var(--ease-out);
+}
+
+.liyan-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(133 107 55 / 14%);
+}
+
+/* The capsule hint is guidance about the field, not content in it: below the
+   composer, quiet, and out of the way of what is being typed. */
+.liyan-composer .liyan-instruction-editor {
+  min-width: 0;
+  flex: 1;
+}
+
+.liyan-composer .liyan-instruction-editor .form-hint {
+  margin: 2px 0 0;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+
+.liyan-composer .liyan-instruction-editor__content {
+  min-height: 24px;
+  max-height: 40vh;
+  flex: 1;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow-y: auto;
+}
+
+.liyan-composer .liyan-instruction-editor__content:focus-visible {
+  border: 0;
+  box-shadow: none;
+}
+
+.liyan-composer__send {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  place-items: center;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.liyan-composer__send:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+
+.liyan-composer__send:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.liyan-composer__send:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liyan-composer,
+  .liyan-composer__send {
+    transition: none;
+  }
 }
 
 .task-card--opened .task-areas {

@@ -183,8 +183,10 @@ export function TaskZhiyanArea({
         * could not be compared anyway — reaching the second meant scrolling past
         * the whole of the first. A task holds at most three sources, which is
         * what makes a tab strip the right shape here rather than a growing list.
+        * The strip stays for a single report: it names the source that report
+        * came from, and the pane keeps its shape when a second source arrives.
         */}
-      {overview.sources.length > 1 ? (
+      {overview.sources.length > 0 ? (
         <Tabs.Root
           className="zhiyan-tabs"
           value={selected}

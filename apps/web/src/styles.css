@@ -807,17 +807,6 @@
   font-size: 1rem;
 }
 
-/*
- * Where the report tabs exist they finish the header rather than starting the
- * content: the pane title hands straight over to them, and the rule sits under
- * both so the two read as one band.
- */
-.task-workspace-pane:has(.zhiyan-tabs) > .task-pane-heading {
-  margin-bottom: 6px;
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
 .task-workspace-pane:has(.zhiyan-tabs) .zhiyan-tabs__list {
   margin-bottom: 10px;
 }
@@ -827,8 +816,10 @@
   font-size: 0.84rem;
 }
 
-.task-workspace-pane > .zhiyan-panel,
-.task-workspace-pane > .liyan-panel {
+/* In the workspace the pane is the surface; a report drawn as a card on it is a
+   box inside a box, which is not how the article beside it reads. */
+.task-workspace-pane .zhiyan-panel,
+.task-workspace-pane .liyan-panel {
   margin: 0;
   padding: 0;
   border: 0;

@@ -287,7 +287,7 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" />);
 
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    expect(within(await screen.findByRole("tabpanel")).getByText("分析已完成")).toBeInTheDocument();
     expect(screen.getByText(/不可编辑或重新生成/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /重试|终止|开始/ })).not.toBeInTheDocument();
     expect(
@@ -481,7 +481,10 @@ describe("TaskZhiyanArea", () => {
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
     await userEvent.click(await screen.findByRole("button", { name: "重试" }));
 
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    // Waits inside the panel: the run polls through 分析进行中 before it lands.
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已完成"),
+    ).toBeInTheDocument();
     const started = fetchMock.mock.calls.find(
       ([target, options]) => requestMethod(target, options) === "POST",
     );
@@ -528,7 +531,7 @@ describe("TaskZhiyanArea", () => {
     // A single report is not behind a toggle any more; it is simply the report.
     await userEvent.click(await screen.findByRole("button", { name: "终止分析" }));
 
-    expect(await screen.findByText("分析已取消")).toBeInTheDocument();
+    expect(within(await screen.findByRole("tabpanel")).getByText("分析已取消")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("知言分析已取消，可重新发起。");
     expect(
       fetchMock.mock.calls.find(([target]) =>
@@ -642,8 +645,12 @@ describe("TaskZhiyanArea", () => {
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
 
-    expect(await screen.findByText("分析进行中")).toBeInTheDocument();
-    expect(await screen.findByText("分析已完成")).toBeInTheDocument();
+    // The failed poll in the middle does not stop the next one: the run is seen
+    // running, and then seen finishing.
+    expect(within(await screen.findByRole("tabpanel")).getByText("分析进行中")).toBeInTheDocument();
+    expect(
+      await within(await screen.findByRole("tabpanel")).findByText("分析已完成"),
+    ).toBeInTheDocument();
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -759,7 +766,7 @@ describe("TaskZhiyanArea", () => {
     const fetchMock = respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
-    await screen.findByText("分析已完成");
+    await within(await screen.findByRole("tabpanel")).findByText("分析已完成");
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));

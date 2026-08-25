@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -156,8 +156,53 @@ describe("TaskCard", () => {
     expect(screen.getByText("关联的发布任务仍在执行，结束后才能删除立言任务。")).toBeInTheDocument();
   });
 
+  it("shows recognition fields and renames without changing source recognition", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      Response.json({ ...task, display_name: "Renamed" }),
+    ));
+    const user = userEvent.setup();
+    render(<TaskCard task={task} userId="user-1" accessToken="token" />);
+
+    const card = screen.getByRole("article");
+    expect(within(card).getByText("#1")).toBeInTheDocument();
+    expect(within(card).getByText("Test Header", { selector: ".task-card__source" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "重命名 Test Header" }));
+    const input = screen.getByLabelText("任务名称");
+    await user.clear(input);
+    await user.type(input, "Renamed");
+    await user.click(screen.getByRole("button", { name: "保存名称" }));
+
+    // The task's own name changes; what it was recognised from does not.
+    expect(await screen.findByRole("heading", { name: "Renamed" })).toBeInTheDocument();
+    expect(screen.getByText("Test Header", { selector: ".task-card__source" })).toBeInTheDocument();
+  });
+
+  it("requires confirmation and removes a deliberately deleted task", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    const onDelete = vi.fn();
+    const user = userEvent.setup();
+    render(<TaskCard task={task} userId="user-1" accessToken="token" onDelete={onDelete} />);
+
+    await user.click(screen.getByRole("button", { name: "删除 Test Header" }));
+
+    // Asked in the page, and nothing deleted until it is answered: a native
+    // confirm() the browser suppresses would answer for the writer.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("永久删除这个任务？");
+    expect(fetch).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "删除任务" }));
+
+    expect(fetch).toHaveBeenCalledOnce();
+    const request = fetch.mock.calls[0]![0] as Request;
+    expect(request.method).toBe("DELETE");
+    expect(JSON.parse(await request.text())).toEqual({ confirmed: true });
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("task-1"));
+  });
+
   it("shows the server reason when deletion is rejected", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(
       { detail: "关联的发布任务仍在执行，结束后才能删除立言任务。" },
       { status: 409 },
@@ -166,6 +211,9 @@ describe("TaskCard", () => {
     render(<TaskCard task={task} userId="user-1" accessToken="token" />);
 
     await user.click(screen.getByRole("button", { name: "删除 Test Header" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "删除任务" }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "关联的发布任务仍在执行，结束后才能删除立言任务。",
@@ -244,7 +292,9 @@ describe("TaskCard", () => {
     render(<TaskCard task={task} userId="user-1" accessToken="token" opened />);
     const sources = screen.getByRole("tab", { name: "来源" });
     expect(sources).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("1 个来源 · V1")).toBeInTheDocument();
+    // The count and version live in the task header now; the 来源 view shows the
+    // version it is displaying, once, in the control that changes it.
+    expect(await screen.findByRole("combobox")).toHaveDisplayValue("版本 V1（当前）");
 
     await user.click(screen.getByRole("tab", { name: "知言 · 立言" }));
 

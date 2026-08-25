@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
 import type { components } from "../api/schema";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -25,6 +28,11 @@ function webAddress(url: string): string | null {
   }
 }
 
+/**
+ * A report is six sections deep and each one is prose; reading the 逻辑 section
+ * of the second report should not mean scrolling through the 证据 list of the
+ * first. Every section folds, and starts open so nothing is hidden by default.
+ */
 function Section({
   id,
   heading,
@@ -34,10 +42,25 @@ function Section({
   heading: string;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(true);
   return (
     <section className="zhiyan-section" aria-labelledby={id}>
-      <h4 id={id}>{heading}</h4>
-      {children}
+      <h4>
+        <button
+          className="zhiyan-section__toggle"
+          id={id}
+          type="button"
+          aria-expanded={open}
+          aria-controls={`${id}-body`}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+          {heading}
+        </button>
+      </h4>
+      <div id={`${id}-body`} hidden={!open}>
+        {children}
+      </div>
     </section>
   );
 }

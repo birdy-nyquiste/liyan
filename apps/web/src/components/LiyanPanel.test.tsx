@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -460,8 +460,6 @@ describe("LiyanPanel", () => {
     const fetchMock = respondWith(
       stateWithRevisions(revision(2, "第二版"), [revision(1, "第一版")]),
     );
-    const confirmed = vi.fn(() => false);
-    vi.stubGlobal("confirm", confirmed);
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
@@ -470,7 +468,12 @@ describe("LiyanPanel", () => {
     await screen.findByText("有未保存的修改，请先保存后再发布。");
     await user.click(screen.getByRole("button", { name: "恢复为新草稿" }));
 
-    expect(confirmed).toHaveBeenCalledOnce();
+    // Asked in the page, and nothing restored until it is answered.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("恢复历史 Revision 会覆盖当前未保存的修改");
+    expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
+
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
     expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
   });
 });

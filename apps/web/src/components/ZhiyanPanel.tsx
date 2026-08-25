@@ -1,17 +1,9 @@
 import type { ZhiyanStateResponse } from "../api/client";
-import { useEffect, useRef, useState } from "react";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ZhiyanReportView } from "./ZhiyanReportView";
 import { useInterfaceLocale } from "../interfaceLocale";
-
-const STATUS_LABELS: Record<ZhiyanStateResponse["status"], string> = {
-  absent: "尚未分析",
-  running: "分析进行中",
-  cancelled: "分析已取消",
-  failed: "分析未完成",
-  succeeded: "分析已完成",
-};
+import { STATUS_LABELS } from "./zhiyanStatus";
 
 export function ZhiyanPanel({
   state,
@@ -34,6 +26,12 @@ export function ZhiyanPanel({
   const { source_revision_id: revisionId, source_title: title, capabilities } = state;
   const countdown = useRetryCountdown(capabilities.retry.allowed_at, onRetryAllowed);
   const execution = state.execution;
+  // Cancelling a run is a request, not an act: the worker stops at its next
+  // checkpoint, which can be a whole provider call away. The server records that
+  // request as `cancel_requested`, and until this read it, a writer who pressed
+  // 终止分析 saw a panel that still said 分析进行中 and a button that still
+  // invited them to press it again.
+  const stopping = execution?.status === "cancel_requested";
   const unfinished = state.status === "failed" || state.status === "cancelled";
   const exhausted = capabilities.retry.remaining === 0;
   const retryHint = !unfinished
@@ -45,41 +43,21 @@ export function ZhiyanPanel({
       : exhausted
         ? t("重试次数已用完，请稍后再试。")
         : null;
-  const [expanded, setExpanded] = useState(
-    () => state.status === "succeeded" || state.status === "failed",
+  const statusChip = (
+    <span className={`source-chip source-chip--${stopping ? "processing" : state.status}`}>
+      {stopping ? t("正在终止") : t(STATUS_LABELS[state.status])}
+    </span>
   );
-  const previousStatus = useRef(state.status);
-  const manuallyChanged = useRef(false);
-  useEffect(() => {
-    const completed = state.status === "succeeded" || state.status === "failed";
-    if (previousStatus.current !== state.status && completed && !manuallyChanged.current) {
-      setExpanded(true);
-    }
-    previousStatus.current = state.status;
-  }, [state.status]);
 
   return (
     <section className="zhiyan-panel" aria-labelledby={`zhiyan-${revisionId}`}>
-      <button
-        className="zhiyan-panel__heading zhiyan-panel__toggle"
-        type="button"
-        aria-expanded={expanded}
-        aria-controls={`zhiyan-body-${revisionId}`}
-        onClick={() => {
-          manuallyChanged.current = true;
-          setExpanded((current) => !current);
-        }}
-      >
-        <div>
-          <p className="section-kicker">{t("知言报告")}</p>
-          <h3 id={`zhiyan-${revisionId}`}>{title}</h3>
-        </div>
-        <span className="source-operation__status">
-          <span>{t(STATUS_LABELS[state.status])}</span>
-        </span>
-      </button>
+      {/* The tab shows a truncated title; the report itself shows all of it. */}
+      <header className="zhiyan-panel__heading">
+        <h3 id={`zhiyan-${revisionId}`}>{title}</h3>
+        {statusChip}
+      </header>
 
-      {expanded ? <div id={`zhiyan-body-${revisionId}`}>
+      <div id={`zhiyan-body-${revisionId}`}>
 
       {unfinished && execution?.error ? (
         <p role="alert" className="form-error">
@@ -108,13 +86,20 @@ export function ZhiyanPanel({
           <button
             className="button button--quiet"
             type="button"
-            disabled={busy}
+            aria-describedby={stopping ? `zhiyan-stopping-${revisionId}` : undefined}
+            disabled={busy || stopping}
             onClick={() => onCancel(execution.id)}
           >
-            {t("终止分析")}
+            {stopping ? t("正在终止…") : t("终止分析")}
           </button>
         ) : null}
       </div>
+
+      {stopping ? (
+        <p className="form-hint" role="status" id={`zhiyan-stopping-${revisionId}`}>
+          {t("已请求终止，正在等待当前调用结束。")}
+        </p>
+      ) : null}
 
       {retryHint ? (
         <p className="form-hint" role="status" id={`zhiyan-retry-${revisionId}`}>
@@ -137,7 +122,7 @@ export function ZhiyanPanel({
           />
         </>
       ) : null}
-      </div> : null}
+      </div>
     </section>
   );
 }

@@ -3,6 +3,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { ApiError, deleteTask, renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { useInterfaceLocale } from "../interfaceLocale";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
 import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
@@ -35,6 +36,7 @@ export function TaskCard({
   const [name, setName] = useState(task.display_name);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const [zhiyan, setZhiyan] = useState<ZhiyanAreaState | null>(null);
   const [focus, setFocus] = useState<"work" | "sources">(() =>
@@ -69,7 +71,6 @@ export function TaskCard({
   }
 
   async function removeTask() {
-    if (!window.confirm(t("删除任务后将立即消失且无法恢复，确定删除吗？"))) return;
     setDeleting(true);
     try {
       await deleteTask(accessToken, task.id);
@@ -169,7 +170,7 @@ export function TaskCard({
                 task.delete_disabled_reason ? `delete-reason-${task.id}` : undefined
               }
               disabled={!task.can_delete || deleting}
-              onClick={() => void removeTask()}
+              onClick={() => setConfirmingDelete(true)}
             >
               {deleting ? t("删除中") : t("删除")}
             </button>
@@ -202,14 +203,23 @@ export function TaskCard({
           {error ? <p role="alert" className="form-error">{error}</p> : null}
         </div>
       )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t("永久删除这个任务？")}
+        body={t("任务及其工作内容将立即消失且无法恢复。")}
+        confirmLabel={t("删除任务")}
+        danger
+        onOpenChange={setConfirmingDelete}
+        onConfirm={() => void removeTask()}
+      />
       {opened ? (
         <div className="task-detail">
           {focus === "sources" ? (
-            <section className="task-source-view" aria-labelledby={`sources-${task.id}-heading`}>
-              <header className="task-pane-heading">
-                <h2 id={`sources-${task.id}-heading`}>{t("来源")}</h2>
-                <span>{locale === "en" ? `${sourceCount} sources` : `${sourceCount} 个来源`} · V{task.current_version_number}</span>
-              </header>
+            <section className="task-source-view" aria-label={t("来源")}>
+              {/* No pane heading: the tab above already says 来源 and the task
+                  header already says 共 N 个来源 · V2. What this view needs is
+                  the version it shows and what can be done to it, which is the
+                  toolbar TaskSourceVersions owns. */}
               <TaskSourceVersions
                 accessToken={accessToken}
                 taskId={task.id}
@@ -271,7 +281,7 @@ export function TaskCard({
               ) : (
                 <p className="form-hint" role="status">
                   {!viewingCurrent
-                    ? t("历史任务版本只读，恢复为当前版本后才能撰写立言。")
+                    ? t("历史版本只读，恢复为当前版本后才能撰写立言。")
                     : domainMessage(zhiyan?.liyanReason ?? "知言状态读取中。")}
                 </p>
               )}

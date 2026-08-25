@@ -21,6 +21,7 @@ import {
   type PublicationArticle,
 } from "./PublicationConfirmation";
 import { ArticleWorkingCopyEditor } from "./ArticleWorkingCopyEditor";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { articleContentHash, draftMatchesRevision } from "./articleContentHash";
 import { InstructionEditor, type CapsuleSelection } from "./InstructionEditor";
 import { canonicalizeArticleMarkdown } from "./articleMarkdown";
@@ -89,6 +90,9 @@ export function LiyanPanel({
   const appliedResultIdRef = useRef<string | null>(null);
   const workingCopyHashRef = useRef<string | null>(null);
   const unsavedEditsRef = useRef(false);
+  // Overwriting unsaved edits asks first — in the page, because a native
+  // confirm() the browser suppresses returns false and silently cancels.
+  const [restoringRevisionId, setRestoringRevisionId] = useState<string | null>(null);
 
   const updateWorkingCopy = useCallback((next: LiyanWorkingCopy) => {
     setWorkingCopy(next);
@@ -237,7 +241,6 @@ export function LiyanPanel({
   }
 
   async function restore(revisionId: string) {
-    if (unsavedEditsRef.current && !window.confirm(DISCARD_ON_RESTORE)) return;
     setBusy(true);
     try {
       const next = await restoreLiyanRevision(
@@ -456,7 +459,10 @@ export function LiyanPanel({
                   unsavedEdits ? UNSAVED_EDITS : state.capabilities.publication_unavailable_reason
                 }
                 disabled={busy || !state.capabilities.can_save}
-                onRestore={(revisionId) => void restore(revisionId)}
+                onRestore={(revisionId) => {
+                  if (unsavedEditsRef.current) setRestoringRevisionId(revisionId);
+                  else void restore(revisionId);
+                }}
               />
             </Dialog.Content>
           </Dialog.Portal>
@@ -471,6 +477,20 @@ export function LiyanPanel({
           onChange={updateWorkingCopy}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={restoringRevisionId !== null}
+        title={t("恢复这个历史 Revision？")}
+        body={t(DISCARD_ON_RESTORE)}
+        confirmLabel={t("恢复")}
+        danger
+        onOpenChange={(open) => { if (!open) setRestoringRevisionId(null); }}
+        onConfirm={() => {
+          const revisionId = restoringRevisionId;
+          setRestoringRevisionId(null);
+          if (revisionId) void restore(revisionId);
+        }}
+      />
     </section>
   );
 }

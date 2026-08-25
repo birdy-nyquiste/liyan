@@ -4,14 +4,14 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BookOpenText,
-  ChevronLeft,
+  ChevronDown,
   ChevronRight,
   FilePlus2,
   Languages,
   LogOut,
   Menu,
   MoreHorizontal,
+  MonitorCog,
   MoonStar,
   Newspaper,
   PanelLeftClose,
@@ -40,6 +40,7 @@ import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocal
 import { setHistoryGuard } from "../navigationGuard";
 import { PublicationCenter } from "./PublicationCenter";
 import { TaskCard } from "./TaskCard";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { TaskCreationSession } from "./TaskCreationSession";
 
 type Locale = InterfaceLocale;
@@ -54,8 +55,13 @@ const copy = {
     collapse: "折叠侧栏",
     expand: "展开侧栏",
     signOut: "退出登录",
-    language: "中文",
+    language: "语言",
+    languageValue: "中文",
     theme: "主题",
+    themes: { light: "浅色", dark: "深色", system: "跟随系统" },
+    preferences: "账户与偏好",
+    signOutTitle: "退出登录？",
+    signOutBody: "未保存的创建内容或来源修改会被丢弃，下次进入需要重新收取验证码。",
     rename: "重命名",
     remove: "删除",
     deleteTitle: "永久删除这个任务？",
@@ -64,8 +70,6 @@ const copy = {
     confirmDelete: "删除任务",
     empty: "还没有立言任务",
     missing: "找不到这个任务",
-    creationKicker: "任务创建会话",
-    creationDescription: "添加一至三个来源，确认后才会创建正式任务。",
     openNavigation: "打开导航",
     closeNavigation: "关闭导航",
     unavailable: "服务暂不可用，部分操作可能失败。",
@@ -76,6 +80,8 @@ const copy = {
     operations: "操作",
     loadMore: "加载更多",
     unsavedNavigation: "未保存的创建内容或来源修改会被丢弃，确定离开吗？",
+    unsavedNavigationTitle: "离开这里？",
+    leaveAnyway: "仍要离开",
   },
   en: {
     navigation: "Primary navigation",
@@ -85,8 +91,13 @@ const copy = {
     collapse: "Collapse sidebar",
     expand: "Expand sidebar",
     signOut: "Sign out",
-    language: "English",
+    language: "Language",
+    languageValue: "English",
     theme: "Theme",
+    themes: { light: "Light", dark: "Dark", system: "System" },
+    preferences: "Account and preferences",
+    signOutTitle: "Sign out?",
+    signOutBody: "Unsaved creation content or source changes will be discarded, and signing back in needs a new email code.",
     rename: "Rename",
     remove: "Delete",
     deleteTitle: "Permanently delete this task?",
@@ -95,8 +106,6 @@ const copy = {
     confirmDelete: "Delete task",
     empty: "No tasks yet",
     missing: "This task could not be found",
-    creationKicker: "Task creation session",
-    creationDescription: "Add one to three sources. The task is created only after confirmation.",
     openNavigation: "Open navigation",
     closeNavigation: "Close navigation",
     unavailable: "The service is temporarily unavailable. Some actions may fail.",
@@ -107,6 +116,8 @@ const copy = {
     operations: "actions",
     loadMore: "Load more",
     unsavedNavigation: "Unsaved creation content or source changes will be discarded. Leave this page?",
+    unsavedNavigationTitle: "Leave this page?",
+    leaveAnyway: "Leave anyway",
   },
 } as const;
 
@@ -168,7 +179,7 @@ function SidebarTask({
   accessToken: string;
   onRenamed(task: TaskSummary): void;
   onDeleted(taskId: string): void;
-  onNavigate(): boolean;
+  onNavigate(to: string): boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(task.display_name);
@@ -239,10 +250,10 @@ function SidebarTask({
             aria-label={collapsed ? task.display_name : undefined}
             aria-current={active ? "page" : undefined}
             onClick={(event) => {
-              if (!onNavigate()) event.preventDefault();
+              if (!onNavigate(`/task/${task.id}`)) event.preventDefault();
             }}
           >
-            {collapsed ? <BookOpenText size={19} aria-hidden="true" /> : task.display_name}
+            {task.display_name}
           </Link>
         </RailTooltip>
       )}
@@ -352,41 +363,59 @@ function Sidebar({
   onRenamed(task: TaskSummary): void;
   onDeleted(taskId: string): void;
   onSignOut(): void;
-  onNavigate(): boolean;
+  onNavigate(to: string): boolean;
   hasMore: boolean;
   onLoadMore(): void;
 }) {
   const [tasksOpen, setTasksOpen] = useState(() =>
     storedValue("liyan.tasksOpen", ["true", "false"], "true") === "true",
   );
-  const themeIcon = theme === "light" ? <Sun size={18} /> : <MoonStar size={18} />;
+  // The three preference actions are consulted rarely; the address they belong
+  // to is what a writer checks. So the address holds the foot of the rail and
+  // the actions fold into it.
+  const [accountOpen, setAccountOpen] = useState(() =>
+    storedValue("liyan.accountOpen", ["true", "false"], "false") === "true",
+  );
+  // Signing out is one unlabelled icon away from the avatar in the rail, and it
+  // costs a fresh email code to undo.
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const themeIcon =
+    theme === "light" ? <Sun size={18} />
+    : theme === "dark" ? <MoonStar size={18} />
+    : <MonitorCog size={18} />;
 
   return (
     <Tooltip.Provider delayDuration={250}>
     <aside className="app-sidebar" data-collapsed={collapsed || undefined}>
+      {/* Collapsed, the mark occupies the only spot a control could sit in, so it
+          becomes the control: pointing at it swaps the mark for the toggle. */}
       <div className="sidebar-brand">
         <img src="/liyan-mark.svg" alt="" />
         {!collapsed ? <strong>立言阁</strong> : null}
         <RailTooltip label={collapsed ? text.expand : text.collapse} show>
           <button className="icon-button sidebar-collapse" type="button" aria-label={collapsed ? text.expand : text.collapse} onClick={onCollapse}>
-            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={18} />}
           </button>
         </RailTooltip>
       </div>
 
       <nav className="sidebar-primary" aria-label={text.navigation}>
         <RailTooltip label={text.newTask} show={collapsed}>
-          <NavLink aria-label={text.newTask} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
+          <NavLink aria-label={text.newTask} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate("/task")) event.preventDefault(); }}>
             <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTask}</span> : null}
           </NavLink>
         </RailTooltip>
         <RailTooltip label={text.publications} show={collapsed}>
-          <NavLink aria-label={text.publications} className="sidebar-nav-link" to="/publications" onClick={(event) => { if (!onNavigate()) event.preventDefault(); }}>
+          <NavLink aria-label={text.publications} className="sidebar-nav-link" to="/publications" onClick={(event) => { if (!onNavigate("/publications")) event.preventDefault(); }}>
             <Newspaper size={19} aria-hidden="true" /> {!collapsed ? <span>{text.publications}</span> : null}
           </NavLink>
         </RailTooltip>
       </nav>
 
+      {/* Not merely hidden with CSS: a rail full of identical book icons is not
+          a task list, and rendering it would put every task in the tab order
+          behind a label no one can tell apart. */}
+      {!collapsed ? (
       <section className="sidebar-tasks" aria-label={text.tasks}>
         {!collapsed ? (
           <button
@@ -399,7 +428,7 @@ function Sidebar({
               window.localStorage.setItem("liyan.tasksOpen", String(next));
             }}
           >
-            {text.tasks} {tasksOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+            {text.tasks} {tasksOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
           </button>
         ) : null}
         {tasksOpen || collapsed ? (
@@ -424,25 +453,77 @@ function Sidebar({
           </div>
         ) : null}
       </section>
+      ) : null}
 
       <div className="sidebar-account">
-        <RailTooltip label={`${text.theme}: ${theme}`} show={collapsed}>
-          <button aria-label={`${text.theme}: ${theme}`} className="sidebar-account__action" type="button" onClick={onTheme}>
-            {themeIcon} {!collapsed ? <span>{theme === "system" ? "System" : theme}</span> : null}
+        <div className="sidebar-account__group" id="sidebar-preferences" data-open={accountOpen || undefined}>
+          <div className="sidebar-account__actions" aria-hidden={!accountOpen || undefined}>
+        <RailTooltip label={`${text.theme}: ${text.themes[theme]}`} show={collapsed}>
+          <button aria-label={`${text.theme}: ${text.themes[theme]}`} className="sidebar-account__action" type="button" onClick={onTheme} tabIndex={accountOpen ? undefined : -1}>
+            {themeIcon}
+            {!collapsed ? (
+              <>
+                <span>{text.theme}</span>
+                <span className="sidebar-account__value">{text.themes[theme]}</span>
+              </>
+            ) : null}
           </button>
         </RailTooltip>
-        <RailTooltip label={text.language} show={collapsed}>
-          <button aria-label={text.language} className="sidebar-account__action" type="button" onClick={onLocale}>
-            <Languages size={18} /> {!collapsed ? <span>{text.language}</span> : null}
+        <RailTooltip label={`${text.language}: ${text.languageValue}`} show={collapsed}>
+          <button aria-label={`${text.language}: ${text.languageValue}`} className="sidebar-account__action" type="button" onClick={onLocale} tabIndex={accountOpen ? undefined : -1}>
+            <Languages size={18} />
+            {!collapsed ? (
+              <>
+                <span>{text.language}</span>
+                <span className="sidebar-account__value">{text.languageValue}</span>
+              </>
+            ) : null}
           </button>
         </RailTooltip>
-        <div className="sidebar-identity">
-          <span className="avatar" aria-hidden="true">{identity.email.charAt(0).toUpperCase()}</span>
-          {!collapsed ? <span className="sidebar-identity__email">{identity.email}</span> : null}
-        </div>
         <RailTooltip label={text.signOut} show={collapsed}>
-          <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={onSignOut}>
+          <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={() => setSignOutOpen(true)} tabIndex={accountOpen ? undefined : -1}>
             <LogOut size={18} /> {!collapsed ? <span>{text.signOut}</span> : null}
+          </button>
+        </RailTooltip>
+
+        <AlertDialog.Root open={signOutOpen} onOpenChange={setSignOutOpen}>
+          <AlertDialog.Portal>
+            <AlertDialog.Overlay className="dialog-overlay" />
+            <AlertDialog.Content className="dialog-content">
+              <AlertDialog.Title>{text.signOutTitle}</AlertDialog.Title>
+              <AlertDialog.Description>{text.signOutBody}</AlertDialog.Description>
+              <div className="dialog-actions">
+                <AlertDialog.Cancel className="button button--quiet">{text.cancel}</AlertDialog.Cancel>
+                <button className="button button--danger" type="button" onClick={onSignOut}>
+                  {text.signOut}
+                </button>
+              </div>
+            </AlertDialog.Content>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
+          </div>
+        </div>
+
+        <RailTooltip label={identity.email} show={collapsed}>
+          <button
+            className="sidebar-identity"
+            type="button"
+            aria-label={`${text.preferences}: ${identity.email}`}
+            aria-expanded={accountOpen}
+            aria-controls="sidebar-preferences"
+            onClick={() => {
+              const next = !accountOpen;
+              setAccountOpen(next);
+              window.localStorage.setItem("liyan.accountOpen", String(next));
+            }}
+          >
+            <span className="avatar" aria-hidden="true">{identity.email.charAt(0).toUpperCase()}</span>
+            {!collapsed ? (
+              <>
+                <span className="sidebar-identity__email">{identity.email}</span>
+                <ChevronDown className="sidebar-identity__caret" size={15} aria-hidden="true" />
+              </>
+            ) : null}
           </button>
         </RailTooltip>
       </div>
@@ -510,31 +591,36 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creationDirty, setCreationDirty] = useState(false);
   const [sourceDirty, setSourceDirty] = useState(false);
-  const confirmDiscard = useCallback(() => {
-    if (!creationDirty && !sourceDirty) return false;
-    const allowed = window.confirm(preferences.text.unsavedNavigation);
-    if (allowed) {
-      setCreationDirty(false);
-      setSourceDirty(false);
-    }
-    return allowed;
-  }, [creationDirty, preferences.text.unsavedNavigation, sourceDirty]);
+  /**
+   * What a blocked navigation is waiting on. Held as a thunk rather than run
+   * immediately: the writer has to answer first, and the answer arrives from a
+   * dialog rather than from `window.confirm` — which a browser may suppress,
+   * answering "stay here" on their behalf and trapping them on the page.
+   */
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const dirty = creationDirty || sourceDirty;
+  const allowNavigation = useCallback(() => {
+    setCreationDirty(false);
+    setSourceDirty(false);
+  }, []);
+  const requestNavigation = useCallback((proceed: () => void) => {
+    if (!dirty) return true;
+    setPendingNavigation(() => proceed);
+    return false;
+  }, [dirty]);
+
   useLayoutEffect(() => {
-    if (!creationDirty && !sourceDirty) {
+    if (!dirty) {
       setHistoryGuard(null);
       return;
     }
     setHistoryGuard({
-      confirm: () => window.confirm(preferences.text.unsavedNavigation),
-      onAllowed: () => {
-        setCreationDirty(false);
-        setSourceDirty(false);
-      },
+      onBlocked: (replay) => setPendingNavigation(() => replay),
       protectedState: window.history.state,
       protectedUrl: window.location.href,
     });
     return () => setHistoryGuard(null);
-  }, [creationDirty, preferences.text.unsavedNavigation, sourceDirty]);
+  }, [dirty]);
   const taskQuery = useInfiniteQuery({
     queryKey: ["tasks", accessToken],
     queryFn: ({ pageParam }) => listTaskPage(accessToken, pageParam),
@@ -577,11 +663,6 @@ export function AppShell({
     );
   }
 
-  function safeToNavigate() {
-    if (!creationDirty && !sourceDirty) return true;
-    return confirmDiscard();
-  }
-
   function deleted(taskId: string) {
     removeTask(taskId);
     if (currentTaskId === taskId) navigate("/task");
@@ -605,9 +686,14 @@ export function AppShell({
       onTheme={() => preferences.setTheme(preferences.theme === "light" ? "dark" : preferences.theme === "dark" ? "system" : "light")}
       onRenamed={promoteTask}
       onDeleted={deleted}
-      onSignOut={() => { if (safeToNavigate()) void onSignOut(); }}
-      onNavigate={() => {
-        const allowed = safeToNavigate();
+      onSignOut={() => {
+        if (requestNavigation(() => void onSignOut())) void onSignOut();
+      }}
+      onNavigate={(to) => {
+        const allowed = requestNavigation(() => {
+          setMobileOpen(false);
+          navigate(to);
+        });
         if (allowed) setMobileOpen(false);
         return allowed;
       }}
@@ -620,6 +706,20 @@ export function AppShell({
     <InterfaceLocaleProvider locale={preferences.locale}>
     <div className="app-frame" data-sidebar-collapsed={collapsed || undefined}>
       <div className="desktop-sidebar">{sidebar}</div>
+      <ConfirmDialog
+        open={pendingNavigation !== null}
+        title={preferences.text.unsavedNavigationTitle}
+        body={preferences.text.unsavedNavigation}
+        confirmLabel={preferences.text.leaveAnyway}
+        danger
+        onOpenChange={(open) => { if (!open) setPendingNavigation(null); }}
+        onConfirm={() => {
+          const proceed = pendingNavigation;
+          setPendingNavigation(null);
+          allowNavigation();
+          proceed?.();
+        }}
+      />
       <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
         <Dialog.Trigger className="mobile-menu-button" aria-label={preferences.text.openNavigation}>
           <Menu size={22} />
@@ -643,14 +743,11 @@ export function AppShell({
             element={
               <div className="creation-page">
                 <header className="page-heading">
-                  <p className="section-kicker">{preferences.text.creationKicker}</p>
                   <h1>{preferences.text.newTask}</h1>
-                  <p>{preferences.text.creationDescription}</p>
                 </header>
                 <TaskCreationSession
                   accessToken={accessToken}
                   onDirtyChange={setCreationDirty}
-                  onClose={() => navigate("/publications")}
                   onCreated={(task) => {
                     setCreationDirty(false);
                     promoteTask(task);

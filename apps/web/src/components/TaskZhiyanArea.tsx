@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import * as Tabs from "@radix-ui/react-tabs";
 
 import {
   ApiError,
@@ -12,6 +13,7 @@ import {
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { ZhiyanPanel } from "./ZhiyanPanel";
+import { STATUS_LABELS } from "./zhiyanStatus";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { EXECUTION_POLL_MS } from "./pollIntervals";
 
@@ -111,6 +113,12 @@ export function TaskZhiyanArea({
     return () => clearTimeout(timer);
   }, [active, polls, load, pollIntervalMs]);
 
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const sources = overview?.sources ?? [];
+  const selected =
+    sources.find((source) => source.source_revision_id === selectedId)?.source_revision_id
+    ?? sources[0]?.source_revision_id;
+
   const act = useCallback(
     async (action: () => Promise<unknown>, failure: string) => {
       setBusy(true);
@@ -161,24 +169,71 @@ export function TaskZhiyanArea({
 
   return (
     <div className="task-card__zhiyan">
-      <h3 className="section-kicker" ref={zhiyanHeading} tabIndex={-1}>
+      {/* The pane is already titled 知言 and each report names its own source, so
+          this line only repeated the count. It stays in the accessibility tree
+          because it is the heading focus moves to when a run finishes. */}
+      <h3 className="sr-only" ref={zhiyanHeading} tabIndex={-1}>
         {locale === "en" ? `${overview.sources.length} independent source reports` : `共 ${overview.sources.length} 个来源的独立报告`}
       </h3>
       {error ? (
         <p role="alert" className="form-error">{domainMessage(error)}</p>
       ) : null}
-      {overview.sources.map((source) => (
-        <ZhiyanPanel
-          key={source.source_revision_id}
-          state={source}
-          busy={busy}
-          onStart={start}
-          onCancel={cancel}
-          onRetryAllowed={() => void load()}
-          taskVersionId={overview.task_version_id}
-          onCapsuleSelect={onCapsuleSelect}
-        />
-      ))}
+      {/*
+        * One report at a time. Each is six sections of prose, so stacked they
+        * could not be compared anyway — reaching the second meant scrolling past
+        * the whole of the first. A task holds at most three sources, which is
+        * what makes a tab strip the right shape here rather than a growing list.
+        */}
+      {overview.sources.length > 1 ? (
+        <Tabs.Root
+          className="zhiyan-tabs"
+          value={selected}
+          onValueChange={setSelectedId}
+        >
+          <Tabs.List className="zhiyan-tabs__list" aria-label={t("知言报告")}>
+            {overview.sources.map((source, position) => (
+              <Tabs.Trigger
+                className="zhiyan-tab"
+                key={source.source_revision_id}
+                value={source.source_revision_id}
+                title={source.source_title}
+              >
+                <span className="zhiyan-tab__index">{position + 1}</span>
+                <span className="zhiyan-tab__title">{source.source_title}</span>
+                <span className={`zhiyan-tab__dot zhiyan-tab__dot--${source.status}`} aria-hidden="true" />
+                {/* The dot is the visible signal; this is the one screen readers get. */}
+                <span className="sr-only">{t(STATUS_LABELS[source.status])}</span>
+              </Tabs.Trigger>
+            ))}
+          </Tabs.List>
+          {overview.sources.map((source) => (
+            <Tabs.Content key={source.source_revision_id} value={source.source_revision_id}>
+              <ZhiyanPanel
+                state={source}
+                busy={busy}
+                onStart={start}
+                onCancel={cancel}
+                onRetryAllowed={() => void load()}
+                taskVersionId={overview.task_version_id}
+                onCapsuleSelect={onCapsuleSelect}
+              />
+            </Tabs.Content>
+          ))}
+        </Tabs.Root>
+      ) : (
+        overview.sources.map((source) => (
+          <ZhiyanPanel
+            key={source.source_revision_id}
+            state={source}
+            busy={busy}
+            onStart={start}
+            onCancel={cancel}
+            onRetryAllowed={() => void load()}
+            taskVersionId={overview.task_version_id}
+            onCapsuleSelect={onCapsuleSelect}
+          />
+        ))
+      )}
     </div>
   );
 }

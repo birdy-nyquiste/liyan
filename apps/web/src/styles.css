@@ -77,6 +77,19 @@ textarea {
   gap: 40px;
 }
 
+.masthead__brand {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.masthead__mark {
+  width: 88px;
+  height: 88px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
 .eyebrow,
 .section-kicker {
   margin: 0 0 14px;
@@ -412,6 +425,16 @@ h1 {
   .masthead {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .masthead__brand {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .masthead__mark {
+    width: 62px;
+    height: 62px;
   }
 }
 

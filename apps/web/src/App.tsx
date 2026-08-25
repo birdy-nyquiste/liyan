@@ -116,10 +116,13 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
   return (
     <main className="shell">
       <header className="masthead">
-        <div>
-          <p className="eyebrow">LIYAN WORKBENCH</p>
-          <h1>立言阁</h1>
-          <p className="subtitle">从来源到知言，再到由你定调的立言文章。</p>
+        <div className="masthead__brand">
+          <img className="masthead__mark" src="/liyan-mark.svg" alt="" />
+          <div>
+            <p className="eyebrow">LIYAN WORKBENCH</p>
+            <h1>立言阁</h1>
+            <p className="subtitle">从来源到知言，再到由你定调的立言文章。</p>
+          </div>
         </div>
         <div className={`status status--${health}`} role="status" aria-live="polite">
           <span className="status__dot" aria-hidden="true" />

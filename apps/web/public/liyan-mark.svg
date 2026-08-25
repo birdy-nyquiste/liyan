@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">立言阁</title>
+  <desc id="desc">The character 言 shaped as a pavilion.</desc>
+
+  <!-- A compact finial and gable give the top stroke of 言 its pavilion read. -->
+  <path fill="#202830" d="M113 16h30l-5 16h-20z"/>
+  <path fill="#202830" d="m88 88 40-42 40 42z"/>
+
+  <!-- The broad first stroke keeps the silhouette recognizable at favicon size. -->
+  <path fill="#9A7428" d="M21 84c24 8 45 1 65-20l29-31h26l29 31c20 21 41 28 65 20-12 23-36 31-70 23H91c-34 8-58 0-70-23Z"/>
+  <path fill="#9A7428" d="M43 93h170l-11 17H54z"/>
+
+  <!-- Dark uprights turn the second stroke into an open pavilion level. -->
+  <path fill="#202830" d="M67 108h18v25H67zm104 0h18v25h-18z"/>
+  <path fill="#9A7428" d="M57 129h142l-10 18H67z"/>
+  <path fill="#9A7428" d="M67 157h122l-8 17H75z"/>
+
+  <!-- The lower 口 is both the last part of 言 and the attic opening. -->
+  <path fill="#9A7428" fill-rule="evenodd" d="M78 184h100l7 49H71l7-49Zm20 14-3 25h66l-3-25H98Z"/>
+  <path fill="#202830" d="M67 231h122l12 11H55z"/>
+</svg>

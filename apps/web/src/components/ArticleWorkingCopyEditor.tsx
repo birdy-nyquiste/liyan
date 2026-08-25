@@ -92,9 +92,13 @@ export function ArticleWorkingCopyEditor({
 
   return (
     <article className="liyan-working-copy" aria-label={t("未保存 Working Copy")}>
-      <p className="section-kicker">{t("未保存 Working Copy")}</p>
-      <label htmlFor={`liyan-title-${taskId}`}>{t("文章标题")}</label>
+      <p className="liyan-working-copy__state">{t("未保存 Working Copy")}</p>
+      {/* A document's title is its title, not a labelled field in a form. The
+          label stays for anyone who cannot see where the caret is. */}
+      <label className="sr-only" htmlFor={`liyan-title-${taskId}`}>{t("文章标题")}</label>
       <input
+        className="liyan-working-copy__title"
+        placeholder={t("文章标题")}
         id={`liyan-title-${taskId}`}
         value={value.title}
         disabled={disabled}

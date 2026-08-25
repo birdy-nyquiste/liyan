@@ -568,9 +568,15 @@
   white-space: nowrap;
 }
 
+/*
+ * The routed surface is the app's one scroller, so the document itself never
+ * scrolls. On html, a stable gutter reserved 15px that nothing could ever use —
+ * a permanent empty strip down the right of the window.
+ */
 .route-surface {
   min-width: 0;
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--surface);
 }
 
@@ -1458,7 +1464,7 @@ html[lang^="zh"] .signed-out-hero .subtitle {
  * view that grows past the fold shoves the content beside it a few pixels left,
  * and shoves it back when it shrinks.
  */
-html,
+.route-surface,
 .task-source-view,
 .task-workspace-pane > .zhiyan-panel,
 .task-workspace-pane > .liyan-panel,
@@ -2498,21 +2504,29 @@ a.source-meta:focus-visible .source-meta__value {
 }
 
 .liyan-instruction-label,
-.liyan-working-copy > label {
-  display: block;
-  margin: 18px 0 7px;
-  color: var(--ink);
-  font-size: 0.86rem;
-  font-weight: 700;
+.liyan-working-copy__state {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
 }
 
-.liyan-working-copy > input {
+.liyan-working-copy__title {
   width: 100%;
-  padding: 11px 13px;
-  border: 1px solid var(--field-border);
-  border-radius: 10px;
-  background: var(--surface);
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
   color: var(--ink);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: 1.45rem;
+  line-height: 1.4;
+}
+
+.liyan-working-copy__title::placeholder {
+  color: var(--ink-faint);
+}
+
+.liyan-working-copy__title:focus-visible {
+  outline: none;
 }
 
 .liyan-instruction-editor__content {
@@ -2551,25 +2565,42 @@ a.source-meta:focus-visible .source-meta__value {
   box-shadow: 0 0 0 3px rgb(133 107 55 / 22%);
 }
 
+/* The article is the artifact this pane exists for; it reads as a document on
+   the pane's own surface rather than as a field inside a form. */
 .liyan-working-copy {
-  margin-top: 22px;
-  padding-top: 20px;
-  border-top: 1px solid var(--rule-soft);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  margin: 0;
+  max-width: 68ch;
 }
 
+/* Formatting stays reachable in a long article instead of scrolling away. */
 .liyan-toolbar {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin: 12px 0 8px;
+  gap: 2px;
+  margin: 6px 0 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  background: var(--surface);
 }
 
 .liyan-toolbar__button {
-  min-height: 34px;
-  padding: 6px 9px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 7px;
-  font-size: 0.82rem;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+}
+
+.liyan-toolbar__button:hover:not(:disabled) {
+  background: var(--surface-sunk);
+  color: var(--ink);
 }
 
 .liyan-toolbar__button[aria-pressed="true"] {
@@ -2580,16 +2611,19 @@ a.source-meta:focus-visible .source-meta__value {
 
 .liyan-editor__content {
   min-height: 260px;
-  padding: 18px;
-  border: 1px solid var(--field-border);
-  border-radius: 10px;
-  background: var(--surface);
-  line-height: 1.7;
+  padding: 0 0 var(--space-2xl);
+  border: 0;
+  background: transparent;
+  font-size: 1.02rem;
+  line-height: 1.85;
   outline: none;
+  text-wrap: pretty;
 }
 
-.liyan-editor__content:focus-visible,
-.liyan-working-copy > input:focus-visible,
+.liyan-editor__content p {
+  margin: 0 0 1.1em;
+}
+
 .liyan-instruction-editor__content:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(133 107 55 / 18%);

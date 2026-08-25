@@ -30,6 +30,22 @@ describe("canonical article Markdown", () => {
     expect(tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap(markdown))).toBe(markdown);
   });
 
+  it("keeps an underscore inside a word through repeated saves", () => {
+    // `**base_url**` used to serialise as `**base\\_url**`; the escape splits the
+    // bold span when it is read back, so the next save wrote
+    // `**base****\\_****url**` and the article rendered as base**_**url. Each
+    // save degraded it further, which makes idempotence the thing to assert.
+    const once = tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap("**base_url**"));
+    const twice = tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap(once));
+
+    expect(once).toBe("**base_url**");
+    expect(twice).toBe(once);
+
+    // An underscore that could be read as emphasis is still escaped.
+    expect(tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap("_leading_"))).toBe("*leading*");
+    expect(tiptapToCanonicalMarkdown(canonicalMarkdownToTiptap("a \\_b\\_ c"))).toBe("a \\_b\\_ c");
+  });
+
   it("serializes an independently authored Tiptap document to canonical Markdown", () => {
     expect(tiptapToCanonicalMarkdown({
       type: "doc",

@@ -79,7 +79,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Task */
+        get: operations["get_task"];
         put?: never;
         post?: never;
         /** Delete Task */
@@ -823,6 +824,8 @@ export interface components {
         EligibleArticleListResponse: {
             /** Items */
             items: components["schemas"]["EligibleArticleResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** EligibleArticleResponse */
         EligibleArticleResponse: {
@@ -1224,6 +1227,8 @@ export interface components {
         PublishTaskListResponse: {
             /** Items */
             items: components["schemas"]["PublishTaskResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** PublishTaskResponse */
         PublishTaskResponse: {
@@ -1496,6 +1501,8 @@ export interface components {
         TaskListResponse: {
             /** Items */
             items: components["schemas"]["TaskSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** TaskSummary */
         TaskSummary: {
@@ -1514,6 +1521,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Last Activity At
+             * Format: date-time
+             */
+            last_activity_at: string;
             /** Current Version Id */
             current_version_id: string;
             /** Current Version Number */
@@ -1814,7 +1826,10 @@ export interface operations {
     };
     list_tasks: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1828,6 +1843,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2965,7 +3020,10 @@ export interface operations {
     };
     list_eligible_articles: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2981,11 +3039,23 @@ export interface operations {
                     "application/json": components["schemas"]["EligibleArticleListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     list_publish_tasks: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2999,6 +3069,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublishTaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

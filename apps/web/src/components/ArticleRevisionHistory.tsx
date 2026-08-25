@@ -6,14 +6,14 @@ const savedAt = (value: string) => new Date(value).toLocaleString("zh-CN");
 function RevisionContent({ revision }: { revision: LiyanRevisionResponse }) {
   return (
     <>
-      <p className="liyan-revision__identity">Revision {revision.number}</p>
+      <p className="liyan-revision__identity">草稿 {revision.number}</p>
       <p className="liyan-revision__title">{revision.title}</p>
       <p className="form-hint">
         {savedAt(revision.created_at)}
-        {revision.restored_from_revision_id ? "（由历史 Revision 恢复）" : ""}
+        {revision.restored_from_revision_id ? "（由历史草稿恢复）" : ""}
       </p>
       <ArticleReader
-        label={`Revision ${revision.number} 正文`}
+        label={`草稿 ${revision.number} 正文`}
         bodyMarkdown={revision.body_markdown}
       />
     </>
@@ -39,16 +39,16 @@ export function ArticleRevisionHistory({
   const { current, historical } = history;
   return (
     <section className="liyan-revisions" aria-labelledby="liyan-revisions-heading">
-      <p className="section-kicker" id="liyan-revisions-heading">文章 Revision</p>
+      <p className="section-kicker" id="liyan-revisions-heading">草稿历史</p>
       {current ? (
         <article className="liyan-revision liyan-revision--current">
           <RevisionContent revision={current} />
         </article>
       ) : (
-        <p className="form-hint">尚未保存任何 Revision。</p>
+        <p className="form-hint">尚未保存任何草稿。</p>
       )}
       {current && publishableRevisionId === current.id ? (
-        <p role="status" className="form-hint">Revision {current.number} 可用于发布。</p>
+        <p role="status" className="form-hint">草稿 {current.number} 可用于发布。</p>
       ) : publicationUnavailableReason ? (
         <p role="status" className="form-hint">{publicationUnavailableReason}</p>
       ) : null}
@@ -58,7 +58,7 @@ export function ArticleRevisionHistory({
             <li key={revision.id} className="liyan-revision">
               <details>
                 <summary>
-                  Revision {revision.number}：{revision.title}
+                  草稿 {revision.number}：{revision.title}
                 </summary>
                 <RevisionContent revision={revision} />
               </details>
@@ -68,7 +68,7 @@ export function ArticleRevisionHistory({
                 disabled={disabled}
                 onClick={() => onRestore(revision.id)}
               >
-                恢复为当前 Revision
+                恢复为新草稿
               </button>
             </li>
           ))}

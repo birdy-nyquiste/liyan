@@ -1,10 +1,12 @@
+import base64
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
@@ -23,6 +25,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
 from liyan_server.liyan.runs import LIYAN_TARGET_TYPE
+from liyan_server.task_activity import record_task_activity
 from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
 
@@ -33,6 +36,7 @@ class TaskSummary(BaseModel):
     first_source_title: str
     additional_source_count: int
     created_at: datetime
+    last_activity_at: datetime
     current_version_id: str
     current_version_number: int
     can_delete: bool
@@ -41,6 +45,7 @@ class TaskSummary(BaseModel):
 
 class TaskListResponse(BaseModel):
     items: list[TaskSummary]
+    next_cursor: str | None = None
 
 
 class RenameTaskRequest(BaseModel):
@@ -87,7 +92,12 @@ def task_summary(session: Session, task: Task) -> TaskSummary:
     revisions = version_source_revisions(session, task.current_version_id)
     if not revisions:
         raise ValueError("A formal task version must contain at least one source revision.")
-    if task.number is None or task.display_name is None or task.created_at is None:
+    if (
+        task.number is None
+        or task.display_name is None
+        or task.created_at is None
+        or task.last_activity_at is None
+    ):
         raise ValueError("A formal task must contain its recognition fields.")
     publication_pending = session.scalar(
         select(PublishTask.id).where(
@@ -102,6 +112,7 @@ def task_summary(session: Session, task: Task) -> TaskSummary:
         first_source_title=revisions[0].title,
         additional_source_count=max(0, len(revisions) - 1),
         created_at=aware_utc(task.created_at),
+        last_activity_at=aware_utc(task.last_activity_at),
         current_version_id=str(task.current_version_id),
         current_version_number=version.number,
         can_delete=publication_pending is None,
@@ -115,6 +126,30 @@ def task_summary(session: Session, task: Task) -> TaskSummary:
 
 def task_router(database: Database, current_user: CurrentUserDependency) -> APIRouter:
     router = APIRouter()
+
+    def encode_cursor(task: Task) -> str:
+        assert task.last_activity_at is not None
+        payload = json.dumps(
+            [aware_utc(task.last_activity_at).isoformat(), str(task.id)],
+            separators=(",", ":"),
+        ).encode()
+        return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+    def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            timestamp, task_id = json.loads(
+                base64.urlsafe_b64decode(cursor + padding).decode()
+            )
+            moment = datetime.fromisoformat(timestamp)
+            if moment.tzinfo is None:
+                raise ValueError
+            return moment, UUID(task_id)
+        except (ValueError, TypeError, json.JSONDecodeError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="The task cursor is invalid.",
+            ) from error
 
     def owned_task(session: Session, task_id: UUID, owner_id: UUID) -> Task:
         task = session.scalar(
@@ -138,17 +173,32 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
     def list_tasks(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
+        cursor: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=50)] = 20,
     ) -> TaskListResponse:
-        tasks = session.scalars(
-            select(Task)
-            .where(
+        statement = select(Task).where(
                 Task.owner_id == user.id,
                 Task.number.is_not(None),
                 Task.deleted_at.is_(None),
             )
-            .order_by(Task.number.desc())
-        ).all()
-        return TaskListResponse(items=[task_summary(session, task) for task in tasks])
+        if cursor is not None:
+            activity, task_id = decode_cursor(cursor)
+            statement = statement.where(
+                or_(
+                    Task.last_activity_at < activity,
+                    and_(Task.last_activity_at == activity, Task.id < task_id),
+                )
+            )
+        tasks = list(
+            session.scalars(
+                statement.order_by(Task.last_activity_at.desc(), Task.id.desc()).limit(limit + 1)
+            ).all()
+        )
+        page = tasks[:limit]
+        return TaskListResponse(
+            items=[task_summary(session, task) for task in page],
+            next_cursor=encode_cursor(page[-1]) if len(tasks) > limit else None,
+        )
 
     @router.patch(
         "/tasks/{task_id}",
@@ -170,8 +220,22 @@ def task_router(database: Database, current_user: CurrentUserDependency) -> APIR
             )
         task = owned_task(session, task_id, user.id)
         task.display_name = display_name
+        record_task_activity(task)
         session.commit()
         return task_summary(session, task)
+
+    @router.get(
+        "/tasks/{task_id}",
+        operation_id="get_task",
+        response_model=TaskSummary,
+        tags=["tasks"],
+    )
+    def get_task(
+        task_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> TaskSummary:
+        return task_summary(session, owned_task(session, task_id, user.id))
 
     @router.get(
         "/tasks/{task_id}/current-version",

@@ -10,7 +10,7 @@ describe("server health", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows that the server is alive through the generated API client", async () => {
+  it("checks that the server is alive without promoting normal health", async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: "alive" }), {
         status: 200,
@@ -21,7 +21,8 @@ describe("server health", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("服务正常")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "立言阁" })).toBeInTheDocument();
+    expect(screen.queryByText("服务正常")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -36,7 +37,7 @@ describe("server health", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("服务暂不可用")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("服务暂不可用");
   });
 });
 
@@ -73,7 +74,7 @@ describe("Email OTP sign in", () => {
     await user.type(screen.getByLabelText("验证码"), "123456");
     await user.click(screen.getByRole("button", { name: "登录" }));
 
-    expect(await screen.findByRole("heading", { name: "立言任务" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "新建立言任务" })).toBeInTheDocument();
     expect(screen.getByText("还没有立言任务")).toBeInTheDocument();
     expect(authProvider.sendEmailOtp).toHaveBeenCalledWith("writer@example.com");
     expect(authProvider.verifyEmailOtp).toHaveBeenCalledWith(
@@ -119,5 +120,59 @@ describe("Email OTP sign in", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("此账号暂无访问权限。");
     expect(authProvider.signOut).toHaveBeenCalledOnce();
     expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument();
+  });
+});
+
+describe("routed workbench shell", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState({}, "", "/");
+    window.localStorage.clear();
+  });
+
+  it("introduces signed-out visitors before the OTP form", async () => {
+    const authProvider: AuthProvider = {
+      getAccessToken: vi.fn().mockResolvedValue(null),
+      sendEmailOtp: vi.fn().mockResolvedValue(undefined),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
+
+    render(<App authProvider={authProvider} />);
+
+    expect(await screen.findByRole("heading", { name: "立言阁" })).toBeInTheDocument();
+    expect(screen.getByText("有感而发，知言而立")).toBeInTheDocument();
+    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.queryByText("服务正常")).not.toBeInTheDocument();
+  });
+
+  it("redirects a signed-in user to /task and keeps navigation in an app shell", async () => {
+    const authProvider: AuthProvider = {
+      getAccessToken: vi.fn().mockResolvedValue("token"),
+      sendEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (request: Request) => {
+        if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
+        if (request.url.endsWith("/auth/me")) {
+          return Response.json({ id: "user-1", email: "writer@example.com" });
+        }
+        if (request.url.includes("/tasks")) {
+          return Response.json({ items: [], next_cursor: null });
+        }
+        return new Response(null, { status: 404 });
+      }),
+    );
+
+    render(<App authProvider={authProvider} />);
+
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新建立言任务" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "发布" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/task");
   });
 });

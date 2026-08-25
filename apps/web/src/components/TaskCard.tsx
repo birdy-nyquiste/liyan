@@ -2,7 +2,6 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 
 import { ApiError, deleteTask, renameTask } from "../api/client";
 import type { TaskSummary } from "../auth/state";
-import { TaskArea } from "./TaskArea";
 import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
 import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
@@ -17,6 +16,7 @@ export function TaskCard({
   onSourceEditingChange,
   onDelete,
   onPublicationChanged,
+  onPublish,
 }: {
   task: TaskSummary;
   userId: string;
@@ -26,6 +26,7 @@ export function TaskCard({
   onSourceEditingChange?(taskId: string, editing: boolean): void;
   onDelete?(taskId: string): void;
   onPublicationChanged?(): void;
+  onPublish?(taskId: string, revisionId: string): void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [editing, setEditing] = useState(false);
@@ -34,7 +35,11 @@ export function TaskCard({
   const [deleting, setDeleting] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const [zhiyan, setZhiyan] = useState<ZhiyanAreaState | null>(null);
-  const [focus, setFocus] = useState<"work" | "sources">("work");
+  const [focus, setFocus] = useState<"work" | "sources">(() =>
+    window.localStorage.getItem(`liyan.taskStage.${initialTask.id}`) === "work"
+      ? "work"
+      : "sources",
+  );
   const [capsuleSelection, setCapsuleSelection] = useState<CapsuleSelection | null>(null);
   const cardRef = useRef<HTMLElement>(null);
 
@@ -94,6 +99,11 @@ export function TaskCard({
 
   const selectCapsule = (choice: CapsuleChoice) => {
     setCapsuleSelection((current) => ({ ...choice, nonce: (current?.nonce ?? 0) + 1 }));
+  };
+
+  const chooseFocus = (next: "work" | "sources") => {
+    setFocus(next);
+    window.localStorage.setItem(`liyan.taskStage.${task.id}`, next);
   };
 
   return (
@@ -162,6 +172,26 @@ export function TaskCard({
               {deleting ? "删除中" : "删除"}
             </button>
           </div>
+          {opened ? (
+            <div className="task-stage-tabs" role="tablist" aria-label="任务视图">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={focus === "sources"}
+                onClick={() => chooseFocus("sources")}
+              >
+                来源
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={focus === "work"}
+                onClick={() => chooseFocus("work")}
+              >
+                知言 · 立言
+              </button>
+            </div>
+          ) : null}
           {task.delete_disabled_reason ? (
             <p className="form-hint" id={`delete-reason-${task.id}`}>
               {task.delete_disabled_reason}
@@ -172,14 +202,12 @@ export function TaskCard({
       )}
       {opened ? (
         <div className="task-detail">
-          <div className="task-areas" data-focus={focus}>
-            <TaskArea
-              id={`sources-${task.id}`}
-              label="来源"
-              summary={`${sourceCount} 个来源 · V${task.current_version_number}`}
-              expanded={focus === "sources"}
-              onExpand={() => setFocus("sources")}
-            >
+          {focus === "sources" ? (
+            <section className="task-source-view" aria-labelledby={`sources-${task.id}-heading`}>
+              <header className="task-pane-heading">
+                <h2 id={`sources-${task.id}-heading`}>来源</h2>
+                <span>{sourceCount} 个来源 · V{task.current_version_number}</span>
+              </header>
               <TaskSourceVersions
                 accessToken={accessToken}
                 taskId={task.id}
@@ -198,21 +226,17 @@ export function TaskCard({
                     additional_source_count: Math.max(0, version.sources.length - 1),
                   }));
                 }}
-                onEditingChange={(editing) => {
-                  // Editing sources takes the room; finishing gives it back.
-                  setFocus(editing ? "sources" : "work");
-                  onSourceEditingChange?.(task.id, editing);
-                }}
+                onEditingChange={(editing) => onSourceEditingChange?.(task.id, editing)}
               />
-            </TaskArea>
+            </section>
+          ) : (
+            <div className="task-workspace-split">
 
-            <TaskArea
-              id={`zhiyan-${task.id}`}
-              label="知言"
-              summary={zhiyanSummary}
-              expanded={focus === "work"}
-              onExpand={() => setFocus("work")}
-            >
+            <section className="task-workspace-pane" aria-labelledby={`zhiyan-${task.id}-heading`}>
+              <header className="task-pane-heading">
+                <h2 id={`zhiyan-${task.id}-heading`}>知言</h2>
+                <span>{zhiyanSummary}</span>
+              </header>
               <TaskZhiyanArea
                 accessToken={accessToken}
                 taskId={task.id}
@@ -220,19 +244,17 @@ export function TaskCard({
                 onZhiyanState={noteZhiyanState}
                 onCapsuleSelect={viewingCurrent ? selectCapsule : undefined}
               />
-            </TaskArea>
+            </section>
 
-            <TaskArea
-              id={`liyan-${task.id}`}
-              label="立言"
-              summary={
+            <section className="task-workspace-pane" aria-labelledby={`liyan-${task.id}-heading`}>
+              <header className="task-pane-heading">
+                <h2 id={`liyan-${task.id}-heading`}>立言</h2>
+                <span>{
                 !viewingCurrent
                   ? "历史版本只读"
                   : liyanReady ? "可以撰写" : "等待知言完成"
-              }
-              expanded={focus === "work"}
-              onExpand={() => setFocus("work")}
-            >
+                }</span>
+              </header>
               {viewingCurrent && liyanReady ? (
                 <LiyanPanel
                   key={selectedVersionId}
@@ -242,6 +264,7 @@ export function TaskCard({
                   taskLabel={task.display_name}
                   capsuleSelection={capsuleSelection}
                   onPublicationChanged={onPublicationChanged}
+                  onPublish={onPublish}
                 />
               ) : (
                 <p className="form-hint" role="status">
@@ -250,8 +273,9 @@ export function TaskCard({
                     : zhiyan?.liyanReason ?? "知言状态读取中。"}
                 </p>
               )}
-            </TaskArea>
-          </div>
+            </section>
+            </div>
+          )}
         </div>
       ) : null}
     </article>

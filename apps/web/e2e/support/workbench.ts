@@ -110,7 +110,7 @@ export async function seedLocalSession(page: Page): Promise<void> {
     [LOCAL_PROJECT_REF, LOCAL_ACCESS_TOKEN],
   );
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "新建立言任务" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "新建立言任务" })).toBeVisible();
 }
 
 /**
@@ -127,7 +127,7 @@ export async function signInWithOtp(page: Page): Promise<void> {
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByLabel("验证码").fill(otp);
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByRole("button", { name: "新建立言任务" })).toBeVisible({
+  await expect(page.getByRole("link", { name: "新建立言任务" })).toBeVisible({
     timeout: 60_000,
   });
 }
@@ -201,7 +201,11 @@ export const FIXED_OTP = process.env.LIYAN_E2E_FIXED_OTP === "1";
  */
 export async function openWorkbench(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "新建立言任务" })).toBeVisible({
+  const newTask = page.getByRole("link", { name: "新建立言任务" });
+  if ((page.viewportSize()?.width ?? 1280) <= 800) {
+    await page.getByRole("button", { name: "打开导航" }).click();
+  }
+  await expect(newTask).toBeVisible({
     timeout: 60_000,
   });
 }
@@ -215,7 +219,8 @@ export async function openWorkbench(page: Page): Promise<void> {
  * second release.
  */
 export async function createTaskWithReport(page: Page, title: string): Promise<void> {
-  await page.getByRole("button", { name: "新建立言任务" }).click();
+  await page.getByRole("link", { name: "新建立言任务" }).click();
+  await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByLabel("来源标题").fill(title);
   await page.getByLabel("来源正文").fill(SOURCE_BODY);
   await page.getByLabel("出处（可选）").fill("https://press.example/four-day-week");
@@ -232,7 +237,8 @@ export async function createTaskWithReport(page: Page, title: string): Promise<v
   // 已完成, and waiting the full provider budget for it costs five minutes and
   // then reports a timeout, which reads like the product hung. The workbench
   // already tells these apart on screen, so this reads what it says.
-  const zhiyan = card.getByRole("button", { name: /^知言/ });
+  await card.getByRole("tab", { name: "知言 · 立言" }).click();
+  const zhiyan = card.getByText(/份报告已完成|个来源分析失败/).first();
   await expect(zhiyan).toHaveText(/已完成|分析失败/, { timeout: PROVIDER_TIMEOUT });
   await expect(
     zhiyan,
@@ -254,8 +260,8 @@ export function openedTask(page: Page, title: string) {
  */
 export async function openLiyan(page: Page, title: string): Promise<void> {
   const card = openedTask(page, title);
-  await card.getByRole("button", { name: /^立言/ }).click();
-  await expect(card.getByRole("button", { name: "生成立言" })).toBeEnabled({
+  await card.getByRole("tab", { name: "知言 · 立言" }).click();
+  await expect(card.getByRole("button", { name: "默认生成" })).toBeEnabled({
     timeout: PROVIDER_TIMEOUT,
   });
 }

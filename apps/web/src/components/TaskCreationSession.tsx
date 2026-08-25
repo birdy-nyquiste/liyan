@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 
 import {
   cancelExecution,
@@ -43,6 +44,8 @@ function SourceCard({
   onChanged,
   onBusy,
   onError,
+  expanded,
+  onToggle,
 }: {
   accessToken: string;
   source: SessionSourceResponse;
@@ -53,6 +56,8 @@ function SourceCard({
   onChanged(): Promise<void>;
   onBusy(busy: boolean): void;
   onError(message: string | null): void;
+  expanded: boolean;
+  onToggle(): void;
 }) {
   const [draft, setDraft] = useState<DraftSource>({
     title: source.title ?? "",
@@ -105,10 +110,19 @@ function SourceCard({
 
   return (
     <article className={`source-operation source-operation--${source.status}`}>
-      <div className="source-operation__status">
+      <button
+        className="source-operation__summary"
+        type="button"
+        aria-expanded={expanded}
+        aria-label={`编辑来源 ${source.title || "未命名来源"}`}
+        onClick={onToggle}
+      >
+      <span className="source-operation__status">
         <strong>{sourceKindLabels[source.kind]} · {source.title || "未命名来源"}</strong>
         <span>{sourceStatusLabels[source.status]}</span>
-      </div>
+      </span>
+      </button>
+      {expanded ? <div className="source-operation__editor">
       {source.failure ? <p role="alert" className="form-error">{source.failure.message}</p> : null}
       {source.warnings.map((warning) => <p className="warning" key={warning.code}>{warning.message}</p>)}
       {source.warnings.length > 0 ? (
@@ -188,6 +202,7 @@ function SourceCard({
           >删除来源</button>
         ) : null}
       </div>
+      </div> : null}
     </article>
   );
 }
@@ -214,6 +229,8 @@ export function TaskCreationSession({
   const [editingSourceIds, setEditingSourceIds] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const sourceCount = session?.source_count ?? 0;
   const dirty = sourceCount > 0 || Boolean(url || file || Object.values(draft).some(Boolean));
 
@@ -274,6 +291,8 @@ export function TaskCreationSession({
         setFile(null);
       }
       await refresh();
+      setAdding(false);
+      setExpandedSourceId(null);
     } catch (thrown) {
       setError(
         refusalWithoutTiming(thrown) ??
@@ -351,10 +370,16 @@ export function TaskCreationSession({
           onChanged={refresh}
           onBusy={setBusy}
           onError={setError}
+          expanded={expandedSourceId === source.id}
+          onToggle={() => {
+            setAdding(false);
+            setExpandedSourceId((current) => current === source.id ? null : source.id);
+          }}
         />
       ))}
 
       {session?.can_add !== false ? (
+        adding ? (
         <form className="creation-form" onSubmit={(event) => void addSource(event)}>
           <div className="source-kind-tabs" aria-label="来源类型">
             <button className={`button ${mode === "pasted" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("pasted")}>粘贴文本</button>
@@ -381,6 +406,18 @@ export function TaskCreationSession({
           )}
           <button className="button" type="submit" disabled={busy || (mode === "file" && !file)}>{busy ? "正在添加…" : "添加来源"}</button>
         </form>
+        ) : (
+          <button
+            className="add-source-button"
+            type="button"
+            onClick={() => {
+              setExpandedSourceId(null);
+              setAdding(true);
+            }}
+          >
+            <Plus size={18} aria-hidden="true" /> 添加来源
+          </button>
+        )
       ) : <p className="section-kicker">已达到三个来源上限；删除一个来源后可继续添加。</p>}
 
       {error ? <p role="alert" className="form-error">{error}</p> : null}

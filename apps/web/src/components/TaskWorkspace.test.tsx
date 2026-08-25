@@ -13,6 +13,7 @@ const formalTask = {
   first_source_title: "First source",
   additional_source_count: 0,
   created_at: "2026-08-22T18:00:00Z",
+  last_activity_at: "2026-08-22T18:00:00Z",
   current_version_id: "version-1",
   current_version_number: 1,
   can_delete: true,
@@ -170,6 +171,7 @@ describe("task creation session", () => {
 
     await user.click(screen.getByRole("button", { name: "新建立言任务" }));
     await screen.findByText("请先添加来源。");
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.type(screen.getByLabelText("来源标题"), "Pasted source");
     await user.type(screen.getByLabelText("来源正文"), "Pasted body.");
     await user.click(screen.getByRole("button", { name: "添加来源" }));
@@ -177,11 +179,13 @@ describe("task creation session", () => {
     expect(await screen.findByText("粘贴文本 · Pasted source")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "确认并创建任务" })).toBeDisabled();
 
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.click(screen.getByRole("button", { name: "公共文章链接" }));
     await user.type(screen.getByLabelText("来源网址"), "https://example.com/article");
     await user.click(screen.getByRole("button", { name: "添加来源" }));
     expect(await screen.findByText("公共文章链接 · Fetched article")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.click(screen.getByRole("button", { name: "上传文件" }));
     await user.upload(
       screen.getByLabelText("来源文件"),
@@ -191,6 +195,7 @@ describe("task creation session", () => {
     expect(await screen.findByText("上传文件 · brief")).toBeInTheDocument();
     expect(screen.getByText("已达到三个来源上限；删除一个来源后可继续添加。")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "编辑来源 Pasted source" }));
     const warningCheckbox = screen.getByRole("checkbox", { name: "我已检查并接受此来源的警告" });
     await user.click(warningCheckbox);
     const pastedCard = screen.getByText("粘贴文本 · Pasted source").closest("article");
@@ -246,6 +251,7 @@ describe("task creation session", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，来源仍保留在此会话中。请重试。");
     expect(screen.getByText("粘贴文本 · Retained source")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "编辑来源 Retained source" }));
     expect(screen.getByDisplayValue("Retained body.")).toBeInTheDocument();
   });
 
@@ -254,6 +260,7 @@ describe("task creation session", () => {
     const user = userEvent.setup();
     renderWorkspace();
     await user.click(screen.getByRole("button", { name: "新建立言任务" }));
+    await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.type(screen.getByLabelText("来源正文"), "Unsaved text");
 
     const event = new Event("beforeunload", { cancelable: true });

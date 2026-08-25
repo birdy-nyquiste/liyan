@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TaskCard } from "./TaskCard";
 
@@ -11,6 +11,7 @@ const task = {
   first_source_title: "Test Header",
   additional_source_count: 0,
   created_at: "2026-08-23T16:52:00Z",
+  last_activity_at: "2026-08-23T16:52:00Z",
   current_version_id: "version-1",
   current_version_number: 1,
   can_delete: true,
@@ -132,6 +133,7 @@ afterEach(() => {
 });
 
 describe("TaskCard", () => {
+  beforeEach(() => localStorage.setItem("liyan.taskStage.task-1", "work"));
   it("adopts refreshed server deletion capability after publication starts", () => {
     const { rerender } = render(
       <TaskCard task={task} userId="user-1" accessToken="token" />,
@@ -179,10 +181,10 @@ describe("TaskCard", () => {
 
     // 立言 must still be open once every read has settled, not merely flash open
     // before the version list arrives and resets it.
-    await screen.findByRole("button", { name: "生成立言" });
+    await screen.findByRole("button", { name: "默认生成" });
     await new Promise((resolve) => setTimeout(resolve, 150));
 
-    expect(screen.getByRole("button", { name: "生成立言" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "默认生成" })).toBeInTheDocument();
     expect(screen.queryByText("全部知言报告已完成，可以进入立言。")).not.toBeInTheDocument();
   });
 
@@ -192,7 +194,7 @@ describe("TaskCard", () => {
     render(
       <TaskCard task={task} userId="user-1" accessToken="token" opened />,
     );
-    await screen.findByRole("button", { name: "生成立言" });
+    await screen.findByRole("button", { name: "默认生成" });
     await new Promise((resolve) => setTimeout(resolve, 120));
 
     expect(counts.versions).toBeLessThanOrEqual(2);
@@ -222,7 +224,7 @@ describe("TaskCard", () => {
     // The reason shown is the server's, never one the workbench invented.
     await waitFor(() =>
       expect(screen.getByText("全部知言报告成功后才能生成立言。")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "生成立言" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "默认生成" })).not.toBeInTheDocument();
   });
 
   it("moves focus to 立言 once the server permits generating it", async () => {
@@ -234,22 +236,21 @@ describe("TaskCard", () => {
     await waitFor(() => expect(heading).toHaveFocus());
   });
 
-  it("folds 来源 away during normal work and opens it for editing", async () => {
+  it("opens 来源 first and remembers the task's selected view", async () => {
     respondWithVersionListLast();
     const user = userEvent.setup();
+    localStorage.removeItem("liyan.taskStage.task-1");
 
     render(<TaskCard task={task} userId="user-1" accessToken="token" opened />);
-    await screen.findByRole("button", { name: "生成立言" });
-
-    const sources = screen.getByRole("button", { name: /来源/ });
-    expect(sources).toHaveAttribute("aria-expanded", "false");
+    const sources = screen.getByRole("tab", { name: "来源" });
+    expect(sources).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("1 个来源 · V1")).toBeInTheDocument();
 
-    await user.click(sources);
+    await user.click(screen.getByRole("tab", { name: "知言 · 立言" }));
 
-    expect(sources).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("button", { name: /^知言/ })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: "生成立言" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "默认生成" })).toBeInTheDocument();
+    expect(sources).toHaveAttribute("aria-selected", "false");
+    expect(localStorage.getItem("liyan.taskStage.task-1")).toBe("work");
   });
 
   it("states how many reports are done in the 知言 area summary", async () => {

@@ -71,6 +71,7 @@ class Task(Base):
     creation_idempotency_key: Mapped[str | None] = mapped_column(String(255))
     creation_request_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True
     )

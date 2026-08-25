@@ -278,6 +278,7 @@ def task_creation_router(
             creation_idempotency_key=idempotency_key,
             creation_request_hash=request_hash,
             created_at=now,
+            last_activity_at=now,
         )
         session.add(task)
         session.flush()

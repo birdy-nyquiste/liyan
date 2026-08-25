@@ -1,14 +1,18 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { BrowserRouter } from "react-router-dom";
+import { Toaster } from "sonner";
 
 import { ApiError, loadTaskWorkspace, serverIsAlive } from "./api/client";
 import { type AuthProvider, supabaseAuthProvider } from "./auth/provider";
 import type { AuthViewState, SignedOutState } from "./auth/state";
 import { AuthPanel } from "./components/AuthPanel";
-import { TaskWorkspace } from "./components/TaskWorkspace";
+import { AppShell } from "./components/AppShell";
 import "./styles.css";
 
 type HealthState = "checking" | "available" | "unavailable";
 type AppProps = { authProvider?: AuthProvider };
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000 } } });
 
 const signedOut = (message: string | null = null): SignedOutState => ({
   screen: "email",
@@ -113,67 +117,44 @@ export default function App({ authProvider = supabaseAuthProvider }: AppProps) {
     }
   }
 
-  return (
-    <main className="shell">
-      <header className="masthead">
+  const content = auth.screen === "workspace" ? (
+    <AppShell
+      identity={auth.identity}
+      accessToken={auth.accessToken}
+      initialTasks={auth.tasks}
+      onSignOut={async () => {
+        await authProvider.signOut();
+        queryClient.clear();
+        setAuth(signedOut());
+      }}
+    />
+  ) : auth.screen === "checking" ? null : (
+    <main className="signed-out-shell">
+      <header className="signed-out-hero">
         <div className="masthead__brand">
           <img className="masthead__mark" src="/liyan-mark.svg" alt="" />
           <div>
-            <p className="eyebrow">LIYAN WORKBENCH</p>
             <h1>立言阁</h1>
-            <p className="subtitle">从来源到知言，再到由你定调的立言文章。</p>
+            <p className="subtitle">有感而发，知言而立</p>
+            <p className="signed-out-hero__description">从来源中辨明事实与观点，再写成由你定调的文章。</p>
           </div>
         </div>
-        <div className={`status status--${health}`} role="status" aria-live="polite">
-          <span className="status__dot" aria-hidden="true" />
-          <span>
-            {health === "checking" && "正在检查服务"}
-            {health === "available" && "服务正常"}
-            {health === "unavailable" && "服务暂不可用"}
-          </span>
-        </div>
       </header>
-
-      {auth.screen === "workspace" ? (
-        <TaskWorkspace
-          identity={auth.identity}
-          accessToken={auth.accessToken}
-          tasks={auth.tasks}
-          onTaskCreated={(task) =>
-            setAuth((current) =>
-              current.screen === "workspace"
-                ? { ...current, tasks: [task, ...current.tasks] }
-                : current,
-            )
-          }
-          onTaskDeleted={(taskId) =>
-            setAuth((current) =>
-              current.screen === "workspace"
-                ? { ...current, tasks: current.tasks.filter((task) => task.id !== taskId) }
-                : current,
-            )
-          }
-          onTasksChanged={(tasks) =>
-            setAuth((current) =>
-              current.screen === "workspace" ? { ...current, tasks } : current,
-            )
-          }
-          onSignOut={async () => {
-            await authProvider.signOut();
-            setAuth(signedOut());
-          }}
-        />
-      ) : auth.screen === "checking" ? null : (
-        <AuthPanel
-          state={auth}
-          onEmailChange={(email) => setAuth({ ...auth, email })}
-          onOtpChange={(otp) => {
-            if (auth.screen === "otp") setAuth({ ...auth, otp });
-          }}
-          onRequestOtp={requestOtp}
-          onVerifyOtp={verifyOtp}
-        />
-      )}
+      {health === "unavailable" ? <div className="service-banner" role="alert">服务暂不可用，部分操作可能失败。</div> : null}
+      <AuthPanel
+        state={auth}
+        onEmailChange={(email) => setAuth({ ...auth, email })}
+        onOtpChange={(otp) => { if (auth.screen === "otp") setAuth({ ...auth, otp }); }}
+        onRequestOtp={requestOtp}
+        onVerifyOtp={verifyOtp}
+      />
     </main>
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>{content}</BrowserRouter>
+      <Toaster position="top-right" richColors />
+    </QueryClientProvider>
   );
 }

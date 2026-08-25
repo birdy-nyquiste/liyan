@@ -46,6 +46,7 @@ from liyan_server.liyan.revisions import (
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.task_api import version_source_revisions
+from liyan_server.task_activity import record_task_activity
 from liyan_server.task_creation.contracts import (
     ExecutionError,
     ExecutionResponse,
@@ -527,6 +528,7 @@ def liyan_router(
             request_hash=request_hash,
             now=now,
         )
+        record_task_activity(task, at=now)
         try:
             session.commit()
         except IntegrityError as error:
@@ -586,6 +588,7 @@ def liyan_router(
         now: datetime,
     ) -> LiyanStateResponse:
         session.add(revision)
+        record_task_activity(task, at=now)
         try:
             session.commit()
         except IntegrityError as error:

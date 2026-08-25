@@ -5,6 +5,7 @@ import type { components } from "./schema";
 
 export type SourceInput = components["schemas"]["SourceInput"];
 export type TaskSummaryResponse = components["schemas"]["TaskSummary"];
+export type TaskListResponse = components["schemas"]["TaskListResponse"];
 export type UrlSourceResponse = components["schemas"]["UrlSourceResponse"];
 export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
@@ -24,7 +25,9 @@ export type InstructionDocument = components["schemas"]["InstructionDocument"];
 export type InstructionCapsule = components["schemas"]["InstructionCapsule"];
 export type PublicationTargetResponse = components["schemas"]["PublicationTargetResponse"];
 export type EligibleArticleResponse = components["schemas"]["EligibleArticleResponse"];
+export type EligibleArticleListResponse = components["schemas"]["EligibleArticleListResponse"];
 export type PublishTaskResponse = components["schemas"]["PublishTaskResponse"];
+export type PublishTaskListResponse = components["schemas"]["PublishTaskListResponse"];
 export type ConfirmPublicationRequest = components["schemas"]["ConfirmPublicationRequest"];
 
 export class ApiError extends Error {
@@ -96,9 +99,29 @@ export async function loadTaskWorkspace(accessToken: string) {
 }
 
 export async function listTasks(accessToken: string): Promise<TaskSummaryResponse[]> {
-  const result = await authenticatedApi(accessToken).GET("/tasks");
+  return (await listTaskPage(accessToken)).items;
+}
+
+export async function listTaskPage(
+  accessToken: string,
+  cursor: string | null = null,
+): Promise<TaskListResponse> {
+  const result = await authenticatedApi(accessToken).GET("/tasks", {
+    params: { query: { cursor: cursor ?? undefined, limit: 20 } },
+  });
   if (!result.data) throw refusalOf(result);
-  return result.data.items;
+  return result.data;
+}
+
+export async function getTask(
+  accessToken: string,
+  taskId: string,
+): Promise<TaskSummaryResponse> {
+  const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}", {
+    params: { path: { task_id: taskId } },
+  });
+  if (!result.data) throw refusalOf(result);
+  return result.data;
 }
 
 function authenticatedApi(accessToken: string) {
@@ -538,9 +561,18 @@ export async function listPublicationTargets(
 export async function listEligibleArticles(
   accessToken: string,
 ): Promise<EligibleArticleResponse[]> {
-  const result = await authenticatedApi(accessToken).GET("/publication/eligible-articles");
+  return (await listEligibleArticlePage(accessToken)).items;
+}
+
+export async function listEligibleArticlePage(
+  accessToken: string,
+  cursor?: string | null,
+): Promise<EligibleArticleListResponse> {
+  const result = await authenticatedApi(accessToken).GET("/publication/eligible-articles", {
+    params: { query: { cursor: cursor ?? undefined } },
+  });
   if (!result.data) throw refusalOf(result);
-  return result.data.items;
+  return result.data;
 }
 
 export async function confirmPublication(
@@ -590,7 +622,16 @@ export async function getPublishTask(
 }
 
 export async function listPublishTasks(accessToken: string): Promise<PublishTaskResponse[]> {
-  const result = await authenticatedApi(accessToken).GET("/publication/publish-tasks");
+  return (await listPublishTaskPage(accessToken)).items;
+}
+
+export async function listPublishTaskPage(
+  accessToken: string,
+  cursor?: string | null,
+): Promise<PublishTaskListResponse> {
+  const result = await authenticatedApi(accessToken).GET("/publication/publish-tasks", {
+    params: { query: { cursor: cursor ?? undefined } },
+  });
   if (!result.data) throw refusalOf(result);
-  return result.data.items;
+  return result.data;
 }

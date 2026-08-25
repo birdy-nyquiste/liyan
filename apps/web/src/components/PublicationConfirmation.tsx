@@ -231,8 +231,8 @@ export function PublicationConfirmation({
           <dd>{article.taskLabel}</dd>
         </div>
         <div>
-          <dt>文章 Revision</dt>
-          <dd>Revision {article.revisionNumber}</dd>
+          <dt>文章草稿</dt>
+          <dd>草稿 {article.revisionNumber}</dd>
         </div>
         <div>
           <dt>标题</dt>
@@ -282,9 +282,9 @@ export function PublicationConfirmation({
         <p role="status" className="form-hint">当前没有可用的发布目标。</p>
       ) : null}
 
-      <p className="form-hint">确认页只能预览。要修改标题或正文，请返回编辑并保存新的 Revision。</p>
+      <p className="form-hint">确认页只能预览。要修改标题或正文，请返回编辑并保存新草稿。</p>
       <ArticleReader
-        label={`Revision ${article.revisionNumber} 发布正文`}
+        label={`草稿 ${article.revisionNumber} 发布正文`}
         bodyMarkdown={article.bodyMarkdown}
       />
 

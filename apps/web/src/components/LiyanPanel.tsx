@@ -35,6 +35,12 @@ const CONFLICT = 409;
 const STALE_BASE = "文章已有更新的 Revision，请先查看最新内容。";
 const UNSAVED_EDITS = "有未保存的修改，请先保存后再发布。";
 const DISCARD_ON_RESTORE = "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？";
+const EMPTY_INSTRUCTION: InstructionDocument = { content: [] };
+
+const hasInstructionContent = (value: InstructionDocument) =>
+  (value.content ?? []).some((part) =>
+    part.type === "capsule" || (part.type === "text" && part.text.trim().length > 0),
+  );
 
 const workingCopyFromResult = (
   result: NonNullable<LiyanStateResponse["result"]>,
@@ -51,6 +57,7 @@ export function LiyanPanel({
   capsuleSelection = null,
   pollIntervalMs = EXECUTION_POLL_MS,
   onPublicationChanged,
+  onPublish,
 }: {
   userId: string;
   accessToken: string;
@@ -59,6 +66,7 @@ export function LiyanPanel({
   capsuleSelection?: CapsuleSelection | null;
   pollIntervalMs?: number;
   onPublicationChanged?(): void;
+  onPublish?(taskId: string, revisionId: string): void;
 }) {
   const [state, setState] = useState<LiyanStateResponse | null>(null);
   const [instruction, setInstruction] = useState<InstructionDocument>({ content: [] });
@@ -89,7 +97,6 @@ export function LiyanPanel({
       next.result.id !== appliedResultIdRef.current
     ) {
       updateWorkingCopy(workingCopyFromResult(next.result));
-      setInstruction(next.result.instruction);
       appliedResultIdRef.current = next.result.id;
     }
   }, [updateWorkingCopy]);
@@ -145,15 +152,16 @@ export function LiyanPanel({
     return () => clearTimeout(timer);
   }, [active, load, pollIntervalMs, polls]);
 
-  async function generate() {
+  async function generate(useDefault = false) {
     setBusy(true);
+    const submittedInstruction = useDefault ? EMPTY_INSTRUCTION : instruction;
     const request = state?.status === "failed" && lastRequest
         ? { ...lastRequest, idempotency_key: crypto.randomUUID() }
         : state?.status === "absent" && lastRequest
           ? lastRequest
         : {
             idempotency_key: crypto.randomUUID(),
-            instruction,
+            instruction: submittedInstruction,
             working_copy: workingCopy,
           };
     setLastRequest(request);
@@ -164,6 +172,11 @@ export function LiyanPanel({
       setStartedExecutionId(executionId);
       setState(next);
       applyStartedResult(next);
+      setInstruction((current) =>
+        JSON.stringify(current) === JSON.stringify(submittedInstruction)
+          ? EMPTY_INSTRUCTION
+          : current,
+      );
       setError(null);
     } catch (thrown) {
       const refusal =
@@ -246,7 +259,6 @@ export function LiyanPanel({
   function recover() {
     if (!state?.result) return;
     updateWorkingCopy(workingCopyFromResult(state.result));
-    setInstruction(state.result.instruction);
     appliedResultIdRef.current = state.result.id;
   }
 
@@ -274,6 +286,7 @@ export function LiyanPanel({
   // One expression decides both, so the button and its explanation cannot
   // drift into disagreeing about why it is dead.
   const saveDisabled = busy || saveBlockedReason !== null;
+  const composerHasContent = hasInstructionContent(instruction);
   const publishableRevisionId = unsavedEdits
     ? null
     : state?.capabilities.publishable_revision_id ?? null;
@@ -308,7 +321,7 @@ export function LiyanPanel({
       <InstructionEditor
         taskId={taskId}
         value={instruction}
-        disabled={active || busy}
+        disabled={busy}
         selection={capsuleSelection}
         onChange={setInstruction}
       />
@@ -328,7 +341,7 @@ export function LiyanPanel({
 
       <div className="button-row">
         <button
-          className="button"
+          className="button button--quiet"
           type="button"
           // The reason 立言 is closed is already on screen; a disabled button is
           // skipped by keyboard navigation, so it is named here as well rather
@@ -338,10 +351,18 @@ export function LiyanPanel({
               ? `liyan-blocked-${taskId}`
               : undefined
           }
-          disabled={busy || !state?.capabilities.can_generate}
-          onClick={() => void generate()}
+          disabled={busy || active || composerHasContent || !state?.capabilities.can_generate}
+          onClick={() => void generate(true)}
         >
-          {state?.status === "failed" ? "重试" : "生成立言"}
+          默认生成
+        </button>
+        <button
+          className="button"
+          type="button"
+          disabled={busy || (!active && state?.status !== "failed" && (!composerHasContent || !state?.capabilities.can_generate))}
+          onClick={() => void (active ? cancel() : generate())}
+        >
+          {active ? "停止" : state?.status === "failed" ? "重试" : "发送"}
         </button>
         {workingCopy ? (
           <button
@@ -351,7 +372,7 @@ export function LiyanPanel({
             disabled={saveDisabled}
             onClick={() => void save()}
           >
-            保存 Revision
+            保存草稿
           </button>
         ) : null}
         {publicationArticle && !publishing ? (
@@ -359,19 +380,12 @@ export function LiyanPanel({
             className="button button--quiet"
             type="button"
             disabled={busy}
-            onClick={() => setPublishing(true)}
+            onClick={() => {
+              if (onPublish) onPublish(publicationArticle.taskId, publicationArticle.revisionId);
+              else setPublishing(true);
+            }}
           >
             发布
-          </button>
-        ) : null}
-        {state?.capabilities.can_cancel && state.execution ? (
-          <button
-            className="button button--quiet"
-            type="button"
-            disabled={busy}
-            onClick={() => void cancel()}
-          >
-            终止生成
           </button>
         ) : null}
       </div>

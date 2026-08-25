@@ -106,7 +106,7 @@ describe("LiyanPanel", () => {
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" pollIntervalMs={1} />);
 
     await user.type(await screen.findByLabelText("立言指令（可选）"), "语气克制。");
-    await user.click(screen.getByRole("button", { name: "生成立言" }));
+    await user.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
@@ -193,7 +193,7 @@ describe("LiyanPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     expect(screen.getByDisplayValue("完整文章")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "生成立言" }));
+    await user.click(screen.getByRole("button", { name: "默认生成" }));
 
     expect(await screen.findByDisplayValue("替代文章")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("完整文章")).not.toBeInTheDocument();
@@ -209,7 +209,7 @@ describe("LiyanPanel", () => {
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
 
-    await user.click(await screen.findByRole("button", { name: "终止生成" }));
+    await user.click(await screen.findByRole("button", { name: "停止" }));
 
     await waitFor(() => expect(screen.getByText("立言生成已取消，可重新发起。")).toBeInTheDocument());
     expect(fetchMock.mock.calls.some(([request]) => request.url.includes("/executions/liyan-execution-1/cancel"))).toBe(true);
@@ -229,7 +229,7 @@ describe("LiyanPanel", () => {
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
-    const generate = await screen.findByRole("button", { name: "生成立言" });
+    const generate = await screen.findByRole("button", { name: "默认生成" });
     await user.click(generate);
     await waitFor(() => expect(starts).toBe(1));
     await user.click(generate);
@@ -246,7 +246,7 @@ describe("LiyanPanel", () => {
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "生成立言" }));
+    await user.click(await screen.findByRole("button", { name: "默认生成" }));
 
     expect(await screen.findByDisplayValue("完整文章")).toBeInTheDocument();
     expect(screen.getByText("未保存 Working Copy")).toBeInTheDocument();
@@ -265,7 +265,7 @@ describe("LiyanPanel", () => {
     await user.type(title, "手动标题");
     await user.clear(body);
     await user.type(body, "Edited body.");
-    await user.click(screen.getByRole("button", { name: "生成立言" }));
+    await user.click(screen.getByRole("button", { name: "默认生成" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(fetchMock.mock.calls.filter(([request]) => request.method === "POST")).toHaveLength(1);
@@ -293,7 +293,7 @@ describe("LiyanPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     expect(screen.getByRole("textbox", { name: "文章正文" })).toHaveTextContent("保留正文配图");
-    await user.click(screen.getByRole("button", { name: "生成立言" }));
+    await user.click(screen.getByRole("button", { name: "默认生成" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     const request = JSON.parse(await post![0].clone().text()) as {
@@ -356,7 +356,7 @@ describe("LiyanPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);
-    await user.click(screen.getByRole("button", { name: "保存 Revision" }));
+    await user.click(screen.getByRole("button", { name: "保存草稿" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post![0].url).toContain("/liyan-revisions");
@@ -368,7 +368,7 @@ describe("LiyanPanel", () => {
     expect(body.base_revision_id).toBeNull();
     expect(body.title).toBe("完整文章");
     expect(body.body_markdown).toBe("第一段。\n\n## 继续讨论\n\n第二段。");
-    expect(await screen.findByText("Revision 1")).toBeInTheDocument();
+    expect(await screen.findByText("草稿 1")).toBeInTheDocument();
   });
 
   it("keeps the local draft when a newer Revision already exists", async () => {
@@ -385,11 +385,11 @@ describe("LiyanPanel", () => {
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     await user.clear(screen.getByRole("textbox", { name: "文章标题" }));
     await user.type(screen.getByRole("textbox", { name: "文章标题" }), "本地草稿标题");
-    await user.click(screen.getByRole("button", { name: "保存 Revision" }));
+    await user.click(screen.getByRole("button", { name: "保存草稿" }));
 
     expect(await screen.findByText("文章已有更新的 Revision，请先查看最新内容。")).toBeInTheDocument();
     expect(screen.getByDisplayValue("本地草稿标题")).toBeInTheDocument();
-    expect(screen.getByText("Revision 1")).toBeInTheDocument();
+    expect(screen.getByText("草稿 1")).toBeInTheDocument();
   });
 
   it("lists the current Revision and at most three historical ones", async () => {
@@ -400,13 +400,13 @@ describe("LiyanPanel", () => {
     ]));
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
-    expect(await screen.findByText("Revision 6")).toBeInTheDocument();
-    expect(screen.getByText("Revision 5：第五版")).toBeInTheDocument();
-    expect(screen.getByText("Revision 3：第三版")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "恢复为当前 Revision" })).toHaveLength(3);
-    expect(screen.getByRole("document", { name: "Revision 6 正文" }))
+    expect(await screen.findByText("草稿 6")).toBeInTheDocument();
+    expect(screen.getByText("草稿 5：第五版")).toBeInTheDocument();
+    expect(screen.getByText("草稿 3：第三版")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "恢复为新草稿" })).toHaveLength(3);
+    expect(screen.getByRole("document", { name: "草稿 6 正文" }))
       .toHaveTextContent("第6版正文。");
-    expect(screen.getByRole("document", { name: "Revision 5 正文" }))
+    expect(screen.getByRole("document", { name: "草稿 5 正文" }))
       .toHaveTextContent("第5版正文。");
   });
 
@@ -422,18 +422,18 @@ describe("LiyanPanel", () => {
     const user = userEvent.setup();
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "恢复为当前 Revision" }));
+    await user.click(await screen.findByRole("button", { name: "恢复为新草稿" }));
 
     const post = fetchMock.mock.calls.find(([request]) => request.method === "POST");
     expect(post![0].url).toContain("/liyan-revisions/revision-1/restore");
-    expect(await screen.findByText("Revision 3")).toBeInTheDocument();
+    expect(await screen.findByText("草稿 3")).toBeInTheDocument();
   });
 
   it("reports the server's publication eligibility for the newest Revision", async () => {
     respondWith(stateWithRevisions(revision(1, "完整文章")));
     render(<LiyanPanel userId="user-1" accessToken="token" taskId="task-1" />);
 
-    expect(await screen.findByText("Revision 1 可用于发布。")).toBeInTheDocument();
+    expect(await screen.findByText("草稿 1 可用于发布。")).toBeInTheDocument();
   });
 
   it("withdraws publication eligibility while the draft carries unsaved edits", async () => {
@@ -444,7 +444,7 @@ describe("LiyanPanel", () => {
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
 
     expect(await screen.findByText("有未保存的修改，请先保存后再发布。")).toBeInTheDocument();
-    expect(screen.queryByText("Revision 1 可用于发布。")).not.toBeInTheDocument();
+    expect(screen.queryByText("草稿 1 可用于发布。")).not.toBeInTheDocument();
   });
   it("confirms before a restore overwrites unsaved local edits", async () => {
     const fetchMock = respondWith(
@@ -457,7 +457,7 @@ describe("LiyanPanel", () => {
 
     await user.click(await screen.findByRole("button", { name: "载入为未保存草稿" }));
     await screen.findByText("有未保存的修改，请先保存后再发布。");
-    await user.click(screen.getByRole("button", { name: "恢复为当前 Revision" }));
+    await user.click(screen.getByRole("button", { name: "恢复为新草稿" }));
 
     expect(confirmed).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls.some(([request]) => request.method === "POST")).toBe(false);

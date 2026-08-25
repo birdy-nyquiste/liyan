@@ -26,6 +26,7 @@ from liyan_server.liyan.runs import (
     LiyanRunSnapshot,
 )
 from liyan_server.observability import log_execution_failed
+from liyan_server.task_activity import record_task_activity
 
 CANCELLED_MESSAGE = cancelled_message(LIYAN_OPERATION)
 UNREADABLE_RUN_MESSAGE = "立言请求已失效，请重新发起。"
@@ -246,6 +247,8 @@ def _finish_succeeded(
         session.flush()
         execution.status = "succeeded"
         execution.result_id = run_result.id
+        assert task is not None
+        record_task_activity(task, at=now)
         session.commit()
 
 

@@ -42,7 +42,7 @@ def test_allowlisted_identity_maps_to_one_local_user_and_its_empty_task_list(
     assert first_identity.json()["email"] == "writer@example.com"
     assert repeated_identity.json() == first_identity.json()
     assert task_list.status_code == 200
-    assert task_list.json() == {"items": []}
+    assert task_list.json() == {"items": [], "next_cursor": None}
 
 
 def test_non_allowlisted_identity_is_rejected_without_disclosing_configuration(

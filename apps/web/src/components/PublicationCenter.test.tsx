@@ -65,7 +65,7 @@ describe("PublicationCenter", () => {
       <PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "发布" }));
+    await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
     await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
     await user.click(screen.getByRole("button", { name: "确认发布" }));
 
@@ -89,7 +89,7 @@ describe("PublicationCenter", () => {
       <PublicationCenter userId="user-1" accessToken="token" onClose={() => undefined} />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "发布" }));
+    await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
     await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
     await user.click(screen.getByRole("button", { name: "确认发布" }));
 
@@ -137,7 +137,7 @@ describe("PublicationCenter", () => {
       "href",
       "https://lsforum.example/preview/kept",
     );
-    expect(screen.getByText(/Revision 2/)).toBeInTheDocument();
+    expect(screen.getByText(/草稿 2/)).toBeInTheDocument();
   });
 
   const record = (status: string, overrides: Record<string, unknown> = {}) => ({

@@ -37,6 +37,7 @@ const task: {
   first_source_title: string;
   additional_source_count: number;
   created_at: string;
+  last_activity_at: string;
   current_version_id: string;
   current_version_number: number;
   can_delete: boolean;
@@ -48,6 +49,7 @@ const task: {
   first_source_title: "四天工作制",
   additional_source_count: 0,
   created_at: "2026-08-23T16:52:00Z",
+  last_activity_at: "2026-08-23T16:52:00Z",
   current_version_id: "version-1",
   current_version_number: 1,
   can_delete: true,
@@ -172,7 +174,7 @@ describe("disabled controls explain themselves", () => {
 
     render(<LiyanPanel userId="user-1" taskId="task-1" accessToken="token" />);
 
-    const generate = await screen.findByRole("button", { name: "生成立言" });
+    const generate = await screen.findByRole("button", { name: "默认生成" });
     await waitFor(() => expect(generate).toBeDisabled());
     expect(generate).toHaveAccessibleDescription("每个来源都完成知言分析后才能立言。");
   });
@@ -193,7 +195,7 @@ describe("disabled controls explain themselves", () => {
 
     render(<LiyanPanel userId="user-1" taskId="task-1" accessToken="token" />);
 
-    const save = await screen.findByRole("button", { name: "保存 Revision" });
+    const save = await screen.findByRole("button", { name: "保存草稿" });
     await waitFor(() => expect(save).toBeDisabled());
     expect(save).toHaveAccessibleDescription(NO_UNSAVED_EDITS);
   });

@@ -349,7 +349,7 @@ describe("PublicationConfirmation", () => {
     );
 
     expect(
-      await screen.findByText("确认页只能预览。要修改标题或正文，请返回编辑并保存新的 Revision。"),
+      await screen.findByText("确认页只能预览。要修改标题或正文，请返回编辑并保存新草稿。"),
     ).toBeInTheDocument();
     // The author is the only thing this screen may change.
     expect(screen.getAllByRole("textbox")).toHaveLength(1);

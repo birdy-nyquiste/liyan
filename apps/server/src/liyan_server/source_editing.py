@@ -32,6 +32,7 @@ from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content
 from liyan_server.task_api import version_source_revisions
+from liyan_server.task_activity import record_task_activity
 from liyan_server.task_creation.confirmation import SourceInput
 from liyan_server.zhiyan.orchestration import queue_initial_runs
 from liyan_server.zhiyan.runs import ZHIYAN_OPERATION
@@ -471,6 +472,7 @@ def source_editing_router(
                 detail="No source changes were staged.",
             )
         task.current_version_id = version.id
+        record_task_activity(task, at=now)
         edit.status = "saved"
         edit.save_idempotency_key = key
         edit.save_request_hash = request_hash
@@ -510,6 +512,7 @@ def source_editing_router(
         ):
             raise HTTPException(status_code=409, detail=ACTIVE_RUN_BLOCK)
         task.current_version_id = version.id
+        record_task_activity(task)
         session.commit()
         return _snapshot(session, task, version, active_runs=False)
 

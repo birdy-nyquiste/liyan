@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
-  listEligibleArticles,
-  listPublishTasks,
+  listEligibleArticlePage,
+  listPublishTaskPage,
   retryPublication,
   type EligibleArticleResponse,
   type PublishTaskResponse,
@@ -40,14 +40,22 @@ export function PublicationCenter({
   accessToken,
   onClose,
   onPublicationChanged,
+  onOpenTask,
+  initialTaskId,
+  initialRevisionId,
 }: {
   userId: string;
   accessToken: string;
   onClose(): void;
   onPublicationChanged?(): void;
+  onOpenTask?(taskId: string): void;
+  initialTaskId?: string | null;
+  initialRevisionId?: string | null;
 }) {
   const [articles, setArticles] = useState<EligibleArticleResponse[] | null>(null);
   const [records, setRecords] = useState<PublishTaskResponse[] | null>(null);
+  const [articleCursor, setArticleCursor] = useState<string | null>(null);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<EligibleArticleResponse | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,20 +68,44 @@ export function PublicationCenter({
   const load = useCallback(async () => {
     try {
       const [eligible, publications] = await Promise.all([
-        listEligibleArticles(accessToken),
-        listPublishTasks(accessToken),
+        listEligibleArticlePage(accessToken),
+        listPublishTaskPage(accessToken),
       ]);
-      setArticles(eligible);
-      setRecords(publications);
+      setArticles(eligible.items);
+      setArticleCursor(eligible.next_cursor ?? null);
+      setRecords(publications.items);
+      setHistoryCursor(publications.next_cursor ?? null);
       setError(null);
     } catch {
       setError("发布中心加载失败，请稍后重试。");
     }
   }, [accessToken]);
 
+  async function loadMoreArticles() {
+    if (!articleCursor) return;
+    const page = await listEligibleArticlePage(accessToken, articleCursor);
+    setArticles((current) => [...(current ?? []), ...page.items]);
+    setArticleCursor(page.next_cursor ?? null);
+  }
+
+  async function loadMoreHistory() {
+    if (!historyCursor) return;
+    const page = await listPublishTaskPage(accessToken, historyCursor);
+    setRecords((current) => [...(current ?? []), ...page.items]);
+    setHistoryCursor(page.next_cursor ?? null);
+  }
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (selected || !articles || !initialTaskId || !initialRevisionId) return;
+    const initial = articles.find(
+      (article) => article.task_id === initialTaskId && article.revision_id === initialRevisionId,
+    );
+    if (initial) setSelected(initial);
+  }, [articles, initialRevisionId, initialTaskId, selected]);
 
   /**
    * Send one failed 发布任务's snapshot again, from the record itself.
@@ -145,6 +177,44 @@ export function PublicationCenter({
 
       {error ? <p role="alert" className="form-error">{error}</p> : null}
 
+      <p className="section-kicker">1 · 选择草稿</p>
+      {articles && articles.length === 0 ? (
+        <p className="form-hint">
+          还没有可发布的文章。保存某个任务当前版本的立言文章后，它会出现在这里。
+        </p>
+      ) : null}
+      <ul className="publication-candidates publication-candidates--selectable">
+        {(articles ?? []).map((article) => {
+          const isSelected = selected?.revision_id === article.revision_id;
+          const locked = selected !== null && !isSelected;
+          return (
+            <li key={article.revision_id} data-selected={isSelected || undefined}>
+              <button
+                className="publication-candidate-choice"
+                type="button"
+                aria-pressed={isSelected}
+                disabled={locked}
+                onClick={() => setSelected(isSelected ? null : article)}
+              >
+                <span className="liyan-revision__title">{article.title}</span>
+                <span className="form-hint">
+                  {article.task_display_name} · 草稿 {article.revision_number} · {new Date(article.saved_at).toLocaleString("zh-CN")}
+                </span>
+                <span className="publication-candidate-preview">{article.body_markdown.slice(0, 120)}</span>
+                <span className="form-hint">{isSelected ? "已选择，再次点击可取消" : "可发布"}</span>
+              </button>
+              {onOpenTask ? (
+                <button className="button button--quiet" type="button" onClick={() => onOpenTask(article.task_id)}>
+                  打开任务
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {articleCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreArticles()}>加载更多草稿</button> : null}
+
+      <p className="section-kicker">2 · Publishing</p>
       {selected && draftHash ? (
         <PublicationConfirmation
           userId={userId}
@@ -157,37 +227,9 @@ export function PublicationCenter({
             void load();
           }}
         />
-      ) : (
-        <>
-          <p className="section-kicker">可发布的文章</p>
-          {articles && articles.length === 0 ? (
-            <p className="form-hint">
-              还没有可发布的文章。保存某个任务当前版本的立言文章后，它会出现在这里。
-            </p>
-          ) : null}
-          <ul className="publication-candidates">
-            {(articles ?? []).map((article) => (
-              <li key={article.revision_id}>
-                <div>
-                  <p className="liyan-revision__title">{article.title}</p>
-                  <p className="form-hint">
-                    {article.task_display_name} · Revision {article.revision_number}
-                  </p>
-                </div>
-                <button
-                  className="button button--quiet"
-                  type="button"
-                  onClick={() => setSelected(article)}
-                >
-                  发布
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      ) : <p className="form-hint">选择一个草稿后，可配置发布目标与作者并确认锁定快照。</p>}
 
-      <p className="section-kicker">发布记录</p>
+      <p className="section-kicker">3 · 发布历史</p>
       {records && records.length === 0 ? (
         <p className="form-hint">还没有发布记录。</p>
       ) : null}
@@ -197,7 +239,7 @@ export function PublicationCenter({
             <div>
               <p className="liyan-revision__title">{record.title}</p>
               <p className="form-hint">
-                Revision {record.revision_number} · {record.target.display_name} · {record.status}
+                草稿 {record.revision_number} · {record.target.display_name} · {record.status}
               </p>
             </div>
             {record.preview_url ? (
@@ -234,6 +276,7 @@ export function PublicationCenter({
           </li>
         ))}
       </ul>
+      {historyCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreHistory()}>加载更多发布记录</button> : null}
 
     </section>
   );

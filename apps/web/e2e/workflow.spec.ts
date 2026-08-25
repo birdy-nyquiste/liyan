@@ -62,23 +62,23 @@ test("an article is generated, edited, saved, and restored", async ({ page }) =>
   await createTaskWithReport(page, title);
 
   await openLiyan(page, title);
-  await page.getByRole("button", { name: "生成立言" }).click();
+  await page.getByRole("button", { name: "默认生成" }).click();
   const editor = page.getByRole("textbox", { name: "文章正文" });
   await expect(editor).toBeVisible({ timeout: PROVIDER_TIMEOUT });
 
-  await page.getByRole("button", { name: "保存 Revision" }).click();
-  await expect(page.getByText("Revision 1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "保存草稿" }).click();
+  await expect(page.getByText("草稿 1", { exact: true })).toBeVisible();
 
   await editor.click();
   await page.keyboard.type("这一句是保存之后加的。");
-  await page.getByRole("button", { name: "保存 Revision" }).click();
-  await expect(page.getByText("Revision 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "保存草稿" }).click();
+  await expect(page.getByText("草稿 2", { exact: true })).toBeVisible();
 
   // Restoring never rewinds: it creates Revision 3 carrying Revision 1's text,
   // so the history a user published from stays exactly as it was.
   page.once("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("button", { name: "恢复为当前 Revision" }).first().click();
-  await expect(page.getByText("（由历史 Revision 恢复）")).toBeVisible();
+  await page.getByRole("button", { name: "恢复为新草稿" }).first().click();
+  await expect(page.getByText("（由历史草稿恢复）")).toBeVisible();
 });
 
 test("a 立言任务 is deleted and leaves the list", async ({ page }) => {
@@ -97,11 +97,11 @@ test("publishing a saved Revision returns a Preview URL", async ({ page }) => {
   await openWorkbench(page);
   await createTaskWithReport(page, title);
   await openLiyan(page, title);
-  await page.getByRole("button", { name: "生成立言" }).click();
+  await page.getByRole("button", { name: "默认生成" }).click();
   await expect(page.getByRole("textbox", { name: "文章正文" })).toBeVisible({
     timeout: PROVIDER_TIMEOUT,
   });
-  await page.getByRole("button", { name: "保存 Revision" }).click();
+  await page.getByRole("button", { name: "保存草稿" }).click();
 
   // Exact, and inside the task: 发布中心 is also a button whose name starts 发布.
   await openedTask(page, title).getByRole("button", { name: "发布", exact: true }).click();
@@ -122,7 +122,7 @@ test("an unconfirmed Blog answer is shown as 结果未知 and cannot be resent",
   await openWorkbench(page);
   await createTaskWithReport(page, title);
   await openLiyan(page, title);
-  await page.getByRole("button", { name: "生成立言" }).click();
+  await page.getByRole("button", { name: "默认生成" }).click();
   await expect(page.getByRole("textbox", { name: "文章正文" })).toBeVisible({
     timeout: PROVIDER_TIMEOUT,
   });
@@ -131,7 +131,7 @@ test("an unconfirmed Blog answer is shown as 结果未知 and cannot be resent",
   // confirm, which is the case a user must never be invited to retry.
   const heading = page.getByRole("textbox", { name: "文章标题" });
   await heading.fill(title);
-  await page.getByRole("button", { name: "保存 Revision" }).click();
+  await page.getByRole("button", { name: "保存草稿" }).click();
   await openedTask(page, title).getByRole("button", { name: "发布", exact: true }).click();
   await page.getByLabel("作者（显示在 Blog 上）").fill("Zeng Zong");
   await page.getByRole("button", { name: "确认发布" }).click();
@@ -147,7 +147,8 @@ test("a URL 来源 that cannot be reached fails with a reason, not a spinner", a
   test.skip(!AGAINST_STAGING, "A local run has no Chromium behind the worker to fetch with.");
   await openWorkbench(page);
 
-  await page.getByRole("button", { name: "新建立言任务" }).click();
+  await page.getByRole("link", { name: "新建立言任务" }).click();
+  await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByRole("button", { name: "公共文章链接" }).click();
   await page.getByLabel("来源网址").fill("https://example.invalid/does-not-resolve");
   await page.getByRole("button", { name: "添加来源" }).click();

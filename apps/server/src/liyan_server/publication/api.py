@@ -18,13 +18,15 @@ from that:
   it is created rather than after.
 """
 
+import base64
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -120,10 +122,12 @@ class EligibleArticleResponse(BaseModel):
 
 class EligibleArticleListResponse(BaseModel):
     items: list[EligibleArticleResponse]
+    next_cursor: str | None = None
 
 
 class PublishTaskListResponse(BaseModel):
     items: list["PublishTaskResponse"]
+    next_cursor: str | None = None
 
 
 class ConfirmPublicationRequest(BaseModel):
@@ -233,6 +237,26 @@ def publication_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/publication", tags=["publication"])
 
+    def encode_cursor(created_at: datetime, item_id: UUID) -> str:
+        payload = json.dumps(
+            [aware_utc(created_at).isoformat(), str(item_id)], separators=(",", ":")
+        ).encode()
+        return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+    def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
+        try:
+            padding = "=" * (-len(cursor) % 4)
+            timestamp, item_id = json.loads(base64.urlsafe_b64decode(cursor + padding).decode())
+            moment = datetime.fromisoformat(timestamp)
+            if moment.tzinfo is None:
+                raise ValueError
+            return moment, UUID(item_id)
+        except (ValueError, TypeError, json.JSONDecodeError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="The publication cursor is invalid.",
+            ) from error
+
     def publish_executions(session: Session, publish_task: PublishTask) -> list[Execution]:
         return list(
             session.scalars(
@@ -287,6 +311,8 @@ def publication_router(
     def list_eligible_articles(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
+        cursor: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=50)] = 20,
     ) -> EligibleArticleListResponse:
         tasks = session.scalars(
             select(Task)
@@ -319,7 +345,21 @@ def publication_router(
                     saved_at=aware_utc(revision.created_at),
                 )
             )
-        return EligibleArticleListResponse(items=items)
+        items.sort(key=lambda item: (item.saved_at, item.revision_id), reverse=True)
+        if cursor is not None:
+            saved_at, revision_id = decode_cursor(cursor)
+            items = [
+                item for item in items
+                if (item.saved_at, UUID(item.revision_id)) < (saved_at, revision_id)
+            ]
+        page = items[:limit]
+        return EligibleArticleListResponse(
+            items=page,
+            next_cursor=(
+                encode_cursor(page[-1].saved_at, UUID(page[-1].revision_id))
+                if len(items) > limit else None
+            ),
+        )
 
     @router.post(
         "/publish-tasks",
@@ -517,17 +557,31 @@ def publication_router(
     def list_publish_tasks(
         user: Annotated[User, Depends(current_user)],
         session: Annotated[Session, Depends(database.session)],
+        cursor: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=50)] = 20,
     ) -> PublishTaskListResponse:
-        publish_tasks = session.scalars(
-            select(PublishTask)
-            .where(PublishTask.owner_id == user.id)
-            .order_by(PublishTask.created_at.desc())
-        ).all()
+        statement = select(PublishTask).where(PublishTask.owner_id == user.id)
+        if cursor is not None:
+            created_at, publish_task_id = decode_cursor(cursor)
+            statement = statement.where(
+                or_(
+                    PublishTask.created_at < created_at,
+                    and_(PublishTask.created_at == created_at, PublishTask.id < publish_task_id),
+                )
+            )
+        publish_tasks = list(session.scalars(
+            statement.order_by(PublishTask.created_at.desc(), PublishTask.id.desc()).limit(limit + 1)
+        ).all())
+        page = publish_tasks[:limit]
         return PublishTaskListResponse(
             items=[
                 PublishTaskResponse.of(publish_task, publish_executions(session, publish_task))
-                for publish_task in publish_tasks
-            ]
+                for publish_task in page
+            ],
+            next_cursor=(
+                encode_cursor(page[-1].created_at, page[-1].id)
+                if len(publish_tasks) > limit else None
+            ),
         )
 
     @router.get(

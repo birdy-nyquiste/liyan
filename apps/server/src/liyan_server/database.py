@@ -20,6 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from liyan_server.execution_states import (
+    CreditEntryKind,
     ExecutionStatus,
     PublishTaskStatus,
     RunOrigin,
@@ -484,6 +485,75 @@ class PublishTask(Base):
     idempotency_key: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CreditEntry(Base):
+    """One movement of 额度, in the record a user's balance is read from.
+
+    Append-only, and the balance is the sum. Nothing stores it beside this: a
+    cached total is a second source of truth for money, and the one that drifts
+    is the one nobody notices until a user is refused work they paid for.
+
+    `kind` is ASCII for the same reason `ExecutionStatus` is — it is a stored
+    literal, not a phrase — and the workbench renders it as 赠送, 购买, 预扣, or
+    结算. What each one means is in `CONTEXT.md`.
+
+    The target columns mirror the `(target_type, target_id, attempt)` triple
+    `Execution` already uses. They are plain identifiers rather than foreign
+    keys, following `publish_tasks`: `cleanup` removes tasks and cascades into
+    their Executions, and 额度 that vanished with one would change a balance
+    retroactively. Only `owner_id` cascades, because deleting a person should
+    take their accounting with them.
+    """
+
+    __tablename__ = "credit_entries"
+    __table_args__ = (
+        #: One 预扣 and one 结算 for any attempt, so a worker that runs twice or a
+        #: settlement written both eagerly and by the sweep cannot double-count.
+        Index(
+            "uq_credit_entries_run",
+            "kind",
+            "target_type",
+            "target_id",
+            "attempt",
+            unique=True,
+            postgresql_where=text("kind IN ('hold', 'settle')"),
+            sqlite_where=text("kind IN ('hold', 'settle')"),
+        ),
+        #: One capture charge per 来源, however many times intake is replayed.
+        Index(
+            "uq_credit_entries_capture",
+            "target_type",
+            "target_id",
+            unique=True,
+            postgresql_where=text("kind = 'capture'"),
+            sqlite_where=text("kind = 'capture'"),
+        ),
+        #: A redelivered Stripe event collides here rather than crediting twice.
+        Index(
+            "uq_credit_entries_stripe_event",
+            "stripe_event_id",
+            unique=True,
+            postgresql_where=text("stripe_event_id IS NOT NULL"),
+            sqlite_where=text("stripe_event_id IS NOT NULL"),
+        ),
+        Index("ix_credit_entries_owner_created", "owner_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    kind: Mapped[CreditEntryKind] = mapped_column(String(16))
+    #: Signed. Negative takes 额度; positive gives them back or adds them.
+    amount: Mapped[int] = mapped_column(Integer)
+    target_type: Mapped[str | None] = mapped_column(String(64))
+    target_id: Mapped[UUID | None] = mapped_column(Uuid)
+    attempt: Mapped[int | None] = mapped_column(Integer)
+    execution_id: Mapped[UUID | None] = mapped_column(Uuid)
+    stripe_event_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ExecutionCost(Base):

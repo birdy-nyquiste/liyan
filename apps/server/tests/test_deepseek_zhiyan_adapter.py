@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -11,6 +11,9 @@ from liyan_server.zhiyan.deepseek import (
 )
 from liyan_server.zhiyan.prompt import AcceptedSourceRevision, zhiyan_request
 from liyan_server.zhiyan.provider import ToolPolicy, ZhiyanProviderFailure
+from liyan_server.zhiyan.recovery import is_recoverable, retry_allowed_at
+
+FINISHED = datetime(2026, 8, 22, 12, 5, tzinfo=UTC)
 
 REVISION = AcceptedSourceRevision(
     id="11111111-1111-4111-8111-111111111111",
@@ -157,7 +160,7 @@ def test_a_search_only_run_opens_no_pages() -> None:
 
 
 def test_a_provider_error_status_fails_without_leaking_the_body_to_the_user() -> None:
-    response = ProviderHttpResponse(429, None, body_text="rate limit for key sk-live-123")
+    response = ProviderHttpResponse(503, None, body_text="upstream for key sk-live-123")
 
     with pytest.raises(ZhiyanProviderFailure) as failure:
         provider(response).analyze(a_request())
@@ -165,6 +168,24 @@ def test_a_provider_error_status_fails_without_leaking_the_body_to_the_user() ->
     assert failure.value.code == "provider_unavailable"
     assert "sk-live-123" not in failure.value.message
     assert "sk-live-123" in (failure.value.internal_error or "")
+
+
+def test_being_rate_limited_is_told_apart_from_the_provider_being_unwell() -> None:
+    """`zhiyan/recovery` waits twice as long for one as for the other.
+
+    Both leave the 知言 boundary as 服务繁忙, so the difference is invisible to
+    the user and matters only to the backoff — which is exactly why nothing
+    would have reported it: every 429 simply came back in half the time it
+    should have, and asked again.
+    """
+    response = ProviderHttpResponse(429, None, body_text="rate limit exceeded")
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        provider(response).analyze(a_request())
+
+    assert failure.value.code == "provider_rate_limited"
+    assert is_recoverable(failure.value.code)
+    assert retry_allowed_at(FINISHED, failure.value.code) == FINISHED + timedelta(seconds=60)
 
 
 def test_an_incomplete_response_fails() -> None:

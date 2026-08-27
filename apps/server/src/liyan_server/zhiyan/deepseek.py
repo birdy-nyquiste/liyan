@@ -66,8 +66,18 @@ class DeepSeekZhiyanProvider:
             request_body(request),
         )
         if response.status_code != 200:
+            # 429 earns its own code because `zhiyan/recovery` waits twice as
+            # long for it as for a generic provider failure. Being refused for
+            # asking too often is the one failure where asking again in thirty
+            # seconds is how you earn a second one — and 知言 is the operation
+            # that saturates a provider, being the long one that searches.
+            code = (
+                "provider_rate_limited"
+                if response.status_code == 429
+                else "provider_unavailable"
+            )
             raise ZhiyanProviderFailure(
-                "provider_unavailable",
+                code,
                 UNAVAILABLE_MESSAGE,
                 internal_error=f"DeepSeek responded {response.status_code}: {response.body_text}",
             )

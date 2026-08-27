@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from liyan_server.credits import settle
 from liyan_server.database import Execution, ExecutionCost, aware_utc
 from liyan_server.provider_usage import ProviderUsage
 from liyan_server.rate_card import (
@@ -110,6 +111,22 @@ def record_execution_cost(
             cost_micros += worker_cost_micros(held) if held is not None else 0
             cost_micros += storage_cost_micros(stored_bytes) if stored_bytes else 0
 
+        charge = _charge(execution.operation, cost_micros, chargeable)
+        if execution.operation in TOKEN_METERED_OPERATIONS:
+            # The 预扣 was taken against the target, not the Execution, because
+            # a 知言 run's is taken before its Execution exists. Settling here
+            # rather than in a sweep beside it is the same judgement the cost
+            # row makes: this is the only moment the number is known.
+            settle(
+                session,
+                execution.owner_id,
+                target_type=execution.target_type,
+                target_id=execution.target_id,
+                attempt=execution.attempt,
+                actual=charge if cost_micros is not None else (0 if not chargeable else None),
+                execution_id=execution.id,
+            )
+
         session.add(
             ExecutionCost(
                 execution_id=execution.id,
@@ -125,7 +142,7 @@ def record_execution_cost(
                 worker_milliseconds=held,
                 stored_bytes=stored_bytes,
                 cost_micros=cost_micros,
-                charge_credits=_charge(execution.operation, cost_micros, chargeable),
+                charge_credits=charge,
                 created_at=moment,
             )
         )

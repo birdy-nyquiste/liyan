@@ -12,10 +12,11 @@ from database_support import QueueSaying, entitle, migrated_database
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from test_multi_source_intake_api import DeterministicJwtVerifier, MemoryObjectStorage
+from zhiyan_support import confirm_sources, create_session_sources, zhiyan_client
 
 from liyan_server import credits
 from liyan_server.app import create_app
-from liyan_server.database import Database, User
+from liyan_server.database import CreditEntry, Database, User
 from liyan_server.rate_card import CAPTURE_CREDITS
 from liyan_server.settings import Settings
 
@@ -132,3 +133,60 @@ def test_a_付费用户_may_submit_a_url_来源(tmp_path: Path) -> None:
 
     assert created.status_code == 201, created.text
     assert balance(database_url) == 1_000 - CAPTURE_CREDITS
+
+
+def held(database_url: str, kind: str) -> list[int]:
+    database = Database(database_url)
+    assert database.engine is not None
+    try:
+        with Session(database.engine) as session:
+            return [
+                entry.amount
+                for entry in session.query(CreditEntry)
+                .filter(CreditEntry.kind == kind)
+                .order_by(CreditEntry.created_at)
+            ]
+    finally:
+        database.dispose()
+
+
+def test_a_confirmation_holds_for_every_来源_then_settles_each(tmp_path: Path) -> None:
+    """The whole round trip: 预扣 when the 任务版本 is created, 结算 when each run
+    ends. The 预扣 is taken inside that transaction, before the Executions it
+    pays for exist, which is why it keys to the source Revision."""
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    entitle(dispatcher.database_url, credits=100_000)
+    confirm_sources(client, headers, ["四天工作制已经没有争议", "碳中和的真实成本"])
+
+    holds = held(dispatcher.database_url, "hold")
+    assert len(holds) == 2, "one 预扣 per 来源, taken together"
+    assert all(amount < 0 for amount in holds)
+
+    dispatcher.run_all()
+
+    settlements = held(dispatcher.database_url, "settle")
+    assert len(settlements) == 2, "one 结算 per run, once each has ended"
+
+
+def test_a_confirmation_nobody_can_pay_for_is_refused_whole(tmp_path: Path) -> None:
+    """Admitting some of the 来源 would leave a 任务版本 with one report and the
+    rest nobody will ever analyze — the half-analyzed version the capacity
+    ceiling refuses to create, arrived at through the ledger instead of the
+    queue. So the 预扣 is checked for the batch, and nothing is held."""
+    client, database_url = a_client(tmp_path, grant=CAPTURE_CREDITS + 2)
+    ids = create_session_sources(client, HEADERS, ["四天工作制已经没有争议"])
+
+    refused = client.post(
+        "/task-creation/confirm",
+        headers=HEADERS,
+        json={
+            "idempotency_key": "key-1",
+            "client_session_id": "session-1",
+            "source_ids": ids,
+        },
+    )
+
+    assert refused.status_code == 402, refused.text
+    assert held(database_url, "hold") == []
+    # The capture fee already paid stands: that work was done.
+    assert balance(database_url) == 2

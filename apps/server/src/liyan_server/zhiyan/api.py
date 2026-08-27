@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import hold_zhiyan_attempt
 from liyan_server.database import (
     Database,
     Execution,
@@ -322,13 +323,17 @@ def zhiyan_router(
                 headers=_retry_after(retry, now),
             )
         refuse_when_at_capacity(session, settings, owner_id=user.id)
+        attempt = previous.attempt + 1 if previous else 1
+        hold_zhiyan_attempt(
+            session, user.id, revision, attempt=attempt, model=settings.zhiyan_model
+        )
         execution = queue_run(
             session,
             revision,
             owner_id=user.id,
             model=settings.zhiyan_model,
             origin="manual" if previous is not None else "initial",
-            attempt=previous.attempt + 1 if previous else 1,
+            attempt=attempt,
             now=now,
         )
         try:

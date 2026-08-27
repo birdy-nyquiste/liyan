@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server.cleanup import policy_from, run_cleanup
 from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher
+from liyan_server.credit_reconciliation import reconcile_settlements
 from liyan_server.database import Database, Execution
 from liyan_server.execution_dispatch import EXECUTION_QUEUE, CeleryExecutionDispatcher
 from liyan_server.file_parse_worker import process_file_parse
@@ -90,11 +91,15 @@ def clean_expired_data() -> None:
 @celery_app.task(name="liyan.recover_stalled_executions")  # type: ignore[untyped-decorator]
 def recover_stalled() -> None:
     record_scheduled_heartbeat()
+    # After the sweep, not before: a run this pass has just given up on is one
+    # whose 预扣 is now settleable, and waiting a whole interval to hand it back
+    # would leave a user's 额度 short for no reason they could see.
     recover_stalled_executions(
         settings.database_url,
         policy=stalled_policy_from(settings),
         now=datetime.now(UTC),
     )
+    reconcile_settlements(settings.database_url)
 
 
 @celery_app.task(name="liyan.process_execution")  # type: ignore[untyped-decorator]

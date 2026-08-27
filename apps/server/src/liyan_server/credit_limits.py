@@ -18,12 +18,19 @@ arithmetic that follows it, when a 预扣 settles down and rarely to the quoted
 number. `docs/design/credits-in-the-workbench.md` argues that at length.
 """
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from liyan_server import credits
+from liyan_server.credits import hold
+from liyan_server.database import SourceRevision
+from liyan_server.liyan.runs import LIYAN_TARGET_TYPE
+from liyan_server.rate_card import estimate_liyan_credits, estimate_zhiyan_credits
+from liyan_server.zhiyan.orchestration import accepted_report
+from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
 INSUFFICIENT_MESSAGE = "额度不足，购买后可继续。"
 
@@ -61,4 +68,101 @@ def refuse_unless_paid(session: Session, owner_id: UUID) -> None:
     raise HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail=PAID_ONLY_MESSAGE,
+    )
+
+
+def hold_zhiyan_batch(
+    session: Session,
+    owner_id: UUID,
+    revisions: Sequence[SourceRevision],
+    *,
+    model: str,
+) -> None:
+    """预扣 for every 来源 one act will analyze, or refuse the act.
+
+    Whole, or not at all. Confirming a 任务创建会话 with three 来源 is one thing a
+    user did, and admitting two of them would leave a 任务版本 with one report and
+    two 来源 nobody will ever analyze — the half-analyzed version
+    `execution_limits` refuses to create, arrived at through the ledger instead
+    of the queue.
+
+    Called inside the transaction that creates the 任务版本 rather than beside
+    `queue_initial_runs`, which deliberately runs after that transaction
+    commits. Holding there would let two confirmations both pass this check and
+    the second run out partway through its 来源.
+
+    Skips 来源 that already hold a report: re-analysis is free because there is
+    nothing to analyze again, which is the same rule `queue_initial_runs`
+    applies to the work itself.
+    """
+    wanted = [
+        (revision.id, estimate_zhiyan_credits(source_characters=len(revision.body), model=model))
+        for revision in revisions
+        if accepted_report(session, revision.id) is None
+    ]
+    if not wanted:
+        return
+    refuse_when_short(session, owner_id, needed=sum(estimate for _, estimate in wanted))
+    for revision_id, estimate in wanted:
+        hold(
+            session,
+            owner_id,
+            target_type=ZHIYAN_TARGET_TYPE,
+            target_id=revision_id,
+            attempt=1,
+            credits=estimate,
+        )
+
+
+def hold_zhiyan_attempt(
+    session: Session,
+    owner_id: UUID,
+    revision: SourceRevision,
+    *,
+    attempt: int,
+    model: str,
+) -> None:
+    """预扣 for one 知言 run, when a user asks for it again themselves.
+
+    One hold per attempt rather than per 来源: the attempt before it settled at
+    whatever it cost, which for a failed run is nothing. A user pays once for
+    one 知言报告 however many tries it took to get one.
+    """
+    estimate = estimate_zhiyan_credits(source_characters=len(revision.body), model=model)
+    refuse_when_short(session, owner_id, needed=estimate)
+    hold(
+        session,
+        owner_id,
+        target_type=ZHIYAN_TARGET_TYPE,
+        target_id=revision.id,
+        attempt=attempt,
+        credits=estimate,
+    )
+
+
+def hold_liyan_attempt(
+    session: Session,
+    owner_id: UUID,
+    article_id: UUID,
+    *,
+    attempt: int,
+    input_characters: int,
+    model: str,
+) -> None:
+    """预扣 for one 立言 generation.
+
+    Every generation is charged, including a regeneration with a new 立言指令.
+    Unlike a 知言报告 — which is immutable and bound to one source Revision, so
+    asking for it twice returns the one that exists — an article is produced
+    afresh each time, and the provider is paid afresh each time.
+    """
+    estimate = estimate_liyan_credits(input_characters=input_characters, model=model)
+    refuse_when_short(session, owner_id, needed=estimate)
+    hold(
+        session,
+        owner_id,
+        target_type=LIYAN_TARGET_TYPE,
+        target_id=article_id,
+        attempt=attempt,
+        credits=estimate,
     )

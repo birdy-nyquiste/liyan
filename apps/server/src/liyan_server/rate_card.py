@@ -117,3 +117,91 @@ def credits_for(cost_micros: int) -> int:
     """
     divisor = PER_MILLION // CREDITS_PER_DOLLAR_OF_COST
     return max(1, -(-max(0, cost_micros) // divisor))
+
+
+# --- Estimating a run before it happens -------------------------------------
+#
+# A 预扣 is taken at what a run is expected to cost, and settled against what it
+# did. These are the coefficients that expectation is built from. They live here
+# rather than in settings because they are a model of the provider, not a knob
+# per environment: every deployment should hold the same view of what a run
+# costs, and a wrong one should be wrong in a place that is reviewed.
+#
+# None of them is fitted yet. `docs/operations/credits.md` says which are
+# assumptions and which the afternoon of 2026-08-27 measured, and
+# `scripts/calibrate_costs.py` is what replaces them with a line through real
+# runs. Until then they are deliberately generous: over-holding costs a user a
+# refusal they could have afforded, under-holding costs 立言阁 money it cannot
+# get back, and ADR-0008 chooses the first.
+
+#: Assumed. DeepSeek's own guidance for Chinese text.
+TOKENS_PER_CHARACTER = 0.6
+
+#: Assumed. The instructions and report schema every 知言 run carries.
+ZHIYAN_PREAMBLE_TOKENS = 2_000
+
+#: Assumed, and known to be low. Runs measured on 2026-08-27 carried 46,000 to
+#: 142,000 input tokens — but around 90% were cache hits at a thirty-first of
+#: the price, so the figure that matters for a cost is much smaller than the one
+#: that matters for a context window.
+ZHIYAN_SEARCH_TOKENS = 15_000
+
+#: Measured once, on 2026-08-27: 15,161 output tokens, of which 11,205 were
+#: reasoning. The report itself was 3,956 — but reasoning is billed as output,
+#: so the number that costs money is the whole of it.
+ZHIYAN_OUTPUT_TOKENS = 15_000
+
+#: 立言 has no tool access and so no injection term: what it sends and what comes
+#: back is the whole of it. Assumed to reason as much as 知言 does.
+LIYAN_OUTPUT_TOKENS = 15_000
+
+
+def _input_tokens(characters: int) -> int:
+    return int(max(0, characters) * TOKENS_PER_CHARACTER)
+
+
+def _estimate(input_tokens: int, output_tokens: int, model: str) -> int:
+    """What a run costing this much would be charged.
+
+    Estimated as an entirely uncached call, which is the pessimistic reading:
+    cache hits are a discount the provider may or may not give on the day, and a
+    预扣 that assumed one would under-hold exactly when the provider changed its
+    mind.
+    """
+    usage = ProviderUsage(
+        input_tokens=input_tokens,
+        cached_input_tokens=0,
+        output_tokens=output_tokens,
+        reasoning_tokens=0,
+        total_tokens=input_tokens + output_tokens,
+    )
+    cost = provider_cost_micros(usage, model)
+    if cost is None:
+        # An unrated model cannot be estimated any more than it can be costed.
+        # One 额度 is not a guess at the price; it is the smallest hold that
+        # still requires the user to have some.
+        return 1
+    return credits_for(cost)
+
+
+def estimate_zhiyan_credits(*, source_characters: int, model: str) -> int:
+    """What analyzing one 来源 is expected to cost.
+
+    The 来源 is in hand, so its own contribution is counted rather than guessed.
+    What is predicted is the preamble, whatever the provider injects when it
+    searches, and how long the report comes out.
+    """
+    return _estimate(
+        _input_tokens(source_characters) + ZHIYAN_PREAMBLE_TOKENS + ZHIYAN_SEARCH_TOKENS,
+        ZHIYAN_OUTPUT_TOKENS,
+        model,
+    )
+
+
+def estimate_liyan_credits(*, input_characters: int, model: str) -> int:
+    """What generating one 立言文章 is expected to cost.
+
+    Its input is entirely known — the 知言报告 and the 立言指令 are both already
+    written — so only the article's own length is predicted.
+    """
+    return _estimate(_input_tokens(input_characters), LIYAN_OUTPUT_TOKENS, model)

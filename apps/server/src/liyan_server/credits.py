@@ -209,7 +209,7 @@ def settle(
     target_type: str,
     target_id: UUID,
     attempt: int,
-    actual: int,
+    actual: int | None,
     execution_id: UUID | None = None,
     now: datetime | None = None,
 ) -> CreditEntry | None:
@@ -219,6 +219,12 @@ def settle(
     was low, collecting the shortfall. Work that produced nothing settles at
     zero, so the whole 预扣 comes back: a user never pays for a run that gave
     them nothing.
+
+    `actual=None` means the work succeeded but its cost could not be measured —
+    a provider that reported no usage, or a model with no rates. The 预扣 stands
+    as the charge. Settling that at zero would hand out a 知言报告 for free every
+    time the meter blinked, and settling it at a guess would be a third number
+    nobody could defend.
 
     Returns nothing when there was no 预扣 to correct, or when this attempt has
     already settled — the second being how the eager path and the reconciling
@@ -237,7 +243,7 @@ def settle(
         session,
         owner_id,
         kind="settle",
-        amount=abs(held.amount) - max(0, actual),
+        amount=0 if actual is None else abs(held.amount) - max(0, actual),
         now=now,
         target_type=target_type,
         target_id=target_id,

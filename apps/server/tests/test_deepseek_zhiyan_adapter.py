@@ -328,3 +328,28 @@ def test_a_reply_with_no_text_says_what_it_did_carry() -> None:
     detail = refused.value.internal_error or ""
     assert "web_search_call" in detail
     assert "reasoning" in detail
+
+
+def test_a_completed_response_carries_what_the_call_consumed() -> None:
+    """The meter's only source. Nothing in this repository recorded a token
+    before it, so a run that dropped `usage` cost an unknown amount forever."""
+    payload = completed_payload()
+    payload["usage"] = {
+        "input_tokens": 18_200,
+        "input_tokens_details": {"cached_tokens": 2_000},
+        "output_tokens": 4_000,
+        "total_tokens": 22_200,
+    }
+
+    result = provider_result(payload, fallback_model="deepseek-v4-flash")
+
+    assert result.usage is not None
+    assert result.usage.uncached_input_tokens == 16_200
+    assert result.usage.output_tokens == 4_000
+
+
+def test_a_report_still_arrives_when_the_provider_reports_no_usage() -> None:
+    result = provider_result(completed_payload(), fallback_model="deepseek-v4-flash")
+
+    assert result.usage is None
+    assert result.report_text

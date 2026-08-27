@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
+from liyan_server.provider_usage import provider_usage
 from liyan_server.zhiyan.provider import (
     SearchAction,
     SearchActionKind,
@@ -198,6 +199,7 @@ def provider_result(payload: object, *, fallback_model: str) -> ZhiyanProviderRe
         search_actions=tuple(actions),
         model=model if isinstance(model, str) else fallback_model,
         response_id=response_id if isinstance(response_id, str) else None,
+        usage=provider_usage(payload),
     )
 
 

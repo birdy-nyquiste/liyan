@@ -59,3 +59,13 @@ def test_only_the_defined_verdicts_appear_in_a_real_report() -> None:
     report = accept_report_text(result.report_text, opened_urls=result.opened_urls)
 
     assert {item.verdict for item in report.facts.items} <= FACT_VERDICTS
+
+
+def test_the_captured_response_predates_usage_and_is_handled_anyway() -> None:
+    """This capture was trimmed to what the adapter read at the time, so it
+    carries no `usage` — which makes it the one piece of real provider output
+    available to prove that a report survives a missing meter."""
+    result = provider_result(live_payload(), fallback_model="deepseek-v4-flash")
+
+    assert result.usage is None
+    assert accept_report_text(result.report_text, opened_urls=result.opened_urls)

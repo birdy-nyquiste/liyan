@@ -7,6 +7,7 @@ from liyan_server.liyan.provider import (
     LiyanProviderResult,
     LiyanRequest,
 )
+from liyan_server.provider_usage import provider_usage
 
 ARTICLE_FORMAT_NAME = "liyan_article"
 UNAVAILABLE_MESSAGE = "立言服务暂时不可用，请稍后重试。"
@@ -150,6 +151,7 @@ def provider_result(payload: object, *, fallback_model: str) -> LiyanProviderRes
         article_text=article_text,
         model=model if isinstance(model, str) else fallback_model,
         response_id=response_id if isinstance(response_id, str) else None,
+        usage=provider_usage(payload),
     )
 
 

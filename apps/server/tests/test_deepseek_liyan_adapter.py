@@ -6,6 +6,7 @@ from liyan_server.liyan.acceptance import accept_article_text
 from liyan_server.liyan.deepseek import (
     DeepSeekLiyanProvider,
     ProviderHttpResponse,
+    provider_result,
     request_body,
 )
 from liyan_server.liyan.failures import LiyanRunFailure
@@ -122,3 +123,30 @@ def test_acceptance_rejects_markup_in_the_title(title: str) -> None:
         accept_article_text(
             json.dumps({"title": title, "body_markdown": "完整正文。"}, ensure_ascii=False)
         )
+
+
+def test_a_completed_article_carries_what_the_call_consumed() -> None:
+    """立言 is metered from the same block as 知言, and has no search term to
+    complicate it: what it sent and what came back is the whole cost."""
+    payload = {
+        "id": "resp_1",
+        "model": "deepseek-v4-flash",
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": '{"title":"t","body_markdown":"b"}'}],
+            }
+        ],
+        "usage": {
+            "input_tokens": 15_000,
+            "input_tokens_details": {"cached_tokens": 1_500},
+            "output_tokens": 4_000,
+        },
+    }
+
+    result = provider_result(payload, fallback_model="deepseek-v4-flash")
+
+    assert result.usage is not None
+    assert result.usage.uncached_input_tokens == 13_500
+    assert result.usage.output_tokens == 4_000

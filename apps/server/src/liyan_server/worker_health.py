@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 type WorkerState = Literal["beating", "silent", "unknown"]
 
+#: What beat is called in `worker_heartbeats`.
+#:
+#: Beat only schedules — it never executes a task — so the beat process can
+#: never write its own row. What proves beat is alive is a scheduled task
+#: arriving at all, because nothing else sends one. The worker that runs one
+#: therefore writes this row on beat's behalf.
+BEAT_WORKER = "liyan-beat"
+
 #: How long a worker may say nothing before its silence is worth reporting.
 #: Comfortably longer than the slowest run 立言阁 starts, so a worker part-way
 #: through a 知言 analysis is never called dead.

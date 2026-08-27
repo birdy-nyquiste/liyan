@@ -20,8 +20,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from zhiyan_support import confirm_sources, unavailable, zhiyan_client
 
+from liyan_server import celery_worker
 from liyan_server.app import create_app
-from liyan_server.database import Database, Execution, User, ZhiyanReport
+from liyan_server.database import (
+    Database,
+    Execution,
+    User,
+    WorkerHeartbeat,
+    ZhiyanReport,
+)
 from liyan_server.settings import Settings
 from liyan_server.stalled import (
     NEVER_STARTED_CODE,
@@ -29,7 +36,7 @@ from liyan_server.stalled import (
     StalledPolicy,
     recover_stalled_executions,
 )
-from liyan_server.worker_health import record_heartbeat, silent_workers
+from liyan_server.worker_health import BEAT_WORKER, record_heartbeat, silent_workers
 
 
 def _client(tmp_path: Path, *, reachable: bool = True) -> tuple[TestClient, str]:
@@ -290,6 +297,36 @@ def test_a_late_provider_answer_cannot_undo_a_recovered_execution(
     assert [execution.status for execution in executions] == ["stale"]
     assert [execution.error_code for execution in executions] == [STALLED_CODE]
     assert executions[0].stale_result is not None
+
+
+def test_running_a_scheduled_sweep_says_beat_is_alive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beat cannot write its own heartbeat, so the sweep it sent writes one.
+
+    `celery beat` only schedules — every task it dispatches runs on a worker,
+    where `worker_name` is the worker's. A sweep recording only that name
+    leaves no `liyan-beat` row in existence at all, and the test below, which
+    proves a stale beat is reported, proves it about a row nothing ever writes.
+
+    Both names, because each covers the other's blind spot: the worker's own,
+    so a worker idling between sweeps is not called dead; beat's, so a beat
+    that has stopped sending cannot hide behind a busy worker.
+    """
+    database_url = migrated_database(tmp_path)
+    monkeypatch.setattr(
+        celery_worker,
+        "settings",
+        Settings(database_url=database_url, worker_name="liyan-worker-provider"),
+    )
+
+    celery_worker.recover_stalled()
+
+    database = Database(database_url)
+    assert database.engine is not None
+    with Session(database.engine) as session:
+        recorded = sorted(beat.worker for beat in session.scalars(select(WorkerHeartbeat)))
+    assert recorded == [BEAT_WORKER, "liyan-worker-provider"]
 
 
 def test_a_live_worker_never_masks_a_dead_one(tmp_path: Path) -> None:

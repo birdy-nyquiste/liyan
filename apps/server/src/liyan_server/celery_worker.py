@@ -20,7 +20,7 @@ from liyan_server.settings import Settings
 from liyan_server.stalled import policy_from as stalled_policy_from
 from liyan_server.stalled import recover_stalled_executions
 from liyan_server.url_fetch_worker import process_url_fetch
-from liyan_server.worker_health import record_heartbeat
+from liyan_server.worker_health import BEAT_WORKER, record_heartbeat
 from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
@@ -59,11 +59,26 @@ celery_app.conf.beat_schedule = {
 }
 
 
+def record_scheduled_heartbeat() -> None:
+    """Say that both processes a scheduled task depends on were alive just now.
+
+    This worker, because it is running this. And beat, because only beat sends
+    a scheduled task — so one arriving is the only evidence beat exists.
+
+    Both, not one. Writing only `worker_name` leaves no `liyan-beat` row for
+    anything to go stale, and a dead beat then hides behind the worker's own
+    heartbeat: the API answers, the worker runs, readiness says `beating`, and
+    nothing is ever cleaned up or recovered again. Writing only `BEAT_WORKER`
+    has the opposite hole — a worker with no user work would fall silent
+    between sweeps, which is the state these sweeps run in most of the time.
+    """
+    record_heartbeat(settings.database_url, settings.worker_name)
+    record_heartbeat(settings.database_url, BEAT_WORKER)
+
+
 @celery_app.task(name="liyan.clean_expired_data")  # type: ignore[untyped-decorator]
 def clean_expired_data() -> None:
-    # Beat's own heartbeat. Nothing else writes one for it, and a dead beat is
-    # invisible: the API answers, the worker runs, and no sweep ever happens.
-    record_heartbeat(settings.database_url, settings.worker_name)
+    record_scheduled_heartbeat()
     run_cleanup(
         settings.database_url,
         R2ObjectStorage(settings),
@@ -74,7 +89,7 @@ def clean_expired_data() -> None:
 
 @celery_app.task(name="liyan.recover_stalled_executions")  # type: ignore[untyped-decorator]
 def recover_stalled() -> None:
-    record_heartbeat(settings.database_url, settings.worker_name)
+    record_scheduled_heartbeat()
     recover_stalled_executions(
         settings.database_url,
         policy=stalled_policy_from(settings),

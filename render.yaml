@@ -104,9 +104,11 @@ services:
     plan: starter
     buildCommand: pip install uv && uv sync --locked
     startCommand: uv run celery -A liyan_server.celery_worker beat --loglevel=info
+    # No LIYAN_WORKER_NAME here, deliberately. Beat only schedules; it never
+    # executes a task, so nothing in this process ever reads one. Its heartbeat
+    # is written under `worker_health.BEAT_WORKER` by whichever worker runs the
+    # task beat sent — which is the only evidence beat is alive.
     envVars:
-      - key: LIYAN_WORKER_NAME
-        value: liyan-beat
       - fromGroup: liyan-shared
       - key: LIYAN_DATABASE_URL
         fromDatabase:

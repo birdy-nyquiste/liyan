@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from liyan_server.database import Execution, ExecutionCost, aware_utc
 from liyan_server.provider_usage import ProviderUsage
 from liyan_server.rate_card import (
+    CAPTURE_CREDITS,
     RATE_CARD_VERSION,
     credits_for,
     provider_cost_micros,
@@ -34,6 +35,13 @@ logger = logging.getLogger(__name__)
 #: bytes really are the whole of what it cost.
 TOKEN_METERED_OPERATIONS = frozenset({"analyze_source", "generate_article"})
 
+#: Operations charged a flat fee per 来源 rather than from what they measured.
+#: A 250x difference in a 来源's length makes only a few times' difference in
+#: what capturing it costs, so the fee is a floor covering the largest file this
+#: system accepts. The measured cost beside it is how anyone finds out whether
+#: that is still the right number.
+FLAT_CHARGED_OPERATIONS = frozenset({"fetch_url", "parse_file"})
+
 
 def _held_milliseconds(execution: Execution, now: datetime) -> int | None:
     """How long this run held a worker.
@@ -46,6 +54,19 @@ def _held_milliseconds(execution: Execution, now: datetime) -> int | None:
         return None
     finished = aware_utc(execution.finished_at) if execution.finished_at else now
     return max(0, int((finished - aware_utc(execution.started_at)).total_seconds() * 1000))
+
+
+def _charge(operation: str, cost_micros: int | None, chargeable: bool) -> int | None:
+    """What this run would be charged, which is not always what it cost.
+
+    Capture is a flat fee and is known before it runs, so its charge does not
+    follow its measurement — which is the point of recording both.
+    """
+    if operation in FLAT_CHARGED_OPERATIONS:
+        return CAPTURE_CREDITS if chargeable else 0
+    if cost_micros is None:
+        return None
+    return credits_for(cost_micros) if chargeable else 0
 
 
 def record_execution_cost(
@@ -104,13 +125,7 @@ def record_execution_cost(
                 worker_milliseconds=held,
                 stored_bytes=stored_bytes,
                 cost_micros=cost_micros,
-                charge_credits=(
-                    None
-                    if cost_micros is None
-                    else credits_for(cost_micros)
-                    if chargeable
-                    else 0
-                ),
+                charge_credits=_charge(execution.operation, cost_micros, chargeable),
                 created_at=moment,
             )
         )

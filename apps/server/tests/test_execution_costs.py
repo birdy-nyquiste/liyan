@@ -24,7 +24,7 @@ from zhiyan_support import (
 
 from liyan_server.database import Database, ExecutionCost
 from liyan_server.provider_usage import ProviderUsage
-from liyan_server.rate_card import RATE_CARD_VERSION
+from liyan_server.rate_card import CAPTURE_CREDITS, RATE_CARD_VERSION
 from liyan_server.zhiyan.provider import ZhiyanProviderResult, ZhiyanRequest
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
@@ -154,3 +154,37 @@ def test_a_provider_that_reported_no_usage_leaves_the_cost_unknown(tmp_path: Pat
     assert cost.cost_micros is None
     assert cost.charge_credits is None
     assert cost.worker_milliseconds is not None
+
+
+def test_a_url_capture_is_costed_from_the_worker_it_held(tmp_path: Path) -> None:
+    """No tokens and no bytes: a URL 来源 never reaches R2, so a fetch costs only
+    the worker that held Chromium for it.
+
+    It is charged the flat fee rather than what it measured, which is the whole
+    reason both numbers are recorded — the gap between them is how anyone finds
+    out whether three 额度 is still the right floor.
+    """
+    from test_url_source_api import authenticated_client
+
+    client, headers, dispatcher = authenticated_client(tmp_path)
+    created = client.post(
+        "/task-creation/url-sources",
+        headers=headers,
+        json={
+            "client_session_id": "session-1",
+            "client_source_id": "source-1",
+            "url": "https://example.com/story",
+        },
+    )
+    assert created.status_code == 201, created.text
+    dispatcher.run_next()
+
+    (cost,) = costs(dispatcher.database_url)
+    assert cost.operation == "fetch_url"
+    assert cost.input_tokens is None
+    assert cost.stored_bytes is None
+    assert cost.model is None
+    # Worker time is the whole of it, so the cost is known rather than unknown.
+    assert cost.cost_micros is not None
+    assert cost.worker_milliseconds is not None
+    assert cost.charge_credits == CAPTURE_CREDITS

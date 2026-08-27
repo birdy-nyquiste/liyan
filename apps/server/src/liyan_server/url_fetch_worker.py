@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server.database import Database, Execution, SourcePreparation, UrlFetchResult
 from liyan_server.execution_states import surrendered
+from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
 from liyan_server.source_preparation import source_warnings
 from liyan_server.source_text import without_nul, without_nul_in_mapping
@@ -86,6 +87,7 @@ def _mark_failed(database: Database, execution_id: UUID, failure: UrlFetchFailur
                 source.failure_code = "cancelled"
                 source.failure_message = "Fetching was cancelled. Retry it or replace this source."
                 source.updated_at = now
+            _record_cost(session, execution, source)
             session.commit()
             return
         execution.status = "failed"
@@ -108,6 +110,7 @@ def _mark_failed(database: Database, execution_id: UUID, failure: UrlFetchFailur
             source.failure_code = failure.code
             source.failure_message = failure.message
             source.updated_at = now
+        _record_cost(session, execution, source)
         session.commit()
 
 
@@ -217,6 +220,22 @@ def process_url_fetch(
                 source.failure_message = None
                 source.accepted_result_id = result.id
                 source.updated_at = now
+            _record_cost(session, execution, source)
             session.commit()
     finally:
         database.dispose()
+
+def _record_cost(session: Session, execution: Execution, source: SourcePreparation | None) -> None:
+    """What capturing this 来源 cost, and what the flat fee would take for it.
+
+    Chargeable only when the 来源 is one the user ended up with: a capture that
+    failed or was superseded left them nothing to pay for. No stored bytes: a
+    URL 来源 never reaches R2, so a fetch costs only the worker that held
+    Chromium for it.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=execution.status == "succeeded",
+        stored_bytes=None,
+    )

@@ -199,13 +199,45 @@ whichever of these is furthest off.
 | --- | --- | --- |
 | Chinese characters → tokens | 0.6 tok/char | Good |
 | Instructions + report schema | ~2,000 tokens | Rough |
-| Search results injected per 知言 run | ~15,000 tokens | **Weak — could be 3× either way** |
-| 知言报告 output | ~4,000 tokens | Rough |
+| Search results injected per 知言 run | ~15,000 tokens | **Wrong — see below** |
+| 知言报告 output | ~4,000 tokens | **Incomplete — see below** |
 | R2 retention for amortisation | 12 months | A policy choice, not a measurement |
 
-The search-result figure is the one that matters. It is the largest term in a
-short 来源's cost, it is chosen by the provider rather than by 立言阁, and
-nothing currently bounds it.
+### What one afternoon against the real provider already showed
+
+A partial calibration on 2026-08-27 could not finish, but it settled two of
+these and unsettled a third.
+
+**Reasoning tokens are unaccounted for, and they are the larger half of the
+output.** `deepseek-v4-flash` reasons, and DeepSeek bills reasoning as output.
+One measured run returned 15,161 output tokens of which **11,205 were
+reasoning** — so the report itself was 3,956, which is what this page assumed.
+The assumption about the *report* was right; the page simply did not know
+reasoning existed, and output is the most expensive token this system buys.
+
+`rate_card.py` prices this correctly without changing, because `output_tokens`
+already includes reasoning. It is the estimate above that is short, by roughly
+three times, on the largest term.
+
+**Search injection is far larger than 15,000 tokens**, and moving. Runs measured
+that day carried 46,000–142,000 input tokens where this page assumes 18,200 —
+but around 90% were cache hits, at a thirty-first of the price, which is the
+only reason the totals landed near the figures above.
+
+**The provider's behaviour drifted mid-measurement.** Sources that took three to
+five searches on 2026-08-24 took eighteen to twenty-three on 2026-08-27, from a
+byte-identical request. Some runs then returned no report at all: many searches,
+little reasoning, and no message, which `zhiyan` records as
+`invalid_provider_response`.
+
+So the price table above is not corrected here. Correcting it against a provider
+mid-drift would replace a stated assumption with a measurement that reads as
+settled and is not. `scripts/calibrate_costs.py` is what settles it, once runs
+complete reliably again.
+
+One thing worth reporting upstream: `max_tool_calls` is accepted by the
+Responses API and **not enforced**. A run capped at six made twenty searches.
+Whatever bounds a 知言 run's searching, it is not that.
 
 ## Holding and settling
 

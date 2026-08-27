@@ -26,6 +26,10 @@ there is no endpoint for it — nor should there be, for an operator's tool.
 Real data through the real API, so this is pointed at Local or Staging and never
 at Production. Every task is left behind on purpose: the rows are the output.
 
+A `--url` is a 来源 too, and the only way to measure what capturing one costs:
+a fetch holds Chromium for as long as the page takes, which is the whole of a
+URL 来源's cost and the thing the flat capture fee is meant to cover.
+
 ## What makes a corpus worth running
 
 One file per 来源, `.txt` or `.md`, and **the material you actually expect**.
@@ -103,6 +107,57 @@ def _client(base_url: str, token: str) -> httpx.Client:
         base_url=base_url.rstrip("/"),
         headers={"Authorization": f"Bearer {token}"},
         timeout=60.0,
+    )
+
+
+def submit_url(client: httpx.Client, url: str, timeout: float) -> tuple[str, str, str, int]:
+    """One URL 来源, waited on before it can be confirmed.
+
+    Unlike pasted text, a URL is not a 来源 until Chromium has been and returned,
+    so this polls the preparation to `ready` first. What comes back also gives
+    the character count the fit needs, which nobody knows before the fetch.
+    """
+    session_id = f"calibrate-{uuid.uuid4()}"
+    created = client.post(
+        "/task-creation/url-sources",
+        json={
+            "client_session_id": session_id,
+            "client_source_id": "source-0",
+            "url": url,
+        },
+    )
+    created.raise_for_status()
+    source_id = str(created.json()["id"])
+    started = time.monotonic()
+    body = ""
+    while time.monotonic() - started < timeout:
+        state = client.get(f"/task-creation/url-sources/{source_id}")
+        state.raise_for_status()
+        payload = state.json()
+        status = str(payload.get("status", ""))
+        if status in {"ready", "warning"}:
+            body = str(payload.get("body") or "")
+            break
+        if status == "failure":
+            raise SystemExit(f"Fetching {url} failed: {payload.get('failure_message')}")
+        time.sleep(POLL_SECONDS)
+    else:
+        raise SystemExit(f"Fetching {url} did not finish inside {timeout}s.")
+    confirmed = client.post(
+        "/task-creation/confirm",
+        json={
+            "idempotency_key": session_id,
+            "client_session_id": session_id,
+            "source_ids": [source_id],
+        },
+    )
+    confirmed.raise_for_status()
+    payload = confirmed.json()
+    return (
+        session_id,
+        str(payload["task"]["id"]),
+        str(payload["source_revisions"][0]["id"]),
+        len(body),
     )
 
 
@@ -199,7 +254,7 @@ def measured_costs(database_url: str, sessions: dict[str, Piece]) -> list[Measur
                   FROM execution_costs c
                   JOIN executions e ON e.id = c.execution_id
                   LEFT JOIN source_revisions r ON r.id = e.target_id
-                 WHERE c.operation IN ('analyze_source', 'generate_article')
+                 WHERE c.operation IN ('analyze_source', 'generate_article', 'fetch_url')
                  ORDER BY c.created_at
                 """
             )
@@ -207,7 +262,7 @@ def measured_costs(database_url: str, sessions: dict[str, Piece]) -> list[Measur
             provenance = record.provenance or ""
             name = provenance.removeprefix("calibration://")
             piece = sessions.get(name)
-            if piece is None and record.operation == "analyze_source":
+            if piece is None and record.operation in {"analyze_source", "fetch_url"}:
                 continue
             rows.append(
                 Measured(
@@ -327,7 +382,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=os.environ.get("LIYAN_DATABASE_URL", ""),
         help="Where the meter writes. Defaults to $LIYAN_DATABASE_URL.",
     )
-    parser.add_argument("--corpus", required=True, type=Path)
+    parser.add_argument("--corpus", type=Path, help="Directory of .txt/.md 来源.")
+    parser.add_argument(
+        "--url",
+        action="append",
+        default=[],
+        dest="urls",
+        help="A URL 来源, repeatable. Measures what capturing one costs.",
+    )
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument(
         "--articles",
@@ -338,21 +400,37 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.database_url:
         parser.error("--database-url or LIYAN_DATABASE_URL is required to read the meter.")
-    if not args.corpus.is_dir():
-        parser.error(f"{args.corpus} is not a directory of corpus files.")
-    pieces = read_corpus(args.corpus)
-    if not pieces:
-        parser.error(f"No .txt or .md files in {args.corpus}.")
+    if not args.corpus and not args.urls:
+        parser.error("Give --corpus, --url, or both.")
+    pieces: list[Piece] = []
+    if args.corpus:
+        if not args.corpus.is_dir():
+            parser.error(f"{args.corpus} is not a directory of corpus files.")
+        pieces = read_corpus(args.corpus)
+        if not pieces:
+            parser.error(f"No .txt or .md files in {args.corpus}.")
 
-    print(f"{len(pieces)} 来源, {min(p.characters for p in pieces):,}"
-          f"–{max(p.characters for p in pieces):,} characters")
-    by_name = {piece.name: piece for piece in pieces}
+    if pieces:
+        print(f"{len(pieces)} pasted 来源, {min(p.characters for p in pieces):,}"
+              f"–{max(p.characters for p in pieces):,} characters")
+    if args.urls:
+        print(f"{len(args.urls)} URL 来源")
+    by_name: dict[str, Piece] = {piece.name: piece for piece in pieces}
 
     with _client(args.base_url, args.token) as client:
         for piece in pieces:
             _, task_id, revision_id = submit(client, piece)
             state = await_report(client, revision_id, args.timeout)
             print(f"  {piece.name:<30} 知言 {state}")
+            if state == "succeeded" and args.articles:
+                print(f"  {'':<30} 立言 {generate_article(client, task_id, args.timeout)}")
+        for url in args.urls:
+            _, task_id, revision_id, characters = submit_url(client, url, args.timeout)
+            name = url
+            by_name[name] = Piece(name=name, title=name, body="x" * characters)
+            print(f"  {url[:29]:<30} fetched {characters:,} chars")
+            state = await_report(client, revision_id, args.timeout)
+            print(f"  {'':<30} 知言 {state}")
             if state == "succeeded" and args.articles:
                 print(f"  {'':<30} 立言 {generate_article(client, task_id, args.timeout)}")
 

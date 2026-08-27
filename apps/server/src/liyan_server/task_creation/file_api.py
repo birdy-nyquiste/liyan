@@ -15,6 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import refuse_unless_paid, refuse_when_short
+from liyan_server.credits import charge_capture
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_limits import refuse_when_at_capacity
@@ -24,6 +26,7 @@ from liyan_server.object_storage import (
     ObjectStorage,
     ObjectStorageUnconfigured,
 )
+from liyan_server.rate_card import CAPTURE_CREDITS
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_creation.contracts import (
@@ -355,6 +358,10 @@ def file_source_router(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Client source identity is required.",
             )
+        # Gated and charged before the upload is read, let alone stored: this
+        # request costs 立言阁 R2 bytes and a parse whatever becomes of the 来源.
+        refuse_unless_paid(session, user.id)
+        refuse_when_short(session, user.id, needed=CAPTURE_CREDITS)
         refuse_when_at_capacity(session, settings, owner_id=user.id)
         # Before the bytes are read and stored: a refused upload must not pay R2.
         upload = await _read_validated_upload(file, max_bytes=settings.file_max_bytes)
@@ -414,6 +421,7 @@ def file_source_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This browser source identity is already in use.",
             ) from error
+        charge_capture(session, user.id, preparation_id=source.id, credits=CAPTURE_CREDITS)
         execution = _new_file_execution(source, attempt=1)
         session.add(execution)
         session.flush()
@@ -510,6 +518,7 @@ def file_source_router(
         source.failure_message = None
         source.accepted_result_id = None
         source.updated_at = now
+        charge_capture(session, user.id, preparation_id=source.id, credits=CAPTURE_CREDITS)
         execution = _new_file_execution(source, attempt=1)
         session.add(execution)
         session.flush()

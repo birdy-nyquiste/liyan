@@ -13,6 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import refuse_unless_paid, refuse_when_short
+from liyan_server.credits import charge_capture
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_limits import refuse_when_at_capacity
@@ -21,6 +23,7 @@ from liyan_server.execution_states import (
     SourcePreparationStatus,
     cancelled_message,
 )
+from liyan_server.rate_card import CAPTURE_CREDITS
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_creation.contracts import (
@@ -256,6 +259,11 @@ def url_source_router(
                 detail="Client source identity is required.",
             )
         input_url, normalized_url = normalize_public_url(request.url)
+        # URL and file 来源 are what a 付费用户 buys, and they are the ones that
+        # cost 立言阁 real work before anyone has decided to keep them: this
+        # request launches Chromium or the parser either way.
+        refuse_unless_paid(session, user.id)
+        refuse_when_short(session, user.id, needed=CAPTURE_CREDITS)
         ensure_session_capacity(
             session,
             owner_id=user.id,
@@ -293,6 +301,7 @@ def url_source_router(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This browser source identity is already in use.",
             ) from error
+        charge_capture(session, user.id, preparation_id=source.id, credits=CAPTURE_CREDITS)
         execution = new_url_fetch_execution(source, attempt=1, created_at=now)
         session.add(execution)
         session.flush()
@@ -458,6 +467,7 @@ def url_source_router(
         source.failure_message = None
         source.accepted_result_id = None
         source.updated_at = now
+        charge_capture(session, user.id, preparation_id=source.id, credits=CAPTURE_CREDITS)
         execution = new_url_fetch_execution(source, attempt=1, created_at=now)
         session.add(execution)
         session.flush()

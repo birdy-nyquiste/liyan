@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from blog_support import DeterministicBlogSubmitter
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -231,6 +231,7 @@ class RecordingDispatcher:
 
 def zhiyan_client(tmp_path: Path) -> tuple[TestClient, dict[str, str], RecordingDispatcher]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingDispatcher(database_url)
     client = TestClient(
         create_app(

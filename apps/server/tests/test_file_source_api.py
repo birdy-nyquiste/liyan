@@ -7,7 +7,7 @@ from uuid import UUID
 from zipfile import ZipFile
 
 import pytest
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from docx import Document
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
@@ -128,6 +128,7 @@ def authenticated_client(
     tmp_path: Path, *, max_file_bytes: int = 1_000_000
 ) -> tuple[TestClient, dict[str, str], RecordingExecutionDispatcher, MemoryObjectStorage]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     storage = MemoryObjectStorage()
     dispatcher = RecordingExecutionDispatcher(database_url, storage)
     settings = Settings(
@@ -552,6 +553,7 @@ class UnreachableStorage(MemoryObjectStorage):
 
 def _upload_to(tmp_path: Path, storage: MemoryObjectStorage) -> Any:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingExecutionDispatcher(database_url, storage)
     client = TestClient(
         create_app(

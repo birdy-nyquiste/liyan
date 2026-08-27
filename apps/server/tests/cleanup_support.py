@@ -12,7 +12,7 @@ from typing import Any, BinaryIO
 from uuid import UUID
 
 from blog_support import DeterministicBlogSubmitter
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 from publication_support import TARGETS
 from sqlalchemy.orm import Session
@@ -144,6 +144,10 @@ def cleanup_client(
     tmp_path: Path,
 ) -> tuple[TestClient, dict[str, str], RecordingExecutionDispatcher, MemoryObjectStorage, str]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
+    # The second writer buys 额度 too. These tests are about one writer never
+    # reaching another writer's work, which needs both of them able to do any.
+    entitle(database_url, subject='supabase-user-2')
     storage = MemoryObjectStorage()
     dispatcher = RecordingExecutionDispatcher(database_url, storage)
     client = TestClient(

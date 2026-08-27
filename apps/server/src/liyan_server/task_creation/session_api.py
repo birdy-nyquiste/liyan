@@ -9,9 +9,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import refuse_when_short
+from liyan_server.credits import charge_capture
 from liyan_server.database import Database, Execution, SourcePreparation, User
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES, SourcePreparationStatus
 from liyan_server.object_storage import ObjectStorage
+from liyan_server.rate_card import CAPTURE_CREDITS
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_creation.contracts import (
@@ -205,6 +208,10 @@ def task_creation_session_router(
             provenance=request.provenance,
         )
         content_hash = normalized_body_hash(normalized.body)
+        # A pasted 来源 queues no Execution and reaches no browser, so nothing
+        # gates it but the fee itself: every 来源 costs the same to carry once
+        # it is in a 任务版本, whichever way it arrived.
+        refuse_when_short(session, user.id, needed=CAPTURE_CREDITS)
         ensure_session_capacity(
             session,
             owner_id=user.id,
@@ -241,6 +248,8 @@ def task_creation_session_router(
         )
         session.add(source)
         try:
+            session.flush()
+            charge_capture(session, user.id, preparation_id=source.id, credits=CAPTURE_CREDITS)
             session.commit()
         except IntegrityError as error:
             session.rollback()

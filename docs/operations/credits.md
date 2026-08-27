@@ -56,31 +56,31 @@ functions and one conversion.
 
 ### ① Source capture — flat, per 来源
 
-Covers every non-LLM marginal cost: Chromium fetching a URL, PDF and DOCX
-parsing, R2 storage for the life of the 来源, and the worker seconds its 知言
-run occupies.
+Covers the non-LLM marginal cost of having a 来源 at all: Chromium fetching a
+URL, PDF and DOCX parsing, and R2 storage for as long as the 来源 is kept. Not
+the worker seconds of its 知言 run — those are that run's own, and are metered
+there.
 
-    capture_credits = ceil(0.0015 × K) = 3
+    capture_credits = CAPTURE_CREDITS = 3
 
 Flat, and the same for a pasted 来源 as for a 10MB PDF, because the cost really
-is nearly flat:
+is nearly flat — and small:
 
-| | 2,000-char 来源 | 500,000-char 来源 |
-| --- | --- | --- |
-| Fetch / parse worker time | ~$0.00004 | ~$0.00016 |
-| R2 storage (12mo assumed) | ~$0.00001 | ~$0.0018 |
-| Worker seconds during its 知言 run | ~$0.0005 | ~$0.0008 |
-| **Total** | **~$0.0006** | **~$0.0026** |
+| | URL, typical | File, typical (2MB) | File, worst (10MB, 60s) |
+| --- | --- | --- | --- |
+| Fetch / parse worker time | $0.000041 | $0.000027 | $0.000162 |
+| R2 storage | — (URL 来源 never touch R2) | $0.00036 | $0.0018 |
+| **Total** | **$0.000041** | **$0.00039** | **$0.0020** |
+| Computed 额度 | 1 | 1 | 4 |
 
-A 250× difference in length produces a 4× difference in cost. Metering capture
-by characters — the obvious first instinct — would overcharge a long 来源 by
-roughly 60× for infrastructure that costs nearly the same. Length is already
-paid for in ②, where it genuinely scales, and charging for it twice would be
-charging for it once wrongly.
+Length is paid for in ②, where it genuinely scales, and charging for it twice
+would be charging for it once wrongly.
 
-The flat fee is set above the blended average rather than at it, so the large-
-file tail is cross-subsidised by a fraction of a cent rather than by a second
-term in the equation.
+The fee is set to cover **the tail rather than the average**: three 额度 nearly
+covers the largest file this system accepts, so the biggest uploads are
+subsidised by a fraction of a cent instead of by a second term in the equation.
+An ordinary 来源 pays more than it costs, and that is the price of the whole
+thing being one number nobody has to think about.
 
 ### ② 知言 and 立言 — measured tokens
 
@@ -115,14 +115,21 @@ of a 知言 run's input, which is what §What bounds the model is about.
 
 | Action | Cost | 额度 | To the user |
 | --- | --- | --- | --- |
-| Capture one 来源 | $0.0015 | 3 | $0.008 |
+| Capture one 来源 | $0.00004–0.002 | 3 | $0.008 |
 | 知言, short 来源 (2k chars) | $0.0138 | 28 | $0.070 |
-| 知言, long 来源 (500k chars) | $0.148 | 296 | $0.740 |
-| 立言 article | $0.012 | 24 | $0.060 |
-| **Typical task** (3 short 来源 + article) | $0.056 | **113** | **$0.28** |
-| Long-document task | $0.459 | 918 | $2.30 |
+| 知言, long 来源 (500k chars) | $0.1482 | 297 | $0.743 |
+| 立言 article | $0.0122 | 25 | $0.063 |
+| **Typical task** (3 short 来源 + article) | $0.054 | **118** | **$0.30** |
+| Long-document task | $0.458 | 925 | $2.31 |
 
-A $20 额度包 is therefore about **71 typical tasks** or **8 long-document ones**.
+Charged per act rather than over the total, because that is how it happens: each
+Execution rounds up on its own.
+
+A $20 额度包 is therefore about **67 typical tasks** or **8 long-document ones**.
+
+Every figure here is computed by `rate_card.py` and asserted by
+`tests/test_rate_card.py`, so a rate that moves without this page moving with it
+fails a test rather than quietly becoming untrue.
 
 ## Buying 额度
 
@@ -303,7 +310,7 @@ the term that dominates is the one DeepSeek chooses rather than the one 立言�
 sends.
 
 That is also where an overshoot costs least. A 28 额度 estimate missing by ten
-matters far less than a 296 额度 one missing by a hundred, and the hard case is
+matters far less than a 297 额度 one missing by a hundred, and the hard case is
 the small one.
 
 ### What to watch

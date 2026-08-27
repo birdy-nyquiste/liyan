@@ -486,6 +486,49 @@ class PublishTask(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ExecutionCost(Base):
+    """What one Execution cost 立言阁, and what it would be charged for.
+
+    Written for every terminal outcome of a run, not only a successful one: a
+    provider call that produced a report nobody kept was still invoiced, and the
+    gap between what a run cost and what it may be charged is the number that
+    says how much failure this product absorbs. `credits.md` asserts that number
+    is bounded; this is where it stops being an assertion.
+
+    Identifiers are plain columns rather than foreign keys, following
+    `publish_tasks`: `cleanup` removes tasks and cascades to their Executions,
+    and a cost record that vanished with one would change a margin — and later a
+    balance — retroactively. Only the user cascades, because deleting a person
+    genuinely should take their accounting with them.
+
+    Money is `cost_micros`, in millionths of one US dollar, and never a float.
+    It is nullable, as is `charge_credits`, because a provider that reported no
+    usage or a model with no rates leaves a cost unknown — which is a row anyone
+    can count, rather than a guess nobody can spot.
+    """
+
+    __tablename__ = "execution_costs"
+    __table_args__ = (Index("ix_execution_costs_operation_created", "operation", "created_at"),)
+
+    execution_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(Uuid, index=True)
+    operation: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(64))
+    rate_card_version: Mapped[int] = mapped_column(Integer)
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    cached_input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer)
+    search_calls: Mapped[int | None] = mapped_column(Integer)
+    worker_milliseconds: Mapped[int | None] = mapped_column(Integer)
+    stored_bytes: Mapped[int | None] = mapped_column(Integer)
+    cost_micros: Mapped[int | None] = mapped_column(Integer)
+    #: What would be charged. Zero for a run that produced nothing chargeable,
+    #: null when the cost itself is unknown. Nothing is charged yet either way.
+    charge_credits: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class WorkerHeartbeat(Base):
     """The last time a worker process was known to be doing something.
 

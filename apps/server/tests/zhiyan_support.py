@@ -27,6 +27,7 @@ from liyan_server.liyan.provider import (
 )
 from liyan_server.liyan.runs import LIYAN_OPERATION
 from liyan_server.liyan.worker import process_liyan_run
+from liyan_server.provider_usage import ProviderUsage
 from liyan_server.publication.runs import PUBLISH_OPERATION
 from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
@@ -106,7 +107,12 @@ def report_document(summary: str = DEFAULT_SUMMARY) -> dict[str, Any]:
     }
 
 
-def accepted_result(summary: str = DEFAULT_SUMMARY) -> ZhiyanProviderResult:
+def accepted_result(
+    summary: str = DEFAULT_SUMMARY, usage: ProviderUsage | None = None
+) -> ZhiyanProviderResult:
+    """One valid report. `usage` is absent by default, as the provider's own
+    captured response is: a report that arrives without one is still a report,
+    and most of these tests are about the report."""
     return ZhiyanProviderResult(
         report_text=json.dumps(report_document(summary), ensure_ascii=False),
         search_actions=(
@@ -115,6 +121,7 @@ def accepted_result(summary: str = DEFAULT_SUMMARY) -> ZhiyanProviderResult:
         ),
         model="deepseek-v4-flash",
         response_id="resp_1",
+        usage=usage,
     )
 
 

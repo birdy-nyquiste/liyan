@@ -27,6 +27,7 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message, surrendered
+from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
 from liyan_server.zhiyan.acceptance import accept_report_text
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
@@ -63,6 +64,7 @@ def process_zhiyan_run(
         if claimed is None:
             return
         snapshot, revision = claimed
+        result: ZhiyanProviderResult | None = None
         try:
             result = provider.analyze(
                 zhiyan_request(
@@ -75,7 +77,9 @@ def process_zhiyan_run(
             )
             document = accept_report_text(result.report_text, opened_urls=result.opened_urls)
         except ZhiyanRunFailure as failure:
-            _finish_failed(database, execution_id, failure, dispatcher)
+            # `result` is set when the call returned and its report was refused:
+            # the provider invoiced that just the same, so it is still a cost.
+            _finish_failed(database, execution_id, failure, dispatcher, result=result)
             return
         _finish_succeeded(database, execution_id, snapshot, result, document.model_dump())
     finally:
@@ -134,6 +138,7 @@ def _finish_failed(
     execution_id: UUID,
     failure: ZhiyanRunFailure,
     dispatcher: ExecutionDispatcher,
+    result: ZhiyanProviderResult | None = None,
 ) -> None:
     if database.engine is None:
         raise RuntimeError("Database is not configured.")
@@ -156,6 +161,7 @@ def _finish_failed(
         if task is None or task.deleted_at is not None:
             execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
+        _record_cost(session, execution, result, chargeable=False)
         recovery = _automatic_attempt(session, execution)
         session.commit()
         follow_up = recovery.id if recovery is not None else None
@@ -229,6 +235,7 @@ def _finish_succeeded(
             # so why it ended is still readable.
             execution.status = "stale"
             execution.stale_result = _stale_result(result)
+            _record_cost(session, execution, result, chargeable=False)
             session.commit()
             return
         execution.finished_at = now
@@ -237,6 +244,7 @@ def _finish_succeeded(
             execution.error_code = "cancelled"
             execution.error_message = CANCELLED_MESSAGE
             execution.stale_result = _stale_result(result)
+            _record_cost(session, execution, result, chargeable=False)
             session.commit()
             return
         already_accepted = session.scalar(
@@ -247,6 +255,7 @@ def _finish_succeeded(
         if already_accepted is not None:
             execution.status = "stale"
             execution.stale_result = _stale_result(result)
+            _record_cost(session, execution, result, chargeable=False)
             session.commit()
             return
         report = ZhiyanReport(
@@ -264,7 +273,36 @@ def _finish_succeeded(
         session.flush()
         execution.status = "succeeded"
         execution.result_id = report.id
+        _record_cost(session, execution, result, chargeable=True)
         session.commit()
+
+
+def _record_cost(
+    session: Session,
+    execution: Execution,
+    result: ZhiyanProviderResult | None,
+    *,
+    chargeable: bool,
+) -> None:
+    """What this run consumed, whatever became of its report.
+
+    A refused, cancelled, or superseded report was invoiced exactly like an
+    accepted one, so all of them are recorded; only an accepted one is
+    chargeable. Searches are counted from the actions the provider reported,
+    because they are the least predictable term in what a 知言 run costs.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=chargeable,
+        usage=result.usage if result else None,
+        model=result.model if result else None,
+        search_calls=(
+            sum(1 for action in result.search_actions if action.kind == "search")
+            if result
+            else None
+        ),
+    )
 
 
 def _lock_task(session: Session, snapshot: ZhiyanRunSnapshot) -> Task | None:

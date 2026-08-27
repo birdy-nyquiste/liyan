@@ -71,3 +71,35 @@ _Avoid_: Preview 创建, 提交成功
 **结果未知**:
 The terminal outcome of a 发布任务 whose Blog submission may have succeeded but did not return a confirmed Preview URL. It cannot be retried by 立言阁; any reconciliation happens outside the product.
 _Avoid_: 发布失败, 可重试失败
+
+**额度**:
+The unit of paid capacity. Every metered act consumes 额度; what one 额度 is worth in money is 立言阁's own, and only the count is shown.
+_Avoid_: 点数, 积分, 次数, 余额
+
+**额度包**:
+What a user buys: one price for one amount of 额度. The price is the user's side of the exchange; the amount is 立言阁's.
+_Avoid_: 套餐, 订阅, 会员
+
+**赠送额度**:
+额度 granted rather than bought — what a new user is given once on signing up, and any later promotion. A refund never reclaims them.
+_Avoid_: 免费额度, 试用额度
+
+**购买额度**:
+额度 a user bought. A refund or a payment dispute may reclaim them.
+_Avoid_: 充值额度, 付费额度
+
+**使用记录**:
+The append-only record of every 额度 赠送, 购买, 预扣, and 结算. A user's remaining 额度 is read from it and never stored beside it.
+_Avoid_: 账单, 消费记录, 流水
+
+**预扣**:
+The 额度 taken when work is admitted, before it has produced anything, at what that work is expected to cost. It is what makes remaining 额度 answer "what may I still start" rather than "what have I already spent".
+_Avoid_: 冻结, 预留, 预占
+
+**结算**:
+The correction written once work reaches a terminal state, being the difference between its 预扣 and what it actually cost. It returns the excess when the estimate was high and collects the shortfall when it was low. Work that produced nothing settles to zero.
+_Avoid_: 归还, 补扣, 退款 (that is Stripe's, and returns money)
+
+**付费用户**:
+A user who has bought 额度 at least once. It is what authorizes URL and file 来源 capture; a user who has not is limited to 来源 they paste. It is not a plan, a tier, or a subscription.
+_Avoid_: 会员, 订阅用户, Pro 用户, 套餐

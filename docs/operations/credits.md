@@ -1,7 +1,8 @@
 # 额度
 
 What a user buys, what it costs 立言阁 to serve, and the two equations that
-connect them. Everything here is one of three things: a rate quoted by a
+connect them. `docs/design/credits-in-the-workbench.md` is the other half: what
+a user sees of all this, and the two places it reaches back into the API. Everything here is one of three things: a rate quoted by a
 supplier, a measurement, or an assumption. The assumptions are marked, because
 several of them are currently guesses and the difference matters to the margin.
 

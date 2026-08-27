@@ -4,8 +4,8 @@
 worker slot**. This page is how that stops being true, in what order, and what
 each step breaks on its way.
 
-Nothing here has been built. Stages 1 and 2 are specified; stage 3 and beyond
-are named so the order is visible, and will be specified when they are reached.
+Nothing here has been built. Stages 1 to 3 are specified; stage 4 is named so
+the order is visible, and will be specified when it is reached.
 
 ## The mis-sizing at the centre
 
@@ -228,19 +228,95 @@ capture fee is for.
 
 ---
 
-# Later stages, named but not specified
+# Stage 3 — fairness under 额度
 
-**Stage 3 — fairness under 额度.** Once people pay, free work delaying paid work
-is a refund conversation. Separate queues with separate worker allocations
-rather than Celery task priorities, which behave inconsistently on Redis. The
-per-user ceiling `max_active_executions_per_user` becomes tier-scoped, which
-touches its own reasoning in three documents.
+Once people pay, free work delaying paid work stops being a queueing question
+and becomes a refund conversation. This stage is about who reaches the provider
+first, and it is deliberately the smallest of the three.
 
-**Stage 4 — the next things to give.** Postgres `basic-256mb`, where
-`executions.input_snapshot` and `stale_result` are JSON columns on the hottest
-table. Polling load, where every workbench client's interval is server load and
-ETag plus a short cache is a day's work against SSE's several. Neither is close
-yet; both are cheap to see coming.
+## It belongs to the limiter, not to the queues
+
+The obvious shape is a queue per tier with its own worker. It is the wrong one.
+
+After stage 2 the **limiter** is the real bound, not Celery. Two queues with
+eight threads each still contend for the same semaphore, so tiering them buys a
+second Render service and a static split — free workers idling while the paid
+queue backs up — without controlling the thing that actually decides who gets
+served.
+
+Tiering the limiter instead makes this stage an extension of stage 2 rather
+than new infrastructure.
+
+## Reserve for paid; do not cap free
+
+The formulation is the whole design:
+
+- **Capping free** at some share leaves provider capacity idle whenever no
+  付费用户 is working, which is most of the time early on.
+- **Reserving** slots for 付费用户 does not. Free work may use everything,
+  including the reserved slots while they are unclaimed; paid work always finds
+  one immediately, because the reservation is what it is for.
+
+## Deferral already does the queue-jumping
+
+Stage 2's deferral gives priority without any priority mechanism. A thread picks
+up a free-tier run, asks the limiter, finds free's share taken, defers — and
+takes the next task, which may be paid. No Celery priorities, which behave
+inconsistently on Redis; no head-of-line blocking; no second queue.
+
+But the two reasons a run defers are not the same thing and must not share a
+cap:
+
+| Why it deferred | Cap | How it ends |
+| --- | --- | --- |
+| The provider is saturated | Bounded | `provider_rate_limited` — a real failure |
+| This tier is at its share | **Unbounded**, with backoff | It waits, and then it runs |
+
+Conflating them would fail free users' work with 服务繁忙 whenever the product
+is busy. Being asked to wait because you have not paid is a product decision.
+Being told the service is broken is a lie about one.
+
+## `max_active_executions_per_user` changes meaning
+
+Its own docstring is about to be wrong:
+
+> Raising it does not buy throughput — there is still one slot — it only lets
+> one user queue more of it.
+
+After stage 1 there are eight, so raising it **does** buy that user throughput,
+at other users' expense. The number stops being purely protective and becomes an
+allocation: roughly 6 for a free user and 12 for a 付费用户.
+
+`limits.md` needs the same rewrite here as it does for its one-slot premise. The
+ceiling is no longer what protects the provider — the limiter is — and the
+ceiling's remaining job is to stop one user monopolising a tier's share.
+
+## What it costs a user to wait
+
+A deferred run holds its 预扣 for as long as it waits. That is right — the user
+did commit to the work — but it means a busy period leaves a free user's 剩余额度
+committed with nothing visibly happening. The 使用记录 row for a deferred run
+must say 等待中 rather than showing a bare hold, or the product looks like it
+has taken 额度 and stopped.
+
+## When this is worth building
+
+Not yet, and the honest reason is that the contention it manages does not exist.
+Stage 3 matters once enough 付费用户 are working at the same time to compete,
+which is a fact about the business rather than the system. Stages 1 and 2 are
+worth building before anyone pays; this one is not.
+
+---
+
+# Stage 4 — named, not specified
+
+**Postgres `basic-256mb`.** `executions.input_snapshot` and `stale_result` are
+JSON columns on the hottest table. Large payloads belong in R2, which is already
+wired, and `cleanup.py` already knows how to let go of things.
+
+**Polling load.** Every workbench client's interval is server load, and it lands
+on Postgres. ETag plus a short cache is a day's work; SSE is several. Neither is
+close yet, and both are cheap to see coming.
 
 ## Bugs found while specifying this
 

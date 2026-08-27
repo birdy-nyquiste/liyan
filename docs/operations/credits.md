@@ -191,8 +191,9 @@ the shadow meter, and not before.
 ## Assumptions, and how wrong they could be
 
 Nothing below has been measured. They are the reason this page is reasoned
-rather than measured, and the reason the meter should run in shadow before it
-bills anybody.
+rather than measured, and `scripts/calibrate_costs.py` is how each one stops
+being a guess. Until it has been run, every 额度 figure on this page inherits
+whichever of these is furthest off.
 
 | Assumption | Value | Confidence |
 | --- | --- | --- |
@@ -407,8 +408,13 @@ measurement.
    `Execution`, so worker seconds need a rate table rather than instrumentation,
    and `search_actions` is already captured. Persist tokens, seconds, bytes,
    the rate-card version, and the resulting cost — and charge nobody.
-4. **Run it in shadow.** Then set the free grant, calibrate how far the worst
-   case sits above the typical, and replace the table above with measurements.
+4. **Calibrate.** `scripts/calibrate_costs.py` drives 知言 and 立言 over a corpus
+   you choose and fits the assumptions above against what actually happened.
+   Not shadow mode against real traffic: behind an allowlist there is barely
+   any, and what there is would be whatever a few testers happened to paste. A
+   corpus spread across lengths gives the same answers in an afternoon. Then set
+   the 赠送额度 amount and the caps, and replace the assumptions table with
+   measurements.
 5. Ledger, 预扣, enforcement.
 6. Stripe.
 

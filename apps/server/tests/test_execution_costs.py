@@ -129,7 +129,7 @@ def test_a_report_nobody_kept_was_invoiced_all_the_same(tmp_path: Path) -> None:
     process_zhiyan_run(
         dispatcher.database_url,
         UUID(execution_id),
-        CancellingProvider(),  # type: ignore[arg-type]
+        CancellingProvider(),
         dispatcher,
     )
 

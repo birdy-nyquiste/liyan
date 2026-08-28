@@ -5238,17 +5238,6 @@
             "type": "integer",
             "title": "Amount"
           },
-          "held": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Held"
-          },
           "happened_at": {
             "type": "string",
             "format": "date-time",
@@ -5263,7 +5252,6 @@
           "task_id",
           "status",
           "amount",
-          "held",
           "happened_at"
         ],
         "title": "UsageEntry"

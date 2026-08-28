@@ -216,15 +216,18 @@ def test_usage_folds_a_结算_into_the_预扣_it_corrects(tmp_path: Path) -> Non
     running = client.get("/account/usage", headers=headers).json()["entries"]
     analysis = next(row for row in running if row["kind"] == "hold")
     assert analysis["status"] == "running"
-    assert analysis["held"] == -analysis["amount"], "committed in full while it runs"
+    # The whole 预扣, because that is what the balance has done so far.
+    assert analysis["amount"] < 0
 
     dispatcher.run_all()
 
     settled = client.get("/account/usage", headers=headers).json()["entries"]
     analysis = next(row for row in settled if row["kind"] == "hold")
     assert analysis["status"] in {"done", "failed"}
-    assert analysis["held"] is not None
-    assert "分析来源" in analysis["description"]
+    # The act's own name, and a way back to the 立言任务 it belongs to. Not the
+    # 来源's title: that named the same thing twice and led nowhere.
+    assert analysis["description"] == "知言报告"
+    assert analysis["task_id"]
 
 
 def test_usage_still_reads_after_the_task_it_refers_to_is_gone(tmp_path: Path) -> None:
@@ -251,4 +254,5 @@ def test_usage_still_reads_after_the_task_it_refers_to_is_gone(tmp_path: Path) -
 
     rows = client.get("/account/usage", headers=HEADERS).json()["entries"]
 
-    assert rows[0]["description"] == "分析来源"
+    assert rows[0]["description"] == "知言报告"
+    assert rows[0]["task_id"] is None, "a row stops leading anywhere rather than leading nowhere"

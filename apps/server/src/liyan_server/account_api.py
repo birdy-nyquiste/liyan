@@ -58,11 +58,10 @@ class UsageEntry(BaseModel):
     #: has been deleted: the ledger outlives it.
     task_id: str | None
     status: ActivityStatus
-    #: Signed, and already net of any 结算. What the balance actually moved by.
+    #: Signed, and already net of any 结算 — what the balance actually moved by.
+    #: A 预扣 still running shows as the whole of it, because that is what the
+    #: balance has done so far; the correction lands when the work ends.
     amount: int
-    #: What was taken up front, when this act took anything up front. Shown
-    #: beside `amount` so a number that moved and moved back explains itself.
-    held: int | None
     happened_at: datetime
 
 
@@ -209,7 +208,6 @@ def account_router(database: Database, current_user: CurrentUserDependency) -> A
                     task_id=_task_id(session, entry),
                     status=_status(session, entry, settlement is not None),
                     amount=entry.amount + (settlement.amount if settlement else 0),
-                    held=abs(entry.amount) if entry.kind == "hold" else None,
                     happened_at=entry.created_at,
                 )
             )

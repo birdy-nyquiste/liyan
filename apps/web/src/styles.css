@@ -3310,12 +3310,6 @@ a.source-meta:focus-visible .source-meta__value {
   font-variant-numeric: tabular-nums;
 }
 
-.account-usage__held {
-  grid-column: 1 / -1;
-  font-size: 0.8rem;
-  color: var(--ink-muted);
-}
-
 /* A locked 来源 kind explains itself in place, rather than going quiet. */
 .source-kinds-locked {
   display: flex;

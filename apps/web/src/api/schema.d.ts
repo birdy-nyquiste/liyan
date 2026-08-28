@@ -1690,8 +1690,6 @@ export interface components {
             status: components["schemas"]["ActivityStatus"];
             /** Amount */
             amount: number;
-            /** Held */
-            held: number | null;
             /**
              * Happened At
              * Format: date-time

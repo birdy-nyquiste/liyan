@@ -26,8 +26,6 @@ const copy = {
     running: "进行中",
     done: "已完成",
     failedRun: "失败",
-    held: "预扣",
-    returned: "已结算",
   },
   en: {
     title: "Account",
@@ -44,8 +42,6 @@ const copy = {
     running: "Running",
     done: "Done",
     failedRun: "Failed",
-    held: "Held",
-    returned: "Settled",
   },
 } as const;
 
@@ -167,20 +163,16 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
               {statusLabel[entry.status] ? (
                 <span className="account-usage__status">{statusLabel[entry.status]}</span>
               ) : null}
-              <span className="account-usage__amount">
-                {entry.amount > 0 ? "+" : ""}
-                {entry.amount.toLocaleString()}
-              </span>
               {/*
-                The 预扣 beside the amount is the point of this row. A balance
-                that moved and moved back, with nothing saying why, is the thing
-                users write in about.
+                One figure: what the balance did. A 预扣 still running shows in
+                full, a run that produced nothing shows -0 rather than a bare
+                nought, and a finished one shows what it actually took. Purchases
+                and grants are the same column with the other sign.
               */}
-              {entry.held !== null && entry.held !== -entry.amount ? (
-                <span className="account-usage__held">
-                  {text.held} {entry.held} · {text.returned}
-                </span>
-              ) : null}
+              <span className="account-usage__amount">
+                {entry.amount > 0 ? "+" : "-"}
+                {Math.abs(entry.amount).toLocaleString()}
+              </span>
             </li>
           ))}
         </ul>

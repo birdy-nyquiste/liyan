@@ -57,7 +57,8 @@ const copy = {
     collapse: "折叠侧栏",
     expand: "展开侧栏",
     signOut: "退出登录",
-    credits: "额度",
+    account: "账户",
+    creditsRemaining: "剩余额度",
     language: "语言",
     languageValue: "中文",
     theme: "主题",
@@ -94,7 +95,8 @@ const copy = {
     collapse: "Collapse sidebar",
     expand: "Expand sidebar",
     signOut: "Sign out",
-    credits: "Credits",
+    account: "Account",
+    creditsRemaining: "Remaining",
     language: "Language",
     languageValue: "English",
     theme: "Theme",
@@ -491,7 +493,7 @@ function Sidebar({
             ) : null}
           </button>
         </RailTooltip>
-        <RailTooltip label={`${text.credits}: ${creditsLabel}`} show={collapsed}>
+        <RailTooltip label={`${text.account}: ${text.creditsRemaining} ${creditsLabel}`} show={collapsed}>
           {/*
             A bare integer, and it lives here rather than in the rail because a
             user meets it at a refusal, not while they work. The group already
@@ -499,7 +501,7 @@ function Sidebar({
             wants.
           */}
           <NavLink
-            aria-label={`${text.credits}: ${creditsLabel}`}
+            aria-label={`${text.account}: ${text.creditsRemaining} ${creditsLabel}`}
             className="sidebar-account__action"
             to="/account"
             tabIndex={accountOpen ? undefined : -1}
@@ -508,8 +510,11 @@ function Sidebar({
             <Coins size={18} />
             {!collapsed ? (
               <>
-                <span>{text.credits}</span>
-                <span className="sidebar-account__value">{creditsLabel}</span>
+                <span>{text.account}</span>
+                <span className="sidebar-account__value">
+                  <span className="sidebar-account__value-label">{text.creditsRemaining}</span>
+                  {creditsLabel}
+                </span>
               </>
             ) : null}
           </NavLink>

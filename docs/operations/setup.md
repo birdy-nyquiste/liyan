@@ -245,6 +245,42 @@ Render Dashboard → **New → Blueprint**, point it at this repository. It read
 For Staging, give every service a distinguishing name (`liyan-api-staging`, and
 so on) so the two environments cannot be confused in the dashboard.
 
+### 1a. Migrating an environment that already exists
+
+A first-time Blueprint needs none of this. An environment created before the
+queue split (`scaling.md` stage 1) does, because **syncing a Blueprint never
+deletes a resource** — Render says so explicitly, and it is true even when the
+resource is gone from the file.
+
+So `liyan-worker` does not become `liyan-worker-heavy`. Render sees a name it
+has never met, creates a second service, and leaves the first one running: same
+repository, same auto-deploy, now on its old start command with no `--queues`.
+It would take the default queue and duplicate the heavy worker, and it would
+keep writing a `liyan-worker` heartbeat — so `forget_retired_workers` never
+retires it, because it is not silent. It is alive and redundant.
+
+Three steps, in this order:
+
+1. **Let the sync run.** `liyan-worker-heavy` and `liyan-worker-provider` are
+   both created. Wait until `liyan-worker-provider` is live and consuming
+   `provider-runs`. Nothing routes there until the API deploys, so it idles.
+2. **Suspend `liyan-worker`** in the dashboard, then delete it once the two new
+   workers have handled real work. Suspend rather than delete first: it is the
+   reversible half, and anything mid-flight on `source-processing` is picked up
+   by `liyan-worker-heavy` regardless — `process_execution` branches on the
+   operation, not on which queue delivered it.
+3. **Check `/health/ready`.** It reads `silent` while the retired
+   `liyan-worker` row is still in `worker_heartbeats`, because `worker_state`
+   takes the worst of every row. The cleanup sweep drops it a week after its
+   last beat. If you would rather not wait, delete that one row.
+
+`LIYAN_WORKER_CONCURRENCY` is new and carries a literal value, so the sync sets
+it on both workers without prompting. It must move with `--concurrency` if you
+ever change one: it is what the database pool is sized from.
+
+No drain, and no downtime. Deploy order matters only in one direction — the
+provider worker before the API — and the Blueprint does both in one sync.
+
 ### 2. Enter the secrets
 
 Render prompts for every value marked `sync: false`, because none of them are

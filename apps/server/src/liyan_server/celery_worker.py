@@ -6,8 +6,14 @@ from sqlalchemy.orm import Session
 
 from liyan_server.cleanup import policy_from, run_cleanup
 from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher
-from liyan_server.database import Database, Execution
-from liyan_server.execution_dispatch import EXECUTION_QUEUE, CeleryExecutionDispatcher
+from liyan_server.credit_reconciliation import reconcile_settlements
+from liyan_server.database import Database, Execution, share_engine
+from liyan_server.execution_dispatch import (
+    PROVIDER_QUEUE,
+    SCHEDULED_QUEUE,
+    SOURCE_QUEUE,
+    CeleryExecutionDispatcher,
+)
 from liyan_server.file_parse_worker import process_file_parse
 from liyan_server.file_parsing import FileParseLimits
 from liyan_server.liyan.deepseek import DeepSeekLiyanProvider
@@ -20,7 +26,7 @@ from liyan_server.settings import Settings
 from liyan_server.stalled import policy_from as stalled_policy_from
 from liyan_server.stalled import recover_stalled_executions
 from liyan_server.url_fetch_worker import process_url_fetch
-from liyan_server.worker_health import record_heartbeat
+from liyan_server.worker_health import BEAT_WORKER, forget_retired_workers, record_heartbeat
 from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
@@ -28,11 +34,24 @@ configure_logging()
 settings = Settings()
 celery_app = Celery("liyan-worker", broker=settings.broker_url)
 
-# What this worker consumes, and where beat sends. The API dispatches to the
-# same name, so the two cannot disagree without the import failing. Left to
-# Celery's default the worker would listen on `celery` while every Execution
-# piled up in `source-processing`, and nothing would say so.
-celery_app.conf.task_default_queue = EXECUTION_QUEUE
+# Where anything unrouted lands. Both worker services name their queue with
+# `-Q`, so this only decides for a task nobody routed — and the heavy queue is
+# the conservative place for that to be. Left to Celery's own default the
+# worker would listen on `celery` while every Execution piled up elsewhere, and
+# nothing would say so.
+celery_app.conf.task_default_queue = SOURCE_QUEUE
+
+# One engine for this process, sized to how many tasks it runs at once.
+#
+# Without it each task builds its own pool, and the provider worker's threads
+# would hold `concurrency` pools of up to fifteen connections against one small
+# Postgres. That fails as intermittent connection exhaustion under load, which
+# reads as a database problem rather than a pool-sizing one — so this lands with
+# the thread pool, never after it.
+#
+# A little over concurrency: a task briefly holds two sessions when it settles a
+# 预扣 while writing a cost.
+share_engine(settings.database_url, pool_size=settings.worker_concurrency + 2)
 
 # Celery replaces the root logger's handlers when a worker starts, which threw
 # away the JSON formatter and every `extra` field with it: `execution_failed`
@@ -51,19 +70,75 @@ celery_app.conf.beat_schedule = {
     "clean-expired-data": {
         "task": "liyan.clean_expired_data",
         "schedule": float(settings.cleanup_interval_seconds),
+        # Database and R2 work. The heavy queue's single slot is far too scarce
+        # to spend on a sweep, and a sweep queued behind a 10MB PDF is a sweep
+        # that does not run.
+        "options": {"queue": SCHEDULED_QUEUE},
     },
     "recover-stalled-executions": {
         "task": "liyan.recover_stalled_executions",
         "schedule": float(settings.stalled_sweep_interval_seconds),
+        "options": {"queue": SCHEDULED_QUEUE},
+    },
+    # One ping per queue, so a heartbeat stops being a function of demand.
+    #
+    # `record_heartbeat` is written on the way into each run — "a worker that is
+    # processing is by definition alive" — which worked while one worker did
+    # everything and was rarely idle. Split in two, `source-processing` will
+    # genuinely idle for hours, especially now that a user who has never paid
+    # cannot enqueue heavy work at all, and a perfectly healthy worker would
+    # report `silent`. So beat gives each queue something to do.
+    "ping-source-queue": {
+        "task": "liyan.ping",
+        "schedule": float(settings.stalled_sweep_interval_seconds),
+        "options": {"queue": SOURCE_QUEUE},
+    },
+    "ping-provider-queue": {
+        "task": "liyan.ping",
+        "schedule": float(settings.stalled_sweep_interval_seconds),
+        "options": {"queue": PROVIDER_QUEUE},
     },
 }
 
 
+def record_scheduled_heartbeat() -> None:
+    """Say that both processes a scheduled task depends on were alive just now.
+
+    This worker, because it is running this. And beat, because only beat sends
+    a scheduled task — so one arriving is the only evidence beat exists.
+
+    Both, not one. Writing only `worker_name` leaves no `liyan-beat` row for
+    anything to go stale, and a dead beat then hides behind the worker's own
+    heartbeat: the API answers, the worker runs, readiness says `beating`, and
+    nothing is ever cleaned up or recovered again. Writing only `BEAT_WORKER`
+    has the opposite hole — a worker with no user work would fall silent
+    between sweeps, which is the state these sweeps run in most of the time.
+    """
+    record_heartbeat(settings.database_url, settings.worker_name)
+    record_heartbeat(settings.database_url, BEAT_WORKER)
+
+
+@celery_app.task(name="liyan.ping")  # type: ignore[untyped-decorator]
+def ping() -> None:
+    """Do nothing, visibly.
+
+    Whichever worker consumes this says so under its own name, which is the
+    whole point: it proves that queue has a live consumer whether or not any
+    user has asked for anything. Nothing else here can prove that — an empty
+    queue and an abandoned one look identical from the outside.
+    """
+    record_scheduled_heartbeat()
+
+
 @celery_app.task(name="liyan.clean_expired_data")  # type: ignore[untyped-decorator]
 def clean_expired_data() -> None:
-    # Beat's own heartbeat. Nothing else writes one for it, and a dead beat is
-    # invisible: the API answers, the worker runs, and no sweep ever happens.
-    record_heartbeat(settings.database_url, settings.worker_name)
+    record_scheduled_heartbeat()
+    # A worker that is gone rather than unwell. Renaming or removing one leaves
+    # a heartbeat row that can never beat again, and `worker_state` takes the
+    # worst of every row — so readiness would report `silent` forever, naming a
+    # process that no longer exists. Splitting one worker into two is exactly
+    # that event.
+    forget_retired_workers(settings.database_url)
     run_cleanup(
         settings.database_url,
         R2ObjectStorage(settings),
@@ -74,12 +149,16 @@ def clean_expired_data() -> None:
 
 @celery_app.task(name="liyan.recover_stalled_executions")  # type: ignore[untyped-decorator]
 def recover_stalled() -> None:
-    record_heartbeat(settings.database_url, settings.worker_name)
+    record_scheduled_heartbeat()
+    # After the sweep, not before: a run this pass has just given up on is one
+    # whose 预扣 is now settleable, and waiting a whole interval to hand it back
+    # would leave a user's 额度 short for no reason they could see.
     recover_stalled_executions(
         settings.database_url,
         policy=stalled_policy_from(settings),
         now=datetime.now(UTC),
     )
+    reconcile_settlements(settings.database_url)
 
 
 @celery_app.task(name="liyan.process_execution")  # type: ignore[untyped-decorator]

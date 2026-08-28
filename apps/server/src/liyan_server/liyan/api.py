@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import hold_liyan_attempt
 from liyan_server.database import (
     Database,
     Execution,
@@ -511,6 +512,18 @@ def liyan_router(
                     detail=RETRY_INPUT_MISMATCH,
                 )
         refuse_when_at_capacity(session, settings, owner_id=user.id)
+        liyan_attempt = previous.attempt + 1 if retrying and previous else 1
+        # `input_text` is the whole of what this run sends: the 知言报告 and the
+        # 立言指令 are both already written, so only the article's own length is
+        # being predicted.
+        hold_liyan_attempt(
+            session,
+            user.id,
+            article.id,
+            attempt=liyan_attempt,
+            input_characters=len(input_text),
+            model=settings.liyan_model,
+        )
         execution = queue_run(
             session,
             article,
@@ -522,7 +535,7 @@ def liyan_router(
             input_version=previous.input_version if retrying and previous else (
                 previous.input_version + 1 if previous else 1
             ),
-            attempt=previous.attempt + 1 if retrying and previous else 1,
+            attempt=liyan_attempt,
             origin="manual" if retrying else "initial",
             idempotency_key=request.idempotency_key,
             request_hash=request_hash,

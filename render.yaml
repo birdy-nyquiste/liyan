@@ -1,5 +1,6 @@
-# 立言阁 on Render: the API, the worker that does everything slow, the beat
-# process that runs what nobody triggers, PostgreSQL, and the queue.
+# 立言阁 on Render: the API, two workers split by what their work costs a
+# machine, the beat process that runs what nobody triggers, PostgreSQL, and the
+# queue.
 #
 # One blueprint describes one environment. Staging and Production are two
 # separate deployments of this file with their own service names and their own
@@ -44,8 +45,21 @@ services:
       # workers cannot drift apart.
       - fromGroup: liyan-shared
 
+  # Two workers, split by what the work costs a machine rather than by what it
+  # means. One worker did both, and the mis-sizing was at the centre of it: a
+  # 知言 run is an `httpx.post` sitting on a socket for two to three minutes,
+  # using no meaningful memory and no CPU, and it was holding the single slot
+  # that exists because of Chromium. A memory budget was throttling a network
+  # wait.
+  #
+  # Deploy order matters, and only one way round: bring up liyan-worker-provider
+  # first, consuming a queue nothing routes to yet, and deploy the API after.
+  # The reverse strands every 知言 run on a queue with no consumer, and nothing
+  # reports it. No drain is needed — work already queued on source-processing at
+  # cutover still runs, because `process_execution` branches on the operation
+  # rather than on which queue delivered it.
   - type: worker
-    name: liyan-worker
+    name: liyan-worker-heavy
     runtime: python
     region: singapore
     plan: starter
@@ -53,24 +67,23 @@ services:
     # headless browser, and it is not a Python dependency, so `uv sync` alone
     # leaves crawl4ai naming a binary that does not exist. Every URL 来源 then
     # fails with a message that says nothing about browsers. Roughly 95MB and a
-    # minute per build — and only here: the API dispatches and beat sweeps, so
-    # neither of them ever opens a page.
+    # minute per build — and only here now: the API dispatches, beat sweeps, and
+    # the provider worker never opens a page.
     buildCommand: pip install uv && uv sync --locked && uv run playwright install chromium
     # Concurrency is set, not defaulted. Celery forks one child per CPU, each
     # child is a fully imported copy of this application at roughly 110MB, and
     # a URL fetch then launches Chromium beside it — several hundred megabytes
-    # before any 来源 is read, on an instance with 512.
+    # before any 来源 is read, on an instance with 512. This is the process that
+    # number was always for.
     #
     # max-tasks-per-child recycles the process periodically so a browser that
     # does not release everything cannot accumulate across a day.
     #
-    # gossip and mingle are how workers discover each other. There is one.
-    #
-    # The cost is that one long 知言 run holds the only slot. If throughput
-    # matters more than the instance size, raise the plan rather than this
-    # number: concurrency is what the memory limit is actually about.
+    # -Q is explicit on both workers. Left off, this one would also consume
+    # provider-runs and the split would buy nothing while looking like it had.
     startCommand: >-
       uv run celery -A liyan_server.celery_worker worker
+      --queues=source-processing
       --loglevel=info --concurrency=1 --max-tasks-per-child=8
       --without-gossip --without-mingle
     envVars:
@@ -82,7 +95,52 @@ services:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/.playwright
       - key: LIYAN_WORKER_NAME
-        value: liyan-worker
+        value: liyan-worker-heavy
+      - key: LIYAN_WORKER_CONCURRENCY
+        value: "1"
+      - fromGroup: liyan-shared
+      - key: LIYAN_DATABASE_URL
+        fromDatabase:
+          name: liyan-postgres
+          property: connectionString
+      - key: LIYAN_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: liyan-queue
+          property: connectionString
+
+  - type: worker
+    name: liyan-worker-provider
+    runtime: python
+    region: singapore
+    plan: starter
+    # No Chromium. This process never opens a page, so the browser is 95MB and
+    # a minute of build time for nothing.
+    buildCommand: pip install uv && uv sync --locked
+    # Threads, not prefork, and that is the whole point. Prefork at concurrency
+    # four would be four × 110MB of interpreter; threads give one interpreter
+    # and four blocked sockets, which is the actual shape of this work.
+    #
+    # Four rather than eight: the wall after this split is DeepSeek, not Celery.
+    # Shipping eight before a provider-side limiter exists converts an invisible
+    # queueing problem into a visible provider-error problem, which is worse —
+    # users see it, and under ADR-0005 every such failure spends a target's
+    # retry allowance. Raise it once that limiter exists.
+    #
+    # LIYAN_WORKER_CONCURRENCY must move with this number: it is what the
+    # database pool is sized from, and a pool smaller than the concurrency it
+    # serves is intermittent connection exhaustion that reads as a database
+    # fault.
+    startCommand: >-
+      uv run celery -A liyan_server.celery_worker worker
+      --queues=provider-runs
+      --loglevel=info --pool=threads --concurrency=4
+      --without-gossip --without-mingle
+    envVars:
+      - key: LIYAN_WORKER_NAME
+        value: liyan-worker-provider
+      - key: LIYAN_WORKER_CONCURRENCY
+        value: "4"
       - fromGroup: liyan-shared
       - key: LIYAN_DATABASE_URL
         fromDatabase:
@@ -104,9 +162,11 @@ services:
     plan: starter
     buildCommand: pip install uv && uv sync --locked
     startCommand: uv run celery -A liyan_server.celery_worker beat --loglevel=info
+    # No LIYAN_WORKER_NAME here, deliberately. Beat only schedules; it never
+    # executes a task, so nothing in this process ever reads one. Its heartbeat
+    # is written under `worker_health.BEAT_WORKER` by whichever worker runs the
+    # task beat sent — which is the only evidence beat is alive.
     envVars:
-      - key: LIYAN_WORKER_NAME
-        value: liyan-beat
       - fromGroup: liyan-shared
       - key: LIYAN_DATABASE_URL
         fromDatabase:

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from liyan_server.database import Database, Execution, FileParseResult, SourcePreparation
 from liyan_server.execution_states import surrendered
 from liyan_server.file_parsing import FileParseFailure, FileParseLimits, parse_file
+from liyan_server.metering import record_execution_cost
 from liyan_server.object_storage import ObjectStorage
 from liyan_server.observability import log_execution_failed
 from liyan_server.source_preparation import source_warnings
@@ -53,6 +54,7 @@ def _mark_failed(database: Database, execution_id: UUID, failure: FileParseFailu
             source.failure_code = "cancelled" if cancelled else failure.code
             source.failure_message = _cancelled_message() if cancelled else failure.message
             source.updated_at = now
+        _record_cost(session, execution, source)
         session.commit()
 
 
@@ -165,6 +167,21 @@ def process_file_parse(
                 source.failure_message = None
                 source.accepted_result_id = result.id
                 source.updated_at = now
+            _record_cost(session, execution, source)
             session.commit()
     finally:
         database.dispose()
+
+def _record_cost(session: Session, execution: Execution, source: SourcePreparation | None) -> None:
+    """What capturing this 来源 cost, and what the flat fee would take for it.
+
+    Chargeable only when the 来源 is one the user ended up with: a capture that
+    failed or was superseded left them nothing to pay for. The bytes are the
+    upload's, because R2 keeps them for as long as the 来源 lives.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=execution.status == "succeeded",
+        stored_bytes=source.size_bytes if source else None,
+    )

@@ -20,8 +20,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from zhiyan_support import confirm_sources, unavailable, zhiyan_client
 
+from liyan_server import celery_worker
 from liyan_server.app import create_app
-from liyan_server.database import Database, Execution, User, ZhiyanReport
+from liyan_server.database import (
+    Database,
+    Execution,
+    User,
+    WorkerHeartbeat,
+    ZhiyanReport,
+)
 from liyan_server.settings import Settings
 from liyan_server.stalled import (
     NEVER_STARTED_CODE,
@@ -29,7 +36,7 @@ from liyan_server.stalled import (
     StalledPolicy,
     recover_stalled_executions,
 )
-from liyan_server.worker_health import record_heartbeat, silent_workers
+from liyan_server.worker_health import BEAT_WORKER, record_heartbeat, silent_workers
 
 
 def _client(tmp_path: Path, *, reachable: bool = True) -> tuple[TestClient, str]:
@@ -292,6 +299,36 @@ def test_a_late_provider_answer_cannot_undo_a_recovered_execution(
     assert executions[0].stale_result is not None
 
 
+def test_running_a_scheduled_sweep_says_beat_is_alive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beat cannot write its own heartbeat, so the sweep it sent writes one.
+
+    `celery beat` only schedules — every task it dispatches runs on a worker,
+    where `worker_name` is the worker's. A sweep recording only that name
+    leaves no `liyan-beat` row in existence at all, and the test below, which
+    proves a stale beat is reported, proves it about a row nothing ever writes.
+
+    Both names, because each covers the other's blind spot: the worker's own,
+    so a worker idling between sweeps is not called dead; beat's, so a beat
+    that has stopped sending cannot hide behind a busy worker.
+    """
+    database_url = migrated_database(tmp_path)
+    monkeypatch.setattr(
+        celery_worker,
+        "settings",
+        Settings(database_url=database_url, worker_name="liyan-worker-provider"),
+    )
+
+    celery_worker.recover_stalled()
+
+    database = Database(database_url)
+    assert database.engine is not None
+    with Session(database.engine) as session:
+        recorded = sorted(beat.worker for beat in session.scalars(select(WorkerHeartbeat)))
+    assert recorded == [BEAT_WORKER, "liyan-worker-provider"]
+
+
 def test_a_live_worker_never_masks_a_dead_one(tmp_path: Path) -> None:
     """Two processes fail independently, and beat is the quieter of the two.
 
@@ -433,3 +470,44 @@ def test_every_worker_reports_the_failures_it_records() -> None:
     ]
 
     assert silent == [], f"these workers fail without saying so: {silent}"
+
+
+def test_a_renamed_worker_stops_holding_readiness_red_forever(tmp_path: Path) -> None:
+    """Splitting one worker into two leaves a name nothing writes any more.
+
+    `worker_state` takes the worst of every row, so the retired name would hold
+    readiness at `silent` permanently — naming a process that no longer exists,
+    on a deployment where everything is in fact healthy. Nothing would ever
+    clear it, because clearing it requires a heartbeat only the dead worker
+    could write.
+    """
+    from liyan_server.worker_health import forget_retired_workers
+
+    client, database_url = _client(tmp_path)
+    now = datetime.now(UTC)
+    record_heartbeat(database_url, "liyan-worker", at=now - timedelta(days=8))
+    record_heartbeat(database_url, "liyan-worker-heavy", at=now)
+    record_heartbeat(database_url, "liyan-worker-provider", at=now)
+    record_heartbeat(database_url, "liyan-beat", at=now)
+
+    assert client.get("/health/ready").json()["checks"]["worker"] == "silent"
+
+    forgotten = forget_retired_workers(database_url)
+
+    assert forgotten == ("liyan-worker",)
+    assert client.get("/health/ready").json()["checks"]["worker"] == "beating"
+
+
+def test_a_worker_silent_for_an_hour_is_ill_rather_than_retired(tmp_path: Path) -> None:
+    """The two readings must not be confusable. A quarter of an hour of silence
+    is a fault worth raising; forgetting it would be hiding exactly the failure
+    the heartbeat exists to surface."""
+    from liyan_server.worker_health import forget_retired_workers
+
+    client, database_url = _client(tmp_path)
+    record_heartbeat(
+        database_url, "liyan-worker-provider", at=datetime.now(UTC) - timedelta(hours=1)
+    )
+
+    assert forget_retired_workers(database_url) == ()
+    assert client.get("/health/ready").json()["checks"]["worker"] == "silent"

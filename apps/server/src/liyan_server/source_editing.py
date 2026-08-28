@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import hold_zhiyan_batch
 from liyan_server.database import (
     Database,
     Execution,
@@ -478,6 +479,20 @@ def source_editing_router(
         edit.save_request_hash = request_hash
         edit.saved_version_id = version.id
         edit.updated_at = now
+        # Only the 来源 that changed. An unchanged one keeps the 知言报告 bound to
+        # its Revision, so saving an edit costs what was edited and nothing else.
+        hold_zhiyan_batch(
+            session,
+            user.id,
+            [
+                revision
+                for revision in (
+                    session.get(SourceRevision, revision_id) for revision_id in changed
+                )
+                if revision is not None
+            ],
+            model=settings.zhiyan_model,
+        )
         session.commit()
         queue_initial_runs(
             database,

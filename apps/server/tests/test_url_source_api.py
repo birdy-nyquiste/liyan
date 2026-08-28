@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import UUID
 
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 
 from liyan_server.app import create_app
@@ -55,7 +55,7 @@ class RecordingExecutionDispatcher:
         self.deterministic_fetcher = DeterministicUrlFetcher()
         self.fetcher: UrlFetcher = self.deterministic_fetcher
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         self.execution_ids.append(execution_id)
 
     def is_reachable(self) -> bool:
@@ -71,7 +71,7 @@ class RecordingExecutionDispatcher:
 
 
 class FailingExecutionDispatcher(RecordingExecutionDispatcher):
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         raise RuntimeError("broker unavailable")
 
 
@@ -79,6 +79,7 @@ def authenticated_client(
     tmp_path: Path,
 ) -> tuple[TestClient, dict[str, str], RecordingExecutionDispatcher]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingExecutionDispatcher(database_url)
     settings = Settings(
         database_url=database_url,
@@ -157,6 +158,7 @@ def test_private_network_url_is_rejected_before_dispatch(tmp_path: Path) -> None
 
 def test_dispatch_failure_becomes_an_actionable_source_failure(tmp_path: Path) -> None:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = FailingExecutionDispatcher(database_url)
     client = TestClient(
         create_app(
@@ -526,6 +528,7 @@ def test_failure_returned_after_cancellation_remains_cancelled(tmp_path: Path) -
 
 def test_url_source_and_execution_are_owner_isolated(tmp_path: Path) -> None:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingExecutionDispatcher(database_url)
     client = TestClient(
         create_app(

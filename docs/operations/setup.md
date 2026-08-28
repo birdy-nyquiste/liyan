@@ -80,8 +80,15 @@ silently if you skip them.
 ```
 
 ```bash
-.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info
+.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info \
+  --queues=source-processing,provider-runs
 ```
+
+Both queues, in one process. Production splits them across two workers sized
+differently (`scaling.md` stage 1); Local has no memory pressure to justify two
+terminals. Naming them is not optional either way — a worker left to the default
+consumes `source-processing` only, and every 知言 run then sits on
+`provider-runs` with nobody listening, which reports no error anywhere.
 
 ```bash
 .venv/bin/celery -A liyan_server.celery_worker beat --loglevel=info
@@ -232,11 +239,47 @@ Do Staging first and completely; it is the rehearsal for Production.
 ### 1. Create the Blueprint
 
 Render Dashboard → **New → Blueprint**, point it at this repository. It reads
-`render.yaml` and proposes five resources: `liyan-api`, `liyan-worker`,
-`liyan-beat`, `liyan-postgres`, and `liyan-queue`.
+`render.yaml` and proposes six resources: `liyan-api`, `liyan-worker-heavy`,
+`liyan-worker-provider`, `liyan-beat`, `liyan-postgres`, and `liyan-queue`.
 
 For Staging, give every service a distinguishing name (`liyan-api-staging`, and
 so on) so the two environments cannot be confused in the dashboard.
+
+### 1a. Migrating an environment that already exists
+
+A first-time Blueprint needs none of this. An environment created before the
+queue split (`scaling.md` stage 1) does, because **syncing a Blueprint never
+deletes a resource** — Render says so explicitly, and it is true even when the
+resource is gone from the file.
+
+So `liyan-worker` does not become `liyan-worker-heavy`. Render sees a name it
+has never met, creates a second service, and leaves the first one running: same
+repository, same auto-deploy, now on its old start command with no `--queues`.
+It would take the default queue and duplicate the heavy worker, and it would
+keep writing a `liyan-worker` heartbeat — so `forget_retired_workers` never
+retires it, because it is not silent. It is alive and redundant.
+
+Three steps, in this order:
+
+1. **Let the sync run.** `liyan-worker-heavy` and `liyan-worker-provider` are
+   both created. Wait until `liyan-worker-provider` is live and consuming
+   `provider-runs`. Nothing routes there until the API deploys, so it idles.
+2. **Suspend `liyan-worker`** in the dashboard, then delete it once the two new
+   workers have handled real work. Suspend rather than delete first: it is the
+   reversible half, and anything mid-flight on `source-processing` is picked up
+   by `liyan-worker-heavy` regardless — `process_execution` branches on the
+   operation, not on which queue delivered it.
+3. **Check `/health/ready`.** It reads `silent` while the retired
+   `liyan-worker` row is still in `worker_heartbeats`, because `worker_state`
+   takes the worst of every row. The cleanup sweep drops it a week after its
+   last beat. If you would rather not wait, delete that one row.
+
+`LIYAN_WORKER_CONCURRENCY` is new and carries a literal value, so the sync sets
+it on both workers without prompting. It must move with `--concurrency` if you
+ever change one: it is what the database pool is sized from.
+
+No drain, and no downtime. Deploy order matters only in one direction — the
+provider worker before the API — and the Blueprint does both in one sync.
 
 ### 2. Enter the secrets
 
@@ -305,7 +348,7 @@ all:
 | Watch for | Where |
 | --- | --- |
 | Deploy and service failures | Render → service → Settings → Notifications |
-| Memory on `liyan-worker` | Render → service → Metrics → Alerts, near 80% |
+| Memory on `liyan-worker-heavy` | Render → service → Metrics → Alerts, near 80% |
 | `execution_presumed_lost` in logs | Render → service → Settings → Log Streams |
 | `"worker": "beating"` disappearing from `/health/ready` | An external uptime monitor — Render cannot see response bodies |
 

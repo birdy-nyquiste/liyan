@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   MonitorCog,
   MoonStar,
+  Coins,
   Newspaper,
   PanelLeftClose,
   PanelLeftOpen,
@@ -34,10 +35,11 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { deleteTask, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
+import { deleteTask, getAccount, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
 import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocale";
 import { setHistoryGuard } from "../navigationGuard";
+import { AccountPage } from "./AccountPage";
 import { PublicationCenter } from "./PublicationCenter";
 import { TaskCard } from "./TaskCard";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -55,6 +57,8 @@ const copy = {
     collapse: "折叠侧栏",
     expand: "展开侧栏",
     signOut: "退出登录",
+    account: "账户",
+    creditsRemaining: "剩余额度",
     language: "语言",
     languageValue: "中文",
     theme: "主题",
@@ -91,6 +95,8 @@ const copy = {
     collapse: "Collapse sidebar",
     expand: "Expand sidebar",
     signOut: "Sign out",
+    account: "Account",
+    creditsRemaining: "Remaining",
     language: "Language",
     languageValue: "English",
     theme: "Theme",
@@ -379,6 +385,13 @@ function Sidebar({
   // Signing out is one unlabelled icon away from the avatar in the rail, and it
   // costs a fresh email code to undo.
   const [signOutOpen, setSignOutOpen] = useState(false);
+  // Refetched on window focus by default, which is when a user coming back from
+  // a run wants to see what it cost.
+  const account = useQuery({
+    queryKey: ["account", accessToken],
+    queryFn: () => getAccount(accessToken),
+  });
+  const creditsLabel = account.data ? account.data.remaining_credits.toLocaleString() : "—";
   const themeIcon =
     theme === "light" ? <Sun size={18} />
     : theme === "dark" ? <MoonStar size={18} />
@@ -480,6 +493,32 @@ function Sidebar({
             ) : null}
           </button>
         </RailTooltip>
+        <RailTooltip label={`${text.account}: ${text.creditsRemaining} ${creditsLabel}`} show={collapsed}>
+          {/*
+            A bare integer, and it lives here rather than in the rail because a
+            user meets it at a refusal, not while they work. The group already
+            renders a label with a value beside it, which is the shape a balance
+            wants.
+          */}
+          <NavLink
+            aria-label={`${text.account}: ${text.creditsRemaining} ${creditsLabel}`}
+            className="sidebar-account__action"
+            to="/account"
+            tabIndex={accountOpen ? undefined : -1}
+            onClick={(event) => { if (!onNavigate("/account")) event.preventDefault(); }}
+          >
+            <Coins size={18} />
+            {!collapsed ? (
+              <>
+                <span>{text.account}</span>
+                <span className="sidebar-account__value">
+                  <span className="sidebar-account__value-label">{text.creditsRemaining}</span>
+                  {creditsLabel}
+                </span>
+              </>
+            ) : null}
+          </NavLink>
+        </RailTooltip>
         <RailTooltip label={text.signOut} show={collapsed}>
           <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={() => setSignOutOpen(true)} tabIndex={accountOpen ? undefined : -1}>
             <LogOut size={18} /> {!collapsed ? <span>{text.signOut}</span> : null}
@@ -559,6 +598,12 @@ function TaskRoute({
   if (!task) return <div className="route-empty"><h1>{missingLabel}</h1></div>;
   return (
     <TaskCard
+      // Remounted per task, not reused. `TaskCard` copies the task it is given
+      // into state, so a reused instance keeps showing the one it opened with:
+      // every 立言任务 rendered whatever was clicked first. Its editing, naming
+      // and selected-version state belong to one task too, and should not
+      // survive into another.
+      key={task.id}
       task={task}
       userId={identity.id}
       accessToken={accessToken}
@@ -668,12 +713,19 @@ export function AppShell({
     if (currentTaskId === taskId) navigate("/task");
   }
 
-  const sidebar = (
+  /*
+   * Collapsing to a rail is a desktop preference, and it is persisted — so the
+   * drawer, which reuses this, was opening as a column of unlabelled icons for
+   * anyone who had ever collapsed the sidebar on a wide screen. There is no rail
+   * on a phone to collapse into and, now that the drawer hides the collapse
+   * button, no way back out of it either. The drawer always renders expanded.
+   */
+  const sidebarFor = (isCollapsed: boolean) => (
     <Sidebar
       identity={identity}
       accessToken={accessToken}
       tasks={tasks}
-      collapsed={collapsed}
+      collapsed={isCollapsed}
       currentTaskId={currentTaskId}
       theme={preferences.theme}
       text={preferences.text}
@@ -701,6 +753,7 @@ export function AppShell({
       onLoadMore={() => void taskQuery.fetchNextPage()}
     />
   );
+  const sidebar = sidebarFor(collapsed);
 
   return (
     <InterfaceLocaleProvider locale={preferences.locale}>
@@ -729,7 +782,7 @@ export function AppShell({
           <Dialog.Content className="mobile-drawer">
             <Dialog.Title className="sr-only">{preferences.text.navigation}</Dialog.Title>
             <Dialog.Close className="icon-button mobile-drawer__close" aria-label={preferences.text.closeNavigation}><X size={20} /></Dialog.Close>
-            {sidebar}
+            {sidebarFor(false)}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -783,6 +836,7 @@ export function AppShell({
               />
             }
           />
+          <Route path="/account" element={<AccountPage accessToken={accessToken} />} />
           <Route path="*" element={<Navigate to="/task" replace />} />
         </Routes>
       </main>

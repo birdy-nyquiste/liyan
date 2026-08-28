@@ -142,8 +142,49 @@ class QueueSaying:
         self._reachable = reachable
         self.execution_ids: list[UUID] = []
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         self.execution_ids.append(execution_id)
 
     def is_reachable(self) -> bool:
         return self._reachable
+
+
+def entitle(
+    database_url: str, *, subject: str = "supabase-user-1", credits: int = 1_000_000
+) -> None:
+    """Make this test's writer a 付费用户 with 额度 to spend.
+
+    URL and file 来源 belong to somebody who has bought 额度, so a suite that
+    exercises them has to have bought some. The user is created here rather than
+    waited for: the authenticator looks a subject up before it creates one, so a
+    row that already exists is the one it uses.
+
+    Safe to call twice, because fixtures share a tmp_path more often than they
+    look like they do.
+
+    The amount is absurd on purpose. These suites are about intake and parsing,
+    and a test that failed because it ran out of 额度 would be a test about
+    something else.
+    """
+    from sqlalchemy import select as _select
+    from sqlalchemy.orm import Session as _Session
+
+    from liyan_server import credits as _credits
+    from liyan_server.database import Database as _Database
+    from liyan_server.database import User as _User
+
+    database = _Database(database_url)
+    assert database.engine is not None
+    try:
+        with _Session(database.engine) as session:
+            user = session.scalar(_select(_User).where(_User.auth_subject == subject))
+            if user is None:
+                user = _User(auth_subject=subject, email=f"{subject}@example.com")
+                session.add(user)
+                session.flush()
+            _credits.purchase(
+                session, user.id, credits, stripe_event_id=f"evt_test_{user.id}"
+            )
+            session.commit()
+    finally:
+        database.dispose()

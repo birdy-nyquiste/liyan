@@ -11,7 +11,7 @@ refuses halfway through something the user already started.
 from pathlib import Path
 from typing import Any
 
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 from zhiyan_support import (
     DeterministicJwtVerifier,
@@ -37,6 +37,7 @@ def capped_client(
 ) -> tuple[TestClient, RecordingDispatcher]:
     """A workbench whose ceiling is low enough to reach in a test."""
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingDispatcher(database_url)
     client = TestClient(
         create_app(

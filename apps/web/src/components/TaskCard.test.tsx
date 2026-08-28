@@ -156,6 +156,35 @@ describe("TaskCard", () => {
     expect(screen.getByText("关联的发布任务仍在执行，结束后才能删除立言任务。")).toBeInTheDocument();
   });
 
+  it("keeps the task it was mounted with, which is why callers key it by id", () => {
+    /*
+     * Only `can_delete` and `delete_disabled_reason` are adopted from a
+     * refreshed prop — the test above is about exactly those two. Everything
+     * else, the id included, is read once and copied into state, so handing
+     * this a different 立言任务 does not make it show one.
+     *
+     * That is fine, and deliberate: a card's editing, naming and selected
+     * version belong to the task it opened with. What it means is that a caller
+     * switching between 立言任务 has to remount rather than re-render, and
+     * `AppShell`'s `key={task.id}` is what does it. Without that every task
+     * showed whichever was clicked first.
+     */
+    const { rerender } = render(
+      <TaskCard task={task} userId="user-1" accessToken="token" />,
+    );
+
+    rerender(
+      <TaskCard
+        task={{ ...task, id: "task-2", display_name: "另一个任务" }}
+        userId="user-1"
+        accessToken="token"
+      />,
+    );
+
+    expect(screen.queryByText("另一个任务")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Test Header").length).toBeGreaterThan(0);
+  });
+
   it("shows recognition fields and renames without changing source recognition", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
       Response.json({ ...task, display_name: "Renamed" }),

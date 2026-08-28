@@ -84,6 +84,82 @@
         ]
       }
     },
+    "/account": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Get Account",
+        "operationId": "get_account",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/account/usage": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "List Account Usage",
+        "description": "One row per act, newest first, with its 预扣 folded into it.\n\nA 结算 is never its own row. On its own it reads as 额度 arriving from\nnowhere; against the 预扣 it corrects, it is the explanation for a number\nthat moved and moved back — which is the whole reason this page shows\nthe two together.",
+        "operationId": "list_account_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks": {
       "get": {
         "tags": [
@@ -2282,6 +2358,33 @@
   },
   "components": {
     "schemas": {
+      "AccountResponse": {
+        "properties": {
+          "remaining_credits": {
+            "type": "integer",
+            "title": "Remaining Credits"
+          },
+          "is_paying_user": {
+            "type": "boolean",
+            "title": "Is Paying User"
+          }
+        },
+        "type": "object",
+        "required": [
+          "remaining_credits",
+          "is_paying_user"
+        ],
+        "title": "AccountResponse"
+      },
+      "ActivityStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "done",
+          "failed",
+          "none"
+        ]
+      },
       "Body_create_file_source": {
         "properties": {
           "client_session_id": {
@@ -5102,6 +5205,77 @@
           "capabilities"
         ],
         "title": "UrlSourceResponse"
+      },
+      "UsageEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityStatus"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "happened_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Happened At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "description",
+          "task_id",
+          "status",
+          "amount",
+          "happened_at"
+        ],
+        "title": "UsageEntry"
+      },
+      "UsageResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/UsageEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "has_more"
+        ],
+        "title": "UsageResponse"
       },
       "ValidationError": {
         "properties": {

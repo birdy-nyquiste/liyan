@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.auth import InvalidAccessToken, JwtVerifier
+from liyan_server.credits import grant
 from liyan_server.database import Database, User
 from liyan_server.settings import Settings
 
@@ -19,6 +20,7 @@ class Authenticator:
     def __init__(self, settings: Settings, verifier: JwtVerifier) -> None:
         self._allowed_emails = settings.normalized_allowed_emails
         self._verifier = verifier
+        self._signup_grant = settings.signup_grant_credits
         self.bearer = HTTPBearer(auto_error=False)
 
     def authenticate(
@@ -56,6 +58,13 @@ class Authenticator:
             user = User(auth_subject=identity.subject, email=normalized_email)
             session.add(user)
             try:
+                session.flush()
+                # In the same transaction as the row itself: a user who existed
+                # for even a moment without their 赠送额度 is one who could be
+                # refused their first 来源, and nothing would ever come back to
+                # give it to them.
+                if self._signup_grant > 0:
+                    grant(session, user.id, self._signup_grant)
                 session.commit()
             except IntegrityError:
                 session.rollback()

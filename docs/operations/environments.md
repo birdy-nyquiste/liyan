@@ -85,7 +85,7 @@ and reported through the notifications above. `database` and `queue` are what
 gate that verdict.
 
 **Memory and CPU.** Dashboard → the service → **Metrics → Alerts**. Set this on
-`liyan-worker` above all: it is the service with a real ceiling, at roughly
+`liyan-worker-heavy` above all: it is the service with a real ceiling, at roughly
 110MB for the parent, 110MB for the child, and 150–250MB for Chromium during a
 URL fetch, against 512MB on `starter`. Alert near 80% so the warning arrives
 before Render kills it.

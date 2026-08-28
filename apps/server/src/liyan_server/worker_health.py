@@ -19,10 +19,31 @@ logger = logging.getLogger(__name__)
 
 type WorkerState = Literal["beating", "silent", "unknown"]
 
+#: What beat is called in `worker_heartbeats`.
+#:
+#: Beat only schedules — it never executes a task — so the beat process can
+#: never write its own row. What proves beat is alive is a scheduled task
+#: arriving at all, because nothing else sends one. The worker that runs one
+#: therefore writes this row on beat's behalf.
+BEAT_WORKER = "liyan-beat"
+
 #: How long a worker may say nothing before its silence is worth reporting.
 #: Comfortably longer than the slowest run 立言阁 starts, so a worker part-way
 #: through a 知言 analysis is never called dead.
 DEFAULT_SILENCE = timedelta(minutes=15)
+
+#: How long a worker must be gone before it is presumed retired rather than ill.
+#:
+#: `worker_state` takes the worst of every row, so a worker that is renamed or
+#: removed leaves a row that can never beat again — and readiness then reports
+#: `silent` forever, naming a process that no longer exists. Splitting one
+#: worker into two is exactly that event.
+#:
+#: Days rather than minutes, because the two readings must not be confusable: a
+#: worker silent for a quarter of an hour is a fault worth raising, and one
+#: silent for a week has either been decommissioned or has been raising that
+#: fault continuously for a week already.
+RETIREMENT = timedelta(days=7)
 
 
 def record_heartbeat(database_url: str, worker: str, *, at: datetime | None = None) -> None:
@@ -96,3 +117,37 @@ def silent_workers(
                 if moment - aware_utc(beat.last_seen_at) > silence
             )
         )
+
+
+def forget_retired_workers(
+    database_url: str,
+    *,
+    retirement: timedelta = RETIREMENT,
+    now: datetime | None = None,
+) -> tuple[str, ...]:
+    """Drop heartbeat rows for workers that are gone rather than unwell.
+
+    Returns what it forgot, so a deploy that renamed a worker says so once in
+    the logs instead of leaving somebody to work out why readiness went red and
+    stayed red.
+    """
+    database = Database(database_url)
+    if database.engine is None:
+        return ()
+    moment = now or datetime.now(UTC)
+    forgotten: list[str] = []
+    try:
+        with Session(database.engine) as session:
+            for beat in session.scalars(select(WorkerHeartbeat)):
+                if moment - aware_utc(beat.last_seen_at) > retirement:
+                    forgotten.append(beat.worker)
+                    session.delete(beat)
+            session.commit()
+    except Exception:
+        logger.warning("retired_workers_not_forgotten")
+        return ()
+    finally:
+        database.dispose()
+    if forgotten:
+        logger.info("retired_workers_forgotten", extra={"workers": forgotten})
+    return tuple(forgotten)

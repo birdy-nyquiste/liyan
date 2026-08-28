@@ -7,6 +7,7 @@ from liyan_server.liyan.provider import (
     LiyanProviderResult,
     LiyanRequest,
 )
+from liyan_server.provider_usage import provider_usage
 
 ARTICLE_FORMAT_NAME = "liyan_article"
 UNAVAILABLE_MESSAGE = "立言服务暂时不可用，请稍后重试。"
@@ -112,16 +113,29 @@ def provider_result(payload: object, *, fallback_model: str) -> LiyanProviderRes
         raise LiyanProviderFailure(
             "invalid_provider_response", UNUSABLE_MESSAGE, "Provider returned a non-object."
         )
+    # Read before anything can refuse the payload. Every failure below happens
+    # after the call returned and was invoiced, so each one owes this: a run
+    # that came back unusable cost exactly what a run that came back usable did.
+    usage = provider_usage(payload)
+    model = payload.get("model")
+    resolved_model = model if isinstance(model, str) else fallback_model
     if payload.get("status") not in {None, "completed"}:
         raise LiyanProviderFailure(
             "incomplete_provider_response",
             UNUSABLE_MESSAGE,
-            f"Provider status was {payload.get('status')!r}.",
+            f"Provider status was {payload.get('status')!r}; "
+            f"details {payload.get('incomplete_details')!r}.",
+            usage=usage,
+            model=resolved_model,
         )
     output = payload.get("output")
     if not isinstance(output, list):
         raise LiyanProviderFailure(
-            "invalid_provider_response", UNUSABLE_MESSAGE, "Provider returned no output."
+            "invalid_provider_response",
+            UNUSABLE_MESSAGE,
+            "Provider returned no output.",
+            usage=usage,
+            model=resolved_model,
         )
     texts: list[str] = []
     for item in output:
@@ -135,21 +149,30 @@ def provider_result(payload: object, *, fallback_model: str) -> LiyanProviderRes
                 continue
             if part.get("type") == "refusal":
                 raise LiyanProviderFailure(
-                    "provider_refused", UNUSABLE_MESSAGE, "Provider refused the article."
+                    "provider_refused",
+                    UNUSABLE_MESSAGE,
+                    "Provider refused the article.",
+                    usage=usage,
+                    model=resolved_model,
                 )
             if part.get("type") == "output_text" and isinstance(part.get("text"), str):
                 texts.append(cast(str, part["text"]))
     article_text = _unfenced("".join(texts).strip())
     if not article_text:
+        present = sorted({str(item.get("type")) for item in output if isinstance(item, dict)})
         raise LiyanProviderFailure(
-            "invalid_provider_response", UNUSABLE_MESSAGE, "Provider returned no output text."
+            "invalid_provider_response",
+            UNUSABLE_MESSAGE,
+            f"Provider returned no output text; output items were {present or ['none']}.",
+            usage=usage,
+            model=resolved_model,
         )
-    model = payload.get("model")
     response_id = payload.get("id")
     return LiyanProviderResult(
         article_text=article_text,
-        model=model if isinstance(model, str) else fallback_model,
+        model=resolved_model,
         response_id=response_id if isinstance(response_id, str) else None,
+        usage=usage,
     )
 
 

@@ -155,7 +155,7 @@ def dispatch_or_fail(
 ) -> None:
     """Hand a queued run to the queue, and fail it visibly when the queue refuses."""
     try:
-        dispatcher.dispatch(execution_id)
+        dispatcher.dispatch(execution_id, ZHIYAN_OPERATION)
     except Exception as error:
         logger.exception("zhiyan_dispatch_failed", extra={"execution_id": str(execution_id)})
         if database.engine is None:

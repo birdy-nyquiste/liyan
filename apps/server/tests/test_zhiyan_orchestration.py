@@ -6,6 +6,7 @@ how partial progress and partial failure read, how far recovery goes on its own,
 what a manual retry costs, and what cancellation guarantees.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -33,7 +34,12 @@ from zhiyan_support import (
 from liyan_server.app import create_app
 from liyan_server.database import Database, Execution
 from liyan_server.settings import Settings
-from liyan_server.zhiyan.provider import ZhiyanProviderFailure, ZhiyanRequest
+from liyan_server.zhiyan.provider import (
+    SearchAction,
+    ZhiyanProviderFailure,
+    ZhiyanProviderResult,
+    ZhiyanRequest,
+)
 from liyan_server.zhiyan.recovery import MANUAL_RETRY_LIMIT
 from liyan_server.zhiyan.runs import ZHIYAN_OPERATION
 from liyan_server.zhiyan.worker import process_zhiyan_run
@@ -111,7 +117,7 @@ def test_a_queue_that_refuses_the_run_still_leaves_the_formal_task_created(
     """Function Spec §2.1: a 知言 failure never rolls back the task just created."""
 
     class RefusingDispatcher:
-        def dispatch(self, execution_id: UUID) -> None:
+        def dispatch(self, execution_id: UUID, operation: str) -> None:
             raise RuntimeError("The broker is unreachable.")
 
         def is_reachable(self) -> bool:
@@ -430,3 +436,48 @@ def test_a_source_body_is_never_echoed_into_the_overview(tmp_path: Path) -> None
     overview = client.get(f"/tasks/{task_id}/zhiyan", headers=headers).text
 
     assert source_body(THREE_SOURCES[0])[:40] not in overview
+
+
+def test_a_refused_report_is_kept_so_the_refusal_can_be_explained(tmp_path: Path) -> None:
+    """Acceptance says which rule the output broke. Only the output says why.
+
+    Three local runs failed `invalid_report_schema` with `JSONDecodeError` at
+    character zero, and nothing on the record could say whether the model had
+    written prose, an unrecognised fence, or something else — because the text
+    was thrown away on this path while cancelled runs kept theirs.
+    """
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    task_id, _ = confirm_sources(client, headers, ["四天工作制已经没有争议"])
+
+    class WroteProse(DeterministicZhiyanProvider):
+        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+            return ZhiyanProviderResult(
+                report_text="很抱歉，我无法核实这些说法。",
+                search_actions=(SearchAction(kind="search", query="四天工作制"),),
+                model="deepseek-v4-flash",
+                response_id="resp_prose",
+            )
+
+    overview = client.get(f"/tasks/{task_id}/zhiyan", headers=headers).json()
+    execution_id = overview["sources"][0]["execution"]["id"]
+    process_zhiyan_run(
+        dispatcher.database_url, UUID(execution_id), WroteProse(), dispatcher
+    )
+
+    database = Database(dispatcher.database_url)
+    assert database.engine is not None
+    try:
+        with Session(database.engine) as session:
+            execution = session.get(Execution, UUID(execution_id))
+            assert execution is not None
+            assert execution.error_code == "invalid_report_schema"
+            assert execution.stale_result is not None
+            assert execution.stale_result["report_text"] == "很抱歉，我无法核实这些说法。"
+    finally:
+        database.dispose()
+
+    # Kept for tracing, and for nobody else. It quotes 来源 text back, so it
+    # reaches an operator through `explain_execution` and never through the API.
+    served = client.get(f"/tasks/{task_id}/zhiyan", headers=headers).json()
+    assert "stale_result" not in json.dumps(served)
+    assert "很抱歉" not in json.dumps(served)

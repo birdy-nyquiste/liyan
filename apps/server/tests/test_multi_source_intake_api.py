@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import BinaryIO, cast
 from uuid import UUID
 
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 
 from liyan_server.app import create_app
@@ -62,7 +62,7 @@ class RecordingExecutionDispatcher:
         self.storage = storage
         self.execution_ids: list[UUID] = []
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         self.execution_ids.append(execution_id)
 
     def is_reachable(self) -> bool:
@@ -94,7 +94,7 @@ class RecordingExecutionDispatcher:
 
 def authenticated_client(tmp_path: Path) -> tuple[TestClient, dict[str, str]]:
     settings = Settings(
-        database_url=migrated_database(tmp_path),
+        database_url=_entitled(tmp_path),
         allowed_emails="writer@example.com",
     )
     client = TestClient(create_app(settings, jwt_verifier=DeterministicJwtVerifier()))
@@ -105,6 +105,7 @@ def mixed_client(
     tmp_path: Path,
 ) -> tuple[TestClient, dict[str, str], RecordingExecutionDispatcher]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     storage = MemoryObjectStorage()
     dispatcher = RecordingExecutionDispatcher(database_url, storage)
     settings = Settings(
@@ -469,3 +470,9 @@ def test_deleting_one_prepared_source_preserves_the_other_sources(tmp_path: Path
         files={"file": ("replacement.txt", b"Replacement.", "text/plain")},
     )
     assert replacement.status_code == 201
+
+
+def _entitled(tmp_path: Path) -> str:
+    database_url = migrated_database(tmp_path)
+    entitle(database_url)
+    return database_url

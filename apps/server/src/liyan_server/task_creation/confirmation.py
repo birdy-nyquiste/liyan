@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
+from liyan_server.credit_limits import hold_zhiyan_batch
 from liyan_server.database import (
     Database,
     Source,
@@ -317,6 +318,7 @@ def task_creation_router(
             for session_source in ordered_sources:
                 session_source.confirmed_task_id = task.id
         locked_user.next_task_number += 1
+        hold_zhiyan_batch(session, user.id, created_revisions, model=settings.zhiyan_model)
         session.commit()
         revision_responses = [
             SourceRevisionResponse(

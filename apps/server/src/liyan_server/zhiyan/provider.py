@@ -8,6 +8,7 @@ deciding whether that text is a 知言报告 belongs to `acceptance`.
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
+from liyan_server.provider_usage import ProviderUsage
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
 
 type SearchActionKind = Literal["search", "open_page", "find_in_page"]
@@ -47,6 +48,9 @@ class ZhiyanProviderResult:
     search_actions: tuple[SearchAction, ...]
     model: str
     response_id: str | None = None
+    #: What the call consumed, when the provider said. Optional because a report
+    #: that arrived without one is still a report — see `provider_usage`.
+    usage: ProviderUsage | None = None
 
     @property
     def opened_urls(self) -> tuple[str, ...]:

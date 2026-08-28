@@ -1,5 +1,12 @@
 # Design QA — issue #23 workbench
 
+A closed record, kept beside the two captures it compares rather than in the
+repository root. It says what the workbench looked like when issue #23 was
+signed off; it is not a standing description of the interface, and later work
+has moved on from it. `credits-in-the-workbench.md` beside it is the live
+design document.
+
+
 - Source visual truth: `docs/design/workbench-chenjin.png`
 - Rendered implementation: `docs/design/workbench-implementation.png`
 - Viewport: 1440 × 640 CSS px, desktop, light mode, Simplified Chinese, authenticated task route, 知言 · 立言 view

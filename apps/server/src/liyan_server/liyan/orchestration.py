@@ -93,7 +93,7 @@ def dispatch_or_fail(
     database: Database, dispatcher: ExecutionDispatcher, execution_id: UUID
 ) -> None:
     try:
-        dispatcher.dispatch(execution_id)
+        dispatcher.dispatch(execution_id, LIYAN_OPERATION)
     except Exception as error:
         logger.exception("liyan_dispatch_failed", extra={"execution_id": str(execution_id)})
         if database.engine is None:

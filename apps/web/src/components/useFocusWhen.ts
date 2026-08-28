@@ -19,7 +19,12 @@ export function useFocusWhen<T extends HTMLElement>(active: boolean) {
     }
     if (alreadyFocused.current) return;
     alreadyFocused.current = true;
-    element.current?.focus();
+    // Without `preventScroll` the browser brings the element into view, and
+    // these targets are `sr-only` — clipped to a pixel, announced rather than
+    // seen. On a narrow screen the 任务详情 stacks into one very tall column, so
+    // scrolling to the 立言 heading threw the whole 知言 phase off-screen and the
+    // page looked empty. Moving focus is the point; moving the page is not.
+    element.current?.focus({ preventScroll: true });
   }, [active]);
 
   return element;

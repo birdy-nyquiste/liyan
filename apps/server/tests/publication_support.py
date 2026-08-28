@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from blog_support import SITE_URL, DeterministicBlogSubmitter, accepted
-from database_support import migrated_database
+from database_support import entitle, migrated_database
 from fastapi.testclient import TestClient
 from zhiyan_support import (
     DeterministicJwtVerifier,
@@ -61,6 +61,7 @@ def publication_client(
     tmp_path: Path,
 ) -> tuple[TestClient, dict[str, str], RecordingDispatcher]:
     database_url = migrated_database(tmp_path)
+    entitle(database_url)
     dispatcher = RecordingDispatcher(database_url)
     client = TestClient(
         create_app(

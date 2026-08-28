@@ -5,29 +5,40 @@ one is written down because the failure it prevents is quiet. Nothing on this
 page raises an alert when it is wrong: the queue simply grows, or a user waits,
 or an instance is killed and restarted while the API keeps answering.
 
-## The one that everything else follows from
+## The two things everything else follows from
 
-**One worker slot.** `render.yaml` starts the worker with `--concurrency=1`.
-Celery otherwise forks one child per CPU, each child is a fully imported copy of
-this application at roughly 110MB, and a URL 来源 launches Chromium beside it at
+**One Chromium slot, and four sockets.** Slow work is split across two workers
+by what it costs a machine rather than by what it means (`scaling.md` stage 1).
+
+`liyan-worker-heavy` runs `--concurrency=1` and holds the browser. Celery
+otherwise forks one child per CPU, each child is a fully imported copy of this
+application at roughly 110MB, and a URL 来源 launches Chromium beside it at
 150–250MB — several hundred megabytes before a single 来源 is read, against
-512MB on `starter`.
+512MB on `starter`. So capture still does **one thing at a time**: one URL
+fetch, or one file parse.
 
-So the system does one slow thing at a time: one 知言 run, or one 立言
-generation, or one parse, or one Blog submission. Everything below is about who
-gets that slot and for how long.
+`liyan-worker-provider` runs `--pool=threads --concurrency=4` and holds no
+browser. A 知言 run, a 立言 generation, and a Blog submission are each an
+`httpx.post` waiting on somebody else's server: no meaningful memory, no CPU,
+and four of them are four blocked sockets in one interpreter. So provider work
+does **four things at a time**.
+
+That split is the point. Before it, a 知言 run spent two to three minutes
+holding the single slot that exists because of Chromium — a memory budget
+throttling a network wait. The limits below still exist, but what most of them
+now protect is one of two different resources, and the table says which.
 
 | Limit | Setting | Default | What it protects |
 | --- | --- | --- | --- |
-| Executions in flight per user | `LIYAN_MAX_ACTIVE_EXECUTIONS_PER_USER` | 6 | The slot, from one user |
+| Executions in flight per user | `LIYAN_MAX_ACTIVE_EXECUTIONS_PER_USER` | 6 | Both workers, from one user |
 | 来源 per 任务版本 | — (structural) | 3 | The size of one 知言 batch |
 | Upload size | `LIYAN_FILE_MAX_BYTES` | 10MB | Memory during parse |
 | Pages per PDF | `LIYAN_FILE_MAX_PAGES` | 100 | Parse time |
 | Normalized characters | `LIYAN_FILE_MAX_NORMALIZED_CHARACTERS` | 500,000 | Prompt size and database rows |
 | DOCX entries / uncompressed bytes | `LIYAN_FILE_MAX_DOCX_*` | 2,000 / 50MB | Zip bombs |
-| URL fetch | `LIYAN_URL_FETCH_TIMEOUT_SECONDS` | 60 | Chromium holding the slot |
-| 知言 / 立言 provider call | `LIYAN_ZHIYAN_TIMEOUT_SECONDS`, `LIYAN_LIYAN_TIMEOUT_SECONDS` | 300 | The slot, from a provider that stopped answering |
-| Blog submission | `LIYAN_BLOG_TIMEOUT_SECONDS` | 60 | The slot |
+| URL fetch | `LIYAN_URL_FETCH_TIMEOUT_SECONDS` | 60 | Chromium holding the capture slot |
+| 知言 / 立言 provider call | `LIYAN_ZHIYAN_TIMEOUT_SECONDS`, `LIYAN_LIYAN_TIMEOUT_SECONDS` | 300 | A provider thread, from a provider that stopped answering |
+| Blog submission | `LIYAN_BLOG_TIMEOUT_SECONDS` | 60 | A provider thread |
 | Presumed-lost run | `LIYAN_STALLED_EXECUTION_TIMEOUT_MINUTES` | 30 | Work waiting on a dead worker |
 
 ## Executions in flight per user
@@ -68,9 +79,13 @@ holds up to three 来源, so intake can hold three Executions and the 知言 bat
 that follows holds three more. Below 6 an ordinary user meets the ceiling doing
 nothing unusual, which trains them to ignore it.
 
-Raising it does not buy throughput — there is still one slot — it only lets one
-user queue more of it. If throughput is what is short, raise the worker's plan
-and its concurrency together, in that order, and re-run the measurement below.
+Raising it does not buy throughput — the workers are still one capture slot and
+four provider threads — it only lets one user queue more of it. If throughput is
+what is short, the answer differs by which worker is short of it: capture wants
+a larger plan before more concurrency, because its ceiling is Chromium's memory;
+provider work wants `--concurrency` and `LIYAN_WORKER_CONCURRENCY` raised
+together, up to the point where DeepSeek rather than Celery is the wall. That
+point is what `scaling.md` stage 2 is about, and it is not built.
 
 ## Measuring it
 

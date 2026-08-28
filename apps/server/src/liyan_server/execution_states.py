@@ -15,6 +15,19 @@ type SourcePreparationStatus = Literal["processing", "ready", "warning", "failur
 #: ADR-0001: transmission may have started, so 立言阁 must never resend it.
 type PublishTaskStatus = Literal["pending", "succeeded", "failed", "outcome_unknown"]
 
+#: What one movement of 额度 was. Stored literals, rendered in the workbench as
+#: 赠送, 购买, 预扣 and 结算; `CONTEXT.md` defines what each one means.
+#: `capture` is the flat fee a 来源 costs, which is charged outright rather than
+#: held, because it is known before the work runs.
+type CreditEntryKind = Literal[
+    "grant",
+    "purchase",
+    "capture",
+    "hold",
+    "settle",
+    "clawback",
+]
+
 #: Why an Execution exists: the initial operation, its one automatic recovery
 #: attempt, or a retry the user asked for.
 type RunOrigin = Literal["initial", "automatic", "manual"]

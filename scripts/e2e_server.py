@@ -99,7 +99,7 @@ class InlineDispatcher(RecordingDispatcher):
         super().__init__(database_url)
         self.blog = MarkerBlogSubmitter()
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         threading.Thread(target=self._run, args=(execution_id,), daemon=True).start()
 
     def _run(self, execution_id: UUID) -> None:
@@ -131,6 +131,19 @@ def main() -> int:
         # Off: the ceiling is a server rule with its own tests, and a browser
         # suite that trips it would fail for a reason it is not about.
         max_active_executions_per_user=0,
+        # Same reasoning, and it took a CI failure to notice it was missing.
+        # One signed-in writer creates a task per spec, every run's provider is
+        # a double that reports no `usage`, and a run whose cost cannot be
+        # measured keeps its whole 预扣 — deliberately, so a blinking meter does
+        # not hand out reports for free. So the suite spends the real estimate
+        # per task and never gets any of it back, and the signup grant is a
+        # budget for one or two tasks rather than a dozen.
+        #
+        # It was already within a task or two of the ceiling and nothing said
+        # so; raising the 知言 estimate to what runs actually cost pushed it
+        # over, and nine specs failed at 创建任务 with no visible reason. 额度
+        # enforcement has its own tests. This suite is about the workbench.
+        signup_grant_credits=1_000_000,
     )
     application = create_app(
         settings,

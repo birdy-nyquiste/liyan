@@ -61,9 +61,24 @@ class Settings(BaseSettings):
     #: `docs/operations/limits.md`; why a batch that starts under it is
     #: admitted whole is in `execution_limits.py`.
     max_active_executions_per_user: int = 6
+    #: 赠送额度 a new user is given once, on first sign-in. There is no monthly
+    #: refill: this product's cadence is one article at a time, and a standing
+    #: grant is a standing bill against every account ever abandoned.
+    #:
+    #: A placeholder. `docs/operations/credits.md` sizes it at one complete
+    #: 立言任务, which its own table puts near 118 额度 — but that table rests on
+    #: assumptions `scripts/calibrate_costs.py` has not yet been able to settle.
+    #: Raise it in Local, where one developer competes with nobody.
+    signup_grant_credits: int = 150
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.
     worker_name: str = "celery-worker"
+    #: How many tasks this worker runs at once. It does not set the concurrency
+    #: — `render.yaml` passes that to Celery — it *reports* it, so the database
+    #: pool can be sized to match. The two are set together per service, and a
+    #: pool smaller than the concurrency it serves is intermittent connection
+    #: exhaustion that reads as a database fault.
+    worker_concurrency: int = 1
 
     @field_validator("database_url")
     @classmethod

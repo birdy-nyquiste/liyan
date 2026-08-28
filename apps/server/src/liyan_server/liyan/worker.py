@@ -25,6 +25,7 @@ from liyan_server.liyan.runs import (
     InvalidRunSnapshot,
     LiyanRunSnapshot,
 )
+from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
 from liyan_server.task_activity import record_task_activity
 
@@ -45,6 +46,7 @@ def process_liyan_run(
         snapshot = _claim(database, execution_id)
         if snapshot is None:
             return
+        result: LiyanProviderResult | None = None
         try:
             result = provider.generate(
                 liyan_request(
@@ -55,7 +57,9 @@ def process_liyan_run(
             )
             article = accept_article_text(result.article_text)
         except LiyanRunFailure as failure:
-            _finish_failed(database, execution_id, failure, dispatcher)
+            # Set when the call returned and its article was refused: the
+            # provider invoiced that just the same, so it is still a cost.
+            _finish_failed(database, execution_id, failure, dispatcher, result=result)
             return
         _finish_succeeded(database, execution_id, snapshot, result, article)
     finally:
@@ -117,6 +121,7 @@ def _finish_failed(
     execution_id: UUID,
     failure: LiyanRunFailure,
     dispatcher: ExecutionDispatcher,
+    result: LiyanProviderResult | None = None,
 ) -> None:
     assert database.engine is not None
     follow_up: UUID | None = None
@@ -135,6 +140,12 @@ def _finish_failed(
         if task is None or task.deleted_at is not None:
             execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
+        if result is not None:
+            # The article that was refused, kept verbatim, for the same reason
+            # its 知言 counterpart is: the rule it broke is recorded, and only
+            # the text says why it broke it.
+            execution.stale_result = _stale_result(result)
+        _record_failed_cost(session, execution, failure, result)
         recovery = _automatic_attempt(session, execution)
         session.commit()
         follow_up = recovery.id if recovery is not None else None
@@ -209,6 +220,7 @@ def _finish_succeeded(
             # tracing under `stale`, with the original error_code intact.
             execution.status = "stale"
             execution.stale_result = _stale_result(provider_result)
+            _record_cost(session, execution, provider_result, chargeable=False)
             session.commit()
             return
         execution.finished_at = now
@@ -223,6 +235,7 @@ def _finish_succeeded(
                 execution.error_code = "cancelled"
                 execution.error_message = CANCELLED_MESSAGE
             execution.stale_result = _stale_result(provider_result)
+            _record_cost(session, execution, provider_result, chargeable=False)
             session.commit()
             return
         accepted = session.scalar(
@@ -249,7 +262,50 @@ def _finish_succeeded(
         execution.result_id = run_result.id
         assert task is not None
         record_task_activity(task, at=now)
+        _record_cost(session, execution, provider_result, chargeable=True)
         session.commit()
+
+
+def _record_failed_cost(
+    session: Session,
+    execution: Execution,
+    failure: LiyanRunFailure,
+    result: LiyanProviderResult | None,
+) -> None:
+    """What a run that produced no 立言文章 nevertheless consumed.
+
+    A refused article arrives as a `result` and an unusable response does not,
+    but the provider invoiced both. Reading the bill off whichever of the two is
+    present is how a failed 立言 run stops costing an unknown amount.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=False,
+        usage=result.usage if result else failure.usage,
+        model=result.model if result else failure.model,
+    )
+
+
+def _record_cost(
+    session: Session,
+    execution: Execution,
+    result: LiyanProviderResult | None,
+    *,
+    chargeable: bool,
+) -> None:
+    """What this generation consumed, whatever became of its article.
+
+    No search term here: 立言 sends `tools: []` and `tool_choice: "none"`, so
+    what it sent and what came back is the whole of what it cost.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=chargeable,
+        usage=result.usage if result else None,
+        model=result.model if result else None,
+    )
 
 
 def _lock_task(session: Session, snapshot: LiyanRunSnapshot) -> Task | None:

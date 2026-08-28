@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from threading import Lock
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -20,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from liyan_server.execution_states import (
+    CreditEntryKind,
     ExecutionStatus,
     PublishTaskStatus,
     RunOrigin,
@@ -270,8 +272,16 @@ class Execution(Base):
     result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
     )
-    #: Provider output that arrived too late to become business content, kept for
-    #: tracing only (Technical Spec §6.4). Never returned to a client.
+    #: Provider output that did not become business content, kept for tracing
+    #: only (Technical Spec §6.4). Never returned to a client.
+    #:
+    #: Two ways that happens, and both are kept. Output that arrived too late —
+    #: the run was cancelled, or another run won. And output that arrived and
+    #: was *refused*: a report that failed acceptance is the only evidence of
+    #: why, and discarding it made `invalid_report_schema` a dead end — three
+    #: local runs failed with `JSONDecodeError` at character zero and there is
+    #: no way to find out what the model actually wrote, because this column
+    #: was not written on that path.
     stale_result: Mapped[dict[str, object] | None] = mapped_column(JSON)
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
     request_hash: Mapped[str | None] = mapped_column(String(64))
@@ -486,6 +496,118 @@ class PublishTask(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class CreditEntry(Base):
+    """One movement of 额度, in the record a user's balance is read from.
+
+    Append-only, and the balance is the sum. Nothing stores it beside this: a
+    cached total is a second source of truth for money, and the one that drifts
+    is the one nobody notices until a user is refused work they paid for.
+
+    `kind` is ASCII for the same reason `ExecutionStatus` is — it is a stored
+    literal, not a phrase — and the workbench renders it as 赠送, 购买, 预扣, or
+    结算. What each one means is in `CONTEXT.md`.
+
+    The target columns mirror the `(target_type, target_id, attempt)` triple
+    `Execution` already uses. They are plain identifiers rather than foreign
+    keys, following `publish_tasks`: `cleanup` removes tasks and cascades into
+    their Executions, and 额度 that vanished with one would change a balance
+    retroactively. Only `owner_id` cascades, because deleting a person should
+    take their accounting with them.
+    """
+
+    __tablename__ = "credit_entries"
+    __table_args__ = (
+        #: One 预扣 and one 结算 for any attempt, so a worker that runs twice or a
+        #: settlement written both eagerly and by the sweep cannot double-count.
+        Index(
+            "uq_credit_entries_run",
+            "kind",
+            "target_type",
+            "target_id",
+            "attempt",
+            unique=True,
+            postgresql_where=text("kind IN ('hold', 'settle')"),
+            sqlite_where=text("kind IN ('hold', 'settle')"),
+        ),
+        #: One capture charge per 来源, however many times intake is replayed.
+        Index(
+            "uq_credit_entries_capture",
+            "target_type",
+            "target_id",
+            unique=True,
+            postgresql_where=text("kind = 'capture'"),
+            sqlite_where=text("kind = 'capture'"),
+        ),
+        #: A redelivered Stripe event collides here rather than crediting twice.
+        Index(
+            "uq_credit_entries_stripe_event",
+            "stripe_event_id",
+            unique=True,
+            postgresql_where=text("stripe_event_id IS NOT NULL"),
+            sqlite_where=text("stripe_event_id IS NOT NULL"),
+        ),
+        Index("ix_credit_entries_owner_created", "owner_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+    )
+    kind: Mapped[CreditEntryKind] = mapped_column(String(16))
+    #: Signed. Negative takes 额度; positive gives them back or adds them.
+    amount: Mapped[int] = mapped_column(Integer)
+    target_type: Mapped[str | None] = mapped_column(String(64))
+    target_id: Mapped[UUID | None] = mapped_column(Uuid)
+    attempt: Mapped[int | None] = mapped_column(Integer)
+    execution_id: Mapped[UUID | None] = mapped_column(Uuid)
+    stripe_event_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ExecutionCost(Base):
+    """What one Execution cost 立言阁, and what it would be charged for.
+
+    Written for every terminal outcome of a run, not only a successful one: a
+    provider call that produced a report nobody kept was still invoiced, and the
+    gap between what a run cost and what it may be charged is the number that
+    says how much failure this product absorbs. `credits.md` asserts that number
+    is bounded; this is where it stops being an assertion.
+
+    Identifiers are plain columns rather than foreign keys, following
+    `publish_tasks`: `cleanup` removes tasks and cascades to their Executions,
+    and a cost record that vanished with one would change a margin — and later a
+    balance — retroactively. Only the user cascades, because deleting a person
+    genuinely should take their accounting with them.
+
+    Money is `cost_micros`, in millionths of one US dollar, and never a float.
+    It is nullable, as is `charge_credits`, because a provider that reported no
+    usage or a model with no rates leaves a cost unknown — which is a row anyone
+    can count, rather than a guess nobody can spot.
+    """
+
+    __tablename__ = "execution_costs"
+    __table_args__ = (Index("ix_execution_costs_operation_created", "operation", "created_at"),)
+
+    execution_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(Uuid, index=True)
+    operation: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(64))
+    rate_card_version: Mapped[int] = mapped_column(Integer)
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    cached_input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    reasoning_tokens: Mapped[int | None] = mapped_column(Integer)
+    search_calls: Mapped[int | None] = mapped_column(Integer)
+    worker_milliseconds: Mapped[int | None] = mapped_column(Integer)
+    stored_bytes: Mapped[int | None] = mapped_column(Integer)
+    cost_micros: Mapped[int | None] = mapped_column(Integer)
+    #: What would be charged. Zero for a run that produced nothing chargeable,
+    #: null when the cost itself is unknown. Nothing is charged yet either way.
+    charge_credits: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class WorkerHeartbeat(Base):
     """The last time a worker process was known to be doing something.
 
@@ -500,17 +622,68 @@ class WorkerHeartbeat(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+#: One engine per process, for processes that said they wanted one.
+#:
+#: Every worker task builds its own `Database` and disposes it, which at one
+#: task at a time is one pool at a time and nobody notices. Running provider
+#: runs on a thread pool makes it N live pools against one small Postgres, each
+#: willing to open fifteen connections — and the failure is intermittent
+#: connection exhaustion under load, which reads as a database problem rather
+#: than a pool-sizing one. It also stops a fresh TCP and TLS handshake on every
+#: single run.
+#:
+#: Opt-in, and keyed by URL. The API is served by one engine already and tests
+#: build a database per temporary directory; neither should start sharing
+#: because a worker needed to.
+_shared: dict[str, Engine] = {}
+_shared_lock = Lock()
+
+
+def share_engine(database_url: str, *, pool_size: int) -> None:
+    """Declare that this process has one engine, sized for its concurrency.
+
+    Called once, at worker start, before any task runs. `Database` then hands
+    out that engine instead of building one, and `dispose` leaves it alone —
+    a per-task dispose would close the pool the other threads are using.
+    """
+    with _shared_lock:
+        if database_url in _shared:
+            return
+        _shared[database_url] = create_engine(
+            database_url,
+            pool_pre_ping=True,
+            pool_size=pool_size,
+            # Room for a burst without letting a stuck thread hold the whole
+            # pool hostage. Small: the point of this is to bound connections.
+            max_overflow=2,
+            pool_recycle=1_800,
+        )
+
+
+def forget_shared_engines() -> None:
+    """Drop every shared engine. For tests, and for nothing else."""
+    with _shared_lock:
+        for engine in _shared.values():
+            engine.dispose()
+        _shared.clear()
+
+
 class Database:
     def __init__(self, database_url: str) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-        try:
-            self.engine: Engine | None = create_engine(
-                database_url,
-                pool_pre_ping=True,
-                connect_args=connect_args,
-            )
-        except SQLAlchemyError:
-            self.engine = None
+        shared = _shared.get(database_url)
+        self._is_shared = shared is not None
+        if shared is not None:
+            self.engine: Engine | None = shared
+        else:
+            try:
+                self.engine = create_engine(
+                    database_url,
+                    pool_pre_ping=True,
+                    connect_args=connect_args,
+                )
+            except SQLAlchemyError:
+                self.engine = None
         self._sessions = (
             sessionmaker(self.engine, expire_on_commit=False) if self.engine is not None else None
         )
@@ -532,5 +705,8 @@ class Database:
             return False
 
     def dispose(self) -> None:
-        if self.engine is not None:
+        # Never the shared one. Its whole purpose is to outlive the task that
+        # borrowed it, and disposing it here would close connections the other
+        # threads of this worker are mid-query on.
+        if self.engine is not None and not self._is_shared:
             self.engine.dispose()

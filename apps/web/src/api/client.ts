@@ -29,6 +29,9 @@ export type EligibleArticleListResponse = components["schemas"]["EligibleArticle
 export type PublishTaskResponse = components["schemas"]["PublishTaskResponse"];
 export type PublishTaskListResponse = components["schemas"]["PublishTaskListResponse"];
 export type ConfirmPublicationRequest = components["schemas"]["ConfirmPublicationRequest"];
+export type AccountResponse = components["schemas"]["AccountResponse"];
+export type UsageEntry = components["schemas"]["UsageEntry"];
+export type UsageResponse = components["schemas"]["UsageResponse"];
 
 export class ApiError extends Error {
   constructor(
@@ -119,6 +122,23 @@ export async function getTask(
 ): Promise<TaskSummaryResponse> {
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}", {
     params: { path: { task_id: taskId } },
+  });
+  if (!result.data) throw refusalOf(result);
+  return result.data;
+}
+
+export async function getAccount(accessToken: string): Promise<AccountResponse> {
+  const result = await authenticatedApi(accessToken).GET("/account", {});
+  if (!result.data) throw refusalOf(result);
+  return result.data;
+}
+
+export async function listAccountUsage(
+  accessToken: string,
+  offset = 0,
+): Promise<UsageResponse> {
+  const result = await authenticatedApi(accessToken).GET("/account/usage", {
+    params: { query: { offset } },
   });
   if (!result.data) throw refusalOf(result);
   return result.data;

@@ -100,13 +100,31 @@ One equation for both operations; only the token counts differ.
 | Output | $0.66 | $1.32 |
 
 Peak is 01:00–04:00 and 06:00–10:00 UTC on weekdays, which is 09:00–12:00 and
-14:00–18:00 in China. That is the working day of the people this product is
-for, so **every number on this page uses peak rates**. Costing at the off-peak
-rate would halve the apparent cost of the hours when the work actually happens.
+14:00–18:00 in China — the working day of the people this product is for, so
+**every number on this page uses peak rates**. Costing the whole page at the
+off-peak rate would halve the apparent cost of the hours when the work actually
+happens.
+
+A *run*, though, is costed at the rate that was actually in force while it ran
+(rate card version 2). Pricing every run at peak was not conservative, it was
+wrong half the time: a run at 22:00 UTC was booked at twice what DeepSeek
+charged for it, permanently and invisibly. A run's own start decides its window;
+one that straddles a boundary is priced at one rate when it was charged at two,
+which is a rounding error on a few minutes and better than apportioning tokens
+across windows nobody can observe.
+
+The **预扣 still assumes peak**, because it has to guess and ADR-0008 says guess
+high. So an off-peak run holds at peak and settles at half, which returns 额度
+rather than collecting them.
 
 DeepSeek's web search bills no separate fee — results arrive as ordinary input
-tokens. It is therefore not a line item, but it is the least predictable part
-of a 知言 run's input, which is what §What bounds the model is about.
+tokens. Re-verified against the pricing page and the Responses API reference on
+2026-08-28: there is no per-call, per-search, or per-tool line item anywhere, and
+"the expense = number of tokens × price" is the whole of the billing model. Tool
+use costs extra only in the sense that it is *how a 知言 run gets expensive* —
+search results arrive as billable input 立言阁 never sent, mostly at the cache-hit
+rate. It is therefore not a line item, but it is the least predictable part of a
+知言 run's input, which is what §What bounds the model is about.
 
 **Render Starter** (API, worker, beat): $7/month, 0.5 vCPU, 512MB, so
 **$0.0000027 per second**. **Cloudflare R2**: $0.015/GB-month, egress free.
@@ -199,8 +217,8 @@ whichever of these is furthest off.
 | --- | --- | --- |
 | Chinese characters → tokens | 0.6 tok/char | Good |
 | Instructions + report schema | ~2,000 tokens | Rough |
-| Search results injected per 知言 run | ~15,000 tokens | **Wrong — see below** |
-| 知言报告 output | ~4,000 tokens | **Incomplete — see below** |
+| Search results injected per 知言 run | ~45,000 tokens, 90% cached | Measured, n=2 — see below |
+| 知言 output incl. reasoning | ~17,000 tokens | Measured, n=3 — see below |
 | R2 retention for amortisation | 12 months | A policy choice, not a measurement |
 
 ### What one afternoon against the real provider already showed
@@ -238,6 +256,90 @@ complete reliably again.
 One thing worth reporting upstream: `max_tool_calls` is accepted by the
 Responses API and **not enforced**. A run capped at six made twenty searches.
 Whatever bounds a 知言 run's searching, it is not that.
+
+### What that drift turned out to be (2026-08-28)
+
+The runs returning no report were not a provider fault to wait out. DeepSeek
+caps its own server-side search auto-continuation at **ten rounds**, and a model
+that spends all ten searching returns `status: "completed"` carrying only
+`reasoning` and `web_search_call` items. Every search is billed; no report
+arrives. Once the model's search appetite tripled, 知言 hit that cap routinely —
+so the failure rate rose *in proportion to how well 知言 did its job*, which is
+why it looked like a search regression.
+
+The local record is unambiguous: **twelve of twenty-seven** 知言 runs failed
+with exactly `output items were ['reasoning', 'web_search_call']`, against eight
+that succeeded.
+
+`zhiyan/deepseek.py` now continues such a run rather than discarding it — the
+API accepts `message`, `reasoning`, and `web_search_call` back as `input`, so the
+call that stopped mid-search is re-sent with its own trail and asked to conclude,
+at most twice, the last time with its tools removed. Nothing caps how much 知言
+may search; what changed is that searching too well no longer costs the run.
+
+**Those failures were also the ones costing the most and recording the least.**
+The failure is raised inside the adapter — after the call returned and was
+invoiced, before there is any result to hand back — so the worker had nothing to
+meter and wrote a row of nulls on precisely the most expensive runs. A failure
+now carries its own `usage`, `model`, and search count, summed across every call
+the run made. The twelve are unrecoverable; the next twelve are not.
+
+### What the meter has since recorded (2026-08-28)
+
+Every 知言 run whose usage reached `execution_costs`, against the 来源 that
+produced it:
+
+| 来源 chars | input | of which cached | output | of which reasoning | searches | 额度 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2,882 | 43,081 | 37,504 (87%) | 11,218 | 8,514 | 2 | 37 |
+| 3,394 | 165,577 | 138,880 (84%) | 23,308 | 16,570 | 3 | 90 |
+
+Two rows is not a calibration and the table above is not corrected from it.
+What two rows are enough for is to settle a direction, and the direction was
+one-sided: the estimator predicted **28 额度 for both** — below the cheaper run
+and a third of the dearer. It under-held on every run it has ever been checked
+against, which is the one way ADR-0008 says not to be wrong.
+
+Two things changed, and only one of them is a number:
+
+**The injection term is priced as mostly cached.** It was priced as an entirely
+uncached call, on the general principle that a cache hit is a discount the
+provider may withhold. For this one term that principle backfires: search
+injection is the largest part of a short 来源's estimate and the most reliably
+cached — 84–90% in every run measured — so pricing it at the miss rate does not
+buy pessimism, it triples the 预扣 and refuses users work they can comfortably
+afford. Everything 立言阁 actually sends is still priced as a miss.
+
+**The injection and output figures move to what was measured** — 45,000 and
+17,000, at the low end of the observed range because both samples are short
+来源, which is the hard case rather than the typical one.
+
+The estimate for a 2,882-character 来源 is now 53 额度, between the 37 and 90 the
+two real runs cost. It is bracketed rather than fitted; `scripts/calibrate_costs.py`
+over a corpus spread across lengths is still what replaces this section, and
+still needs a corpus somebody chooses.
+
+### Checking the meter against the money (2026-08-28)
+
+`calibrate_costs.py` now reads `GET /user/balance` before and after a batch and
+prints what the account actually lost beside what `execution_costs` computed.
+It is the only check available: DeepSeek publishes **no per-request cost, no
+usage history, and no lookup by response id**. The balance endpoint is
+account-wide, so it measures a quiet key or nothing.
+
+Two things it turned up immediately, both of which affect how any result must be
+read:
+
+**The account settles in CNY, and this page is entirely in USD.** The key in use
+reads `USD 0.00` beside `CNY 10.07`. Every rate here comes from DeepSeek's
+published USD list; no CNY list is documented. So a CNY fall is reported as CNY
+and converted by nobody — comparing it to the USD figure is a judgement for
+whoever runs it, with the day's rate in hand. **Until that comparison is made,
+nothing has verified that these rates are the ones this account is charged.**
+
+**Billing lags.** Three live runs on 2026-08-28 left the balance reading
+unchanged immediately afterwards. An unmoved balance right after a batch means
+"read it again later", not "the runs were free".
 
 ## Holding and settling
 
@@ -414,16 +516,21 @@ Neither of these is load-bearing for correctness now that the 预扣 is an
 estimate rather than a ceiling. Both are still worth adding, because they cut
 the tail the estimator has to cover:
 
-- `zhiyan/deepseek.py` sets no `max_output_tokens`, so a runaway generation is
-  bounded only by the 300-second timeout. A cap turns the worst overshoot from
-  unbounded into a known multiple.
+- `zhiyan/deepseek.py` sets no `max_output_tokens` — and **cannot**. Verified
+  against the API reference on 2026-08-28: DeepSeek's `POST /responses` has no
+  top-level `max_output_tokens`. The only field of that name lives under
+  `reasoning`, and bounds reasoning alone. A runaway generation is bounded by
+  the 300-second timeout and by nothing this repository can send.
 - `ToolPolicy` is a single `web_search_enabled` flag, and its own docstring says
   the provider owns its search caps — so the number of searches, the least
-  predictable term in the estimate, is currently DeepSeek's to choose.
+  predictable term in the estimate, is currently DeepSeek's to choose. The one
+  parameter that claims to bound it, `max_tool_calls`, is ignored (above). The
+  real bound is the provider's ten-round auto-continuation cap, which 知言 now
+  survives rather than sets.
 
-Their values are set from the shadow meter at step 4, at a high percentile of
-what runs actually do. Guessing them now would trade report quality against a
-distribution nobody has looked at.
+So the tail these were meant to cut is cut by measurement instead: every run,
+including every failed one, now records its tokens and its search count, and
+step 4 fits the estimator to that distribution rather than to a guessed cap.
 
 ## Build order
 

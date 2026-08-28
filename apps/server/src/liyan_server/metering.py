@@ -57,6 +57,22 @@ def _held_milliseconds(execution: Execution, now: datetime) -> int | None:
     return max(0, int((finished - aware_utc(execution.started_at)).total_seconds() * 1000))
 
 
+def _billed_at(execution: Execution, now: datetime) -> datetime:
+    """When to price this run, given DeepSeek charges half outside peak hours.
+
+    The run's start, not its end. A 知言 run is several minutes of provider work
+    that begins when it is claimed, and the request that carries almost all of
+    the tokens is the first one — so the window it started in is the window most
+    of it was billed in.
+
+    A run that straddles a boundary is therefore priced at one rate when it was
+    charged at two. That is a rounding error on a few minutes either side of an
+    hour, and the alternative — apportioning tokens across windows 立言阁 cannot
+    observe — is a model dressed up as a measurement.
+    """
+    return aware_utc(execution.started_at) if execution.started_at else now
+
+
 def _charge(operation: str, cost_micros: int | None, chargeable: bool) -> int | None:
     """What this run would be charged, which is not always what it cost.
 
@@ -107,7 +123,9 @@ def record_execution_cost(
 
         held = _held_milliseconds(execution, moment)
         provider_micros = (
-            provider_cost_micros(usage, model) if usage is not None and model else None
+            provider_cost_micros(usage, model, at=_billed_at(execution, moment))
+            if usage is not None and model
+            else None
         )
         # A token-metered run whose provider term is missing has an unknown
         # cost, not a partial one. Reporting its worker time alone would

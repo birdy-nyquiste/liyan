@@ -7,6 +7,7 @@ they cannot pay for.
 """
 
 from pathlib import Path
+from uuid import uuid4
 
 from database_support import QueueSaying, entitle, migrated_database
 from fastapi.testclient import TestClient
@@ -190,3 +191,64 @@ def test_a_confirmation_nobody_can_pay_for_is_refused_whole(tmp_path: Path) -> N
     assert held(database_url, "hold") == []
     # The capture fee already paid stands: that work was done.
     assert balance(database_url) == 2
+
+
+def test_the_account_shows_one_number_and_nothing_that_predicts_it(tmp_path: Path) -> None:
+    """A balance and whether URL 来源 are theirs. No estimate: the figure that
+    decides whether work begins stays on the server, because a quoted price
+    invites arithmetic a settlement will not match."""
+    client, _ = a_client(tmp_path)
+
+    account = client.get("/account", headers=HEADERS)
+
+    assert account.status_code == 200
+    assert account.json() == {"remaining_credits": 150, "is_paying_user": False}
+    assert "estimate" not in account.text
+
+
+def test_usage_folds_a_结算_into_the_预扣_it_corrects(tmp_path: Path) -> None:
+    """A 结算 alone reads as 额度 arriving from nowhere. Against the 预扣 it
+    corrects, it explains a number that moved and moved back."""
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    entitle(dispatcher.database_url, credits=100_000)
+    confirm_sources(client, headers, ["四天工作制已经没有争议"])
+
+    running = client.get("/account/usage", headers=headers).json()["entries"]
+    analysis = next(row for row in running if row["kind"] == "hold")
+    assert analysis["status"] == "running"
+    assert analysis["held"] == -analysis["amount"], "committed in full while it runs"
+
+    dispatcher.run_all()
+
+    settled = client.get("/account/usage", headers=headers).json()["entries"]
+    analysis = next(row for row in settled if row["kind"] == "hold")
+    assert analysis["status"] in {"done", "failed"}
+    assert analysis["held"] is not None
+    assert "分析来源" in analysis["description"]
+
+
+def test_usage_still_reads_after_the_task_it_refers_to_is_gone(tmp_path: Path) -> None:
+    """cleanup removes 立言任务 and cascades into their 来源; these rows are kept
+    on purpose. A 使用记录 older than a deleted task still has to say something."""
+    client, database_url = a_client(tmp_path)
+    entitle(database_url, credits=1_000)
+    database = Database(database_url)
+    assert database.engine is not None
+    try:
+        with Session(database.engine) as session:
+            user = session.query(User).one()
+            credits.hold(
+                session,
+                user.id,
+                target_type="source_revision",
+                target_id=uuid4(),
+                attempt=1,
+                credits=56,
+            )
+            session.commit()
+    finally:
+        database.dispose()
+
+    rows = client.get("/account/usage", headers=HEADERS).json()["entries"]
+
+    assert rows[0]["description"] == "分析来源"

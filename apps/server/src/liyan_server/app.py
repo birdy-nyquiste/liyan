@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from liyan_server.account_api import account_router
 from liyan_server.auth import HttpJwksLoader, JwksJwtVerifier, JwtVerifier
 from liyan_server.authentication import Authenticator, current_user_dependency
 from liyan_server.database import Database
@@ -89,6 +90,7 @@ def create_app(
     )
     application.include_router(health_router(database, storage, dispatcher))
     application.include_router(identity_router(current_user))
+    application.include_router(account_router(database, current_user))
     application.include_router(task_router(database, current_user))
     application.include_router(
         task_creation_router(current_settings, database, current_user, dispatcher)

@@ -1372,6 +1372,15 @@ html[lang^="zh"] .signed-out-hero .subtitle {
     width: 100%;
   }
 
+  /*
+   * The drawer brings its own close button, and collapsing to a rail is a
+   * desktop affordance with nothing to collapse into here. Both were rendering
+   * into the same corner, 5px apart, as one illegible pile of icons.
+   */
+  .mobile-drawer .sidebar-collapse {
+    display: none;
+  }
+
   .mobile-drawer__close {
     position: absolute;
     z-index: 2;

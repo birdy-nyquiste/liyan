@@ -21,14 +21,7 @@ const copy = {
     loadMore: "加载更多",
     failed: "账户信息加载失败，请稍后重试。",
     locked: "购买额度后可使用公共文章链接与上传文件作为来源。",
-    spends: "消耗额度",
-    spendsFree: "不消耗额度",
-    spendCapture: "添加来源",
-    spendZhiyan: "知言分析",
-    spendLiyan: "立言生成（含每次重新生成）",
-    freePublish: "发布",
-    freeFailed: "失败的分析与生成",
-    freeUnchanged: "重复分析未改动的来源",
+    spends: "来源抓取，知言报告生成，立言文章生成会消耗额度，按量计算。",
     running: "进行中",
     done: "已完成",
     failedRun: "失败",
@@ -46,14 +39,7 @@ const copy = {
     loadMore: "Load more",
     failed: "The account could not be loaded. Try again shortly.",
     locked: "Buying credits unlocks article links and uploaded files as sources.",
-    spends: "Spends credits",
-    spendsFree: "Free",
-    spendCapture: "Adding a source",
-    spendZhiyan: "知言 analysis",
-    spendLiyan: "立言 generation, including every regeneration",
-    freePublish: "Publishing",
-    freeFailed: "Analyses and generations that failed",
-    freeUnchanged: "Re-analysing an unchanged source",
+    spends: "Capturing a 来源, generating a 知言报告, and generating a 立言文章 spend credits, metered by usage.",
     running: "Running",
     done: "Done",
     failedRun: "Failed",
@@ -135,29 +121,11 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
       </div>
 
       {/*
-        What spends 额度, said here because nothing quotes a price before an act
-        and 使用记录 only explains one afterwards. The second column matters as
-        much as the first: a user who does not know a failed run is free will
-        assume it was not.
+        What takes 额度, where the balance is. Nothing quotes a price before an
+        act and 使用记录 only explains one afterwards, so this is the only place
+        that says charging happens at all.
       */}
-      <div className="account-spending">
-        <div>
-          <h2>{text.spends}</h2>
-          <ul>
-            <li>{text.spendCapture}</li>
-            <li>{text.spendZhiyan}</li>
-            <li>{text.spendLiyan}</li>
-          </ul>
-        </div>
-        <div>
-          <h2>{text.spendsFree}</h2>
-          <ul>
-            <li>{text.freePublish}</li>
-            <li>{text.freeFailed}</li>
-            <li>{text.freeUnchanged}</li>
-          </ul>
-        </div>
-      </div>
+      <p className="account-spending">{text.spends}</p>
 
       <h2>{text.packs}</h2>
       <ul className="account-packs">

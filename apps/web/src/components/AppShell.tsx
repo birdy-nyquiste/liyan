@@ -598,6 +598,12 @@ function TaskRoute({
   if (!task) return <div className="route-empty"><h1>{missingLabel}</h1></div>;
   return (
     <TaskCard
+      // Remounted per task, not reused. `TaskCard` copies the task it is given
+      // into state, so a reused instance keeps showing the one it opened with:
+      // every 立言任务 rendered whatever was clicked first. Its editing, naming
+      // and selected-version state belong to one task too, and should not
+      // survive into another.
+      key={task.id}
       task={task}
       userId={identity.id}
       accessToken={accessToken}

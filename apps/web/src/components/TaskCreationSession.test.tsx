@@ -1,3 +1,5 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -61,15 +63,39 @@ function sessionResponse(sources: TestSource[]) {
 
 /**
  * The creation session is what these tests are about; the route that hosts it
- * only ever handed it an access token and took the finished task back.
+ * hands it an access token and takes the finished task back.
+ *
+ * It also asks the account which 来源 kinds are the user's to submit, so it now
+ * needs the query client and the router the workbench gives it. Retries are off
+ * because a stubbed fetch that answers once should not be asked again while a
+ * test waits.
  */
+/**
+ * The account, as a 付费用户 sees it. URL and file 来源 are theirs to submit, so
+ * a suite that submits them has to say so — the tabs are locked until the
+ * server confirms otherwise, deliberately, so that a slow answer never briefly
+ * offers a 来源 kind the server is about to refuse.
+ */
+const PAYING_ACCOUNT = { remaining_credits: 100_000, is_paying_user: true };
+
+function accountAnswer(request: Request): Response | null {
+  return request.url.endsWith("/account") ? Response.json(PAYING_ACCOUNT) : null;
+}
+
 function renderSession(onCreated = vi.fn()) {
+  const queries = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <TaskCreationSession
-      accessToken="access-token"
-      onCreated={onCreated}
-      onDirtyChange={vi.fn()}
-    />,
+    <QueryClientProvider client={queries}>
+      <MemoryRouter>
+        <TaskCreationSession
+          accessToken="access-token"
+          onCreated={onCreated}
+          onDirtyChange={vi.fn()}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   return onCreated;
 }
@@ -85,6 +111,8 @@ describe("task creation session", () => {
   it("retains three mixed sources and confirms their accepted snapshot in order", async () => {
     const sources: TestSource[] = [];
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
+      const account = accountAnswer(request);
+      if (account) return account;
       if (request.method === "GET" && request.url.includes("/task-creation/sessions/")) {
         return Response.json(sessionResponse(sources));
       }
@@ -230,7 +258,8 @@ describe("task creation session", () => {
       active_execution: null,
       capabilities,
     };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([preparing]))));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) =>
+      accountAnswer(request) ?? Response.json(sessionResponse([preparing]))));
 
     renderSession();
 
@@ -273,6 +302,8 @@ describe("task creation session", () => {
     };
     let source = processing;
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      const account = accountAnswer(request);
+      if (account) return account;
       if (request.method === "GET") return Response.json(sessionResponse([source]));
       if (request.method === "POST" && request.url.endsWith("/executions/execution-1/cancel")) {
         source = cancelled;
@@ -308,6 +339,8 @@ describe("task creation session", () => {
       capabilities,
     };
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      const account = accountAnswer(request);
+      if (account) return account;
       if (request.method === "GET") return Response.json(sessionResponse([retained]));
       return Response.json({ detail: "Temporary failure" }, { status: 503 });
     }));
@@ -325,6 +358,8 @@ describe("task creation session", () => {
     const sources: TestSource[] = [];
     const requestedSessions: string[] = [];
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      const account = accountAnswer(request);
+      if (account) return account;
       if (request.method === "GET") {
         requestedSessions.push(request.url.split("/").pop()!);
         return Response.json(sessionResponse(sources));
@@ -345,7 +380,8 @@ describe("task creation session", () => {
   });
 
   it("warns before leaving a dirty creation session", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(sessionResponse([]))));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) =>
+      accountAnswer(request) ?? Response.json(sessionResponse([]))));
     const user = userEvent.setup();
     renderSession();
     await user.click(await screen.findByRole("button", { name: "添加来源" }));

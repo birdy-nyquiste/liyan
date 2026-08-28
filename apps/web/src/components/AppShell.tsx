@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   MonitorCog,
   MoonStar,
+  Coins,
   Newspaper,
   PanelLeftClose,
   PanelLeftOpen,
@@ -34,10 +35,11 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { deleteTask, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
+import { deleteTask, getAccount, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
 import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocale";
 import { setHistoryGuard } from "../navigationGuard";
+import { AccountPage } from "./AccountPage";
 import { PublicationCenter } from "./PublicationCenter";
 import { TaskCard } from "./TaskCard";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -55,6 +57,7 @@ const copy = {
     collapse: "折叠侧栏",
     expand: "展开侧栏",
     signOut: "退出登录",
+    credits: "额度",
     language: "语言",
     languageValue: "中文",
     theme: "主题",
@@ -91,6 +94,7 @@ const copy = {
     collapse: "Collapse sidebar",
     expand: "Expand sidebar",
     signOut: "Sign out",
+    credits: "Credits",
     language: "Language",
     languageValue: "English",
     theme: "Theme",
@@ -379,6 +383,13 @@ function Sidebar({
   // Signing out is one unlabelled icon away from the avatar in the rail, and it
   // costs a fresh email code to undo.
   const [signOutOpen, setSignOutOpen] = useState(false);
+  // Refetched on window focus by default, which is when a user coming back from
+  // a run wants to see what it cost.
+  const account = useQuery({
+    queryKey: ["account", accessToken],
+    queryFn: () => getAccount(accessToken),
+  });
+  const creditsLabel = account.data ? account.data.remaining_credits.toLocaleString() : "—";
   const themeIcon =
     theme === "light" ? <Sun size={18} />
     : theme === "dark" ? <MoonStar size={18} />
@@ -479,6 +490,29 @@ function Sidebar({
               </>
             ) : null}
           </button>
+        </RailTooltip>
+        <RailTooltip label={`${text.credits}: ${creditsLabel}`} show={collapsed}>
+          {/*
+            A bare integer, and it lives here rather than in the rail because a
+            user meets it at a refusal, not while they work. The group already
+            renders a label with a value beside it, which is the shape a balance
+            wants.
+          */}
+          <NavLink
+            aria-label={`${text.credits}: ${creditsLabel}`}
+            className="sidebar-account__action"
+            to="/account"
+            tabIndex={accountOpen ? undefined : -1}
+            onClick={(event) => { if (!onNavigate("/account")) event.preventDefault(); }}
+          >
+            <Coins size={18} />
+            {!collapsed ? (
+              <>
+                <span>{text.credits}</span>
+                <span className="sidebar-account__value">{creditsLabel}</span>
+              </>
+            ) : null}
+          </NavLink>
         </RailTooltip>
         <RailTooltip label={text.signOut} show={collapsed}>
           <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={() => setSignOutOpen(true)} tabIndex={accountOpen ? undefined : -1}>
@@ -783,6 +817,7 @@ export function AppShell({
               />
             }
           />
+          <Route path="/account" element={<AccountPage accessToken={accessToken} />} />
           <Route path="*" element={<Navigate to="/task" replace />} />
         </Routes>
       </main>

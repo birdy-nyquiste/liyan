@@ -1,5 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, FileText, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, FileText, Lock, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { RunningNotice } from "./RunningNotice";
 
@@ -23,6 +25,7 @@ import {
 } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { SOURCE_PREPARATION_POLL_MS } from "./pollIntervals";
+import { getAccount } from "../api/client";
 
 type DraftSource = { title: string; body: string; provenance: string };
 const CREATION_SESSION_KEY = "liyan.creationSession";
@@ -236,6 +239,13 @@ export function TaskCreationSession({
     return created;
   });
   const [mode, setMode] = useState<"pasted" | "url" | "file">("pasted");
+  // Locked until proven otherwise, so a slow answer never briefly offers a 来源
+  // kind the server is about to refuse.
+  const account = useQuery({
+    queryKey: ["account", accessToken],
+    queryFn: () => getAccount(accessToken),
+  });
+  const locked = !account.data?.is_paying_user;
   const [session, setSession] = useState<TaskCreationSessionResponse | null>(null);
   const [editingSourceIds, setEditingSourceIds] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -395,9 +405,37 @@ export function TaskCreationSession({
         <form className="creation-form source-operation__editor" onSubmit={(event) => void addSource(event)}>
           <div className="source-kind-tabs" aria-label={t("来源类型")}>
             <button className={`button ${mode === "pasted" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("pasted")}>{t("粘贴文本")}</button>
-            <button className={`button ${mode === "url" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("url")}>{t("公共文章链接")}</button>
-            <button className={`button ${mode === "file" ? "" : "button--quiet"}`} type="button" onClick={() => setMode("file")}>{t("上传文件")}</button>
+            {/*
+              `aria-disabled` rather than `disabled`. A disabled control leaves
+              the tab order and screen readers pass over it, which would hide a
+              paid capability from exactly the people who cannot see the lock —
+              and a capability nobody can find is one nobody can want.
+            */}
+            <button
+              aria-disabled={locked || undefined}
+              aria-describedby={locked ? "source-kinds-locked" : undefined}
+              className={`button ${mode === "url" ? "" : "button--quiet"}`}
+              type="button"
+              onClick={() => { if (!locked) setMode("url"); }}
+            >
+              {locked ? <Lock size={14} aria-hidden="true" /> : null}{t("公共文章链接")}
+            </button>
+            <button
+              aria-disabled={locked || undefined}
+              aria-describedby={locked ? "source-kinds-locked" : undefined}
+              className={`button ${mode === "file" ? "" : "button--quiet"}`}
+              type="button"
+              onClick={() => { if (!locked) setMode("file"); }}
+            >
+              {locked ? <Lock size={14} aria-hidden="true" /> : null}{t("上传文件")}
+            </button>
           </div>
+          {locked ? (
+            <p className="source-kinds-locked" id="source-kinds-locked">
+              {t("公共文章链接与上传文件需购买额度后解锁。")}
+              <Link className="button button--quiet" to="/account">{t("购买额度")}</Link>
+            </p>
+          ) : null}
           {mode === "pasted" ? (
             <>
               <label htmlFor="source-title">{t("来源标题")}</label>

@@ -99,7 +99,7 @@ class InlineDispatcher(RecordingDispatcher):
         super().__init__(database_url)
         self.blog = MarkerBlogSubmitter()
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         threading.Thread(target=self._run, args=(execution_id,), daemon=True).start()
 
     def _run(self, execution_id: UUID) -> None:

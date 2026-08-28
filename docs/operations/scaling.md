@@ -4,8 +4,8 @@
 worker slot**. This page is how that stops being true, in what order, and what
 each step breaks on its way.
 
-Nothing here has been built. Stages 1 to 3 are specified; stage 4 is named so
-the order is visible, and will be specified when it is reached.
+**Stage 1 is built** (2026-08-28). Stages 2 and 3 are specified; stage 4 is
+named so the order is visible, and will be specified when it is reached.
 
 ## The mis-sizing at the centre
 
@@ -23,7 +23,7 @@ Everything below follows from separating the two.
 
 ---
 
-# Stage 1 — split the queues by resource profile
+# Stage 1 — split the queues by resource profile — **built**
 
 | Queue | Operations | Pool | Chromium |
 | --- | --- | --- | --- |
@@ -113,15 +113,37 @@ somebody's article generation. It does **not** meaningfully change pricing:
 worker seconds are about 4% of a short 知言 run's cost, so eight times cheaper
 worker time moves it from 28 额度 to 27.
 
-## Comments this makes false
+## Comments this made false, and what they say now
 
-This repository keeps its reasoning in comments, so these change with the work
+This repository keeps its reasoning in comments, so these changed with the work
 rather than after it:
 
-- `--without-gossip --without-mingle` in `render.yaml` — "There is one."
-- `EXECUTION_QUEUE` in `execution_dispatch.py` — "The one queue this system uses."
-- `limits.md`, **"The one that everything else follows from"** — the whole
-  section is premised on a single slot and needs rewriting, not amending.
+- `--without-gossip --without-mingle` in `render.yaml` — was "There is one."
+  Both workers still set it: they never need to find each other.
+- `EXECUTION_QUEUE` in `execution_dispatch.py` — was "The one queue this system
+  uses." Now `SOURCE_QUEUE` and `PROVIDER_QUEUE`, with `QUEUE_BY_OPERATION`
+  between them and `queue_for` defaulting an unrouted operation to the heavy
+  queue, which is the conservative answer.
+- `limits.md`, **"The one that everything else follows from"** — rewritten
+  rather than amended: the premise was one slot and there are now five.
+
+## Two things the specification above did not anticipate
+
+Both were found building it, and both are the kind that fail quietly.
+
+**A renamed worker never stops being silent.** `worker_state` takes the worst of
+every heartbeat row, so `liyan-worker` — a name nothing writes any more — would
+have held readiness at `silent` permanently after the deploy, naming a process
+that no longer exists. `worker_health.forget_retired_workers` drops a row that
+has been quiet for a week, on the cleanup sweep. Days rather than minutes so the
+two readings stay unconfusable: a quarter of an hour is a fault, a week is a
+decommissioning.
+
+**The pool has to be told the concurrency.** `--concurrency` is passed to Celery
+on the command line and nothing in Python can read it, so `LIYAN_WORKER_CONCURRENCY`
+carries the same number to `share_engine`. They are set together, per service,
+and a pool smaller than the concurrency it serves is exactly the intermittent
+connection exhaustion this stage was supposed to prevent.
 
 ---
 

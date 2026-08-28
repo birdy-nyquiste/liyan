@@ -312,7 +312,7 @@ def file_source_router(
 
     def dispatch(execution_id: UUID) -> None:
         try:
-            dispatcher.dispatch(execution_id)
+            dispatcher.dispatch(execution_id, "parse_file")
         except Exception as error:
             logger.exception("execution_dispatch_failed", extra={"execution_id": str(execution_id)})
             if database.engine is None:

@@ -80,8 +80,15 @@ silently if you skip them.
 ```
 
 ```bash
-.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info
+.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info \
+  --queues=source-processing,provider-runs
 ```
+
+Both queues, in one process. Production splits them across two workers sized
+differently (`scaling.md` stage 1); Local has no memory pressure to justify two
+terminals. Naming them is not optional either way — a worker left to the default
+consumes `source-processing` only, and every 知言 run then sits on
+`provider-runs` with nobody listening, which reports no error anywhere.
 
 ```bash
 .venv/bin/celery -A liyan_server.celery_worker beat --loglevel=info
@@ -232,8 +239,8 @@ Do Staging first and completely; it is the rehearsal for Production.
 ### 1. Create the Blueprint
 
 Render Dashboard → **New → Blueprint**, point it at this repository. It reads
-`render.yaml` and proposes five resources: `liyan-api`, `liyan-worker`,
-`liyan-beat`, `liyan-postgres`, and `liyan-queue`.
+`render.yaml` and proposes six resources: `liyan-api`, `liyan-worker-heavy`,
+`liyan-worker-provider`, `liyan-beat`, `liyan-postgres`, and `liyan-queue`.
 
 For Staging, give every service a distinguishing name (`liyan-api-staging`, and
 so on) so the two environments cannot be confused in the dashboard.
@@ -305,7 +312,7 @@ all:
 | Watch for | Where |
 | --- | --- |
 | Deploy and service failures | Render → service → Settings → Notifications |
-| Memory on `liyan-worker` | Render → service → Metrics → Alerts, near 80% |
+| Memory on `liyan-worker-heavy` | Render → service → Metrics → Alerts, near 80% |
 | `execution_presumed_lost` in logs | Render → service → Settings → Log Streams |
 | `"worker": "beating"` disappearing from `/health/ready` | An external uptime monitor — Render cannot see response bodies |
 

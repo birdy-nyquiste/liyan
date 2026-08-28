@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.
     worker_name: str = "celery-worker"
+    #: How many tasks this worker runs at once. It does not set the concurrency
+    #: — `render.yaml` passes that to Celery — it *reports* it, so the database
+    #: pool can be sized to match. The two are set together per service, and a
+    #: pool smaller than the concurrency it serves is intermittent connection
+    #: exhaustion that reads as a database fault.
+    worker_concurrency: int = 1
 
     @field_validator("database_url")
     @classmethod

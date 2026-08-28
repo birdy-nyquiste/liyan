@@ -470,3 +470,44 @@ def test_every_worker_reports_the_failures_it_records() -> None:
     ]
 
     assert silent == [], f"these workers fail without saying so: {silent}"
+
+
+def test_a_renamed_worker_stops_holding_readiness_red_forever(tmp_path: Path) -> None:
+    """Splitting one worker into two leaves a name nothing writes any more.
+
+    `worker_state` takes the worst of every row, so the retired name would hold
+    readiness at `silent` permanently — naming a process that no longer exists,
+    on a deployment where everything is in fact healthy. Nothing would ever
+    clear it, because clearing it requires a heartbeat only the dead worker
+    could write.
+    """
+    from liyan_server.worker_health import forget_retired_workers
+
+    client, database_url = _client(tmp_path)
+    now = datetime.now(UTC)
+    record_heartbeat(database_url, "liyan-worker", at=now - timedelta(days=8))
+    record_heartbeat(database_url, "liyan-worker-heavy", at=now)
+    record_heartbeat(database_url, "liyan-worker-provider", at=now)
+    record_heartbeat(database_url, "liyan-beat", at=now)
+
+    assert client.get("/health/ready").json()["checks"]["worker"] == "silent"
+
+    forgotten = forget_retired_workers(database_url)
+
+    assert forgotten == ("liyan-worker",)
+    assert client.get("/health/ready").json()["checks"]["worker"] == "beating"
+
+
+def test_a_worker_silent_for_an_hour_is_ill_rather_than_retired(tmp_path: Path) -> None:
+    """The two readings must not be confusable. A quarter of an hour of silence
+    is a fault worth raising; forgetting it would be hiding exactly the failure
+    the heartbeat exists to surface."""
+    from liyan_server.worker_health import forget_retired_workers
+
+    client, database_url = _client(tmp_path)
+    record_heartbeat(
+        database_url, "liyan-worker-provider", at=datetime.now(UTC) - timedelta(hours=1)
+    )
+
+    assert forget_retired_workers(database_url) == ()
+    assert client.get("/health/ready").json()["checks"]["worker"] == "silent"

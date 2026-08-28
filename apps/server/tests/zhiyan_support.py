@@ -196,7 +196,7 @@ class RecordingDispatcher:
         self.liyan_provider = DeterministicLiyanProvider()
         self.blog = DeterministicBlogSubmitter()
 
-    def dispatch(self, execution_id: UUID) -> None:
+    def dispatch(self, execution_id: UUID, operation: str) -> None:
         self.execution_ids.append(execution_id)
 
     def is_reachable(self) -> bool:

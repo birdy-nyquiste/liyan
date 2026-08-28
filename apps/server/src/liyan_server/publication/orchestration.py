@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from liyan_server.database import Database, Execution, PublishTask
 from liyan_server.execution_dispatch import ExecutionDispatcher
+from liyan_server.publication.runs import PUBLISH_OPERATION
 
 logger = logging.getLogger(__name__)
 DISPATCH_FAILED_CODE = "dispatch_failed"
@@ -25,7 +26,7 @@ def dispatch_publication(
     publish_task_id: UUID,
 ) -> None:
     try:
-        dispatcher.dispatch(execution_id)
+        dispatcher.dispatch(execution_id, PUBLISH_OPERATION)
     except Exception as error:
         logger.exception("publication_dispatch_failed", extra={"execution_id": str(execution_id)})
         if database.engine is None:

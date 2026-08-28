@@ -62,8 +62,13 @@ Celery worker, and the scheduled cleanup happens in Celery beat. They are
 separate processes:
 
 ```bash
-.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info
+.venv/bin/celery -A liyan_server.celery_worker worker --loglevel=info \
+  --queues=source-processing,provider-runs
 ```
+
+Both queues in one process: Production splits them across two workers, and
+Local has no reason to. Naming them matters — a worker left to the default takes
+`source-processing` only, and 知言 runs then queue up with nobody listening.
 
 ```bash
 .venv/bin/celery -A liyan_server.celery_worker beat --loglevel=info

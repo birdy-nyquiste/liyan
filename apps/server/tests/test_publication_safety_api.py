@@ -89,13 +89,15 @@ def test_a_publication_that_never_reached_the_queue_is_retried_the_same_way(
     client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
     queued: list[object] = []
 
-    def refuse(execution_id: object) -> None:
+    def refuse(execution_id: object, operation: str) -> None:
         raise RuntimeError("The broker is unreachable.")
 
     dispatcher.dispatch = refuse  # type: ignore[method-assign]
     started = publish(client, headers, task_id=task_id, revision_id=revision["id"])
     assert started.json()["status"] == "failed"
-    dispatcher.dispatch = queued.append  # type: ignore[method-assign,assignment]
+    dispatcher.dispatch = (  # type: ignore[method-assign]
+        lambda execution_id, operation: queued.append(execution_id)
+    )
 
     retried = _retry(client, headers, started.json()["id"], "retry-1")
 

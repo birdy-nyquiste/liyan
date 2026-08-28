@@ -191,7 +191,7 @@ def url_source_router(
 
     def dispatch(execution_id: UUID) -> None:
         try:
-            dispatcher.dispatch(execution_id)
+            dispatcher.dispatch(execution_id, "fetch_url")
         except Exception as error:
             logger.exception(
                 "execution_dispatch_failed",

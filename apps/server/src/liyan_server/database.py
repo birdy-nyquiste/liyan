@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from threading import Lock
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -621,17 +622,68 @@ class WorkerHeartbeat(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+#: One engine per process, for processes that said they wanted one.
+#:
+#: Every worker task builds its own `Database` and disposes it, which at one
+#: task at a time is one pool at a time and nobody notices. Running provider
+#: runs on a thread pool makes it N live pools against one small Postgres, each
+#: willing to open fifteen connections — and the failure is intermittent
+#: connection exhaustion under load, which reads as a database problem rather
+#: than a pool-sizing one. It also stops a fresh TCP and TLS handshake on every
+#: single run.
+#:
+#: Opt-in, and keyed by URL. The API is served by one engine already and tests
+#: build a database per temporary directory; neither should start sharing
+#: because a worker needed to.
+_shared: dict[str, Engine] = {}
+_shared_lock = Lock()
+
+
+def share_engine(database_url: str, *, pool_size: int) -> None:
+    """Declare that this process has one engine, sized for its concurrency.
+
+    Called once, at worker start, before any task runs. `Database` then hands
+    out that engine instead of building one, and `dispose` leaves it alone —
+    a per-task dispose would close the pool the other threads are using.
+    """
+    with _shared_lock:
+        if database_url in _shared:
+            return
+        _shared[database_url] = create_engine(
+            database_url,
+            pool_pre_ping=True,
+            pool_size=pool_size,
+            # Room for a burst without letting a stuck thread hold the whole
+            # pool hostage. Small: the point of this is to bound connections.
+            max_overflow=2,
+            pool_recycle=1_800,
+        )
+
+
+def forget_shared_engines() -> None:
+    """Drop every shared engine. For tests, and for nothing else."""
+    with _shared_lock:
+        for engine in _shared.values():
+            engine.dispose()
+        _shared.clear()
+
+
 class Database:
     def __init__(self, database_url: str) -> None:
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-        try:
-            self.engine: Engine | None = create_engine(
-                database_url,
-                pool_pre_ping=True,
-                connect_args=connect_args,
-            )
-        except SQLAlchemyError:
-            self.engine = None
+        shared = _shared.get(database_url)
+        self._is_shared = shared is not None
+        if shared is not None:
+            self.engine: Engine | None = shared
+        else:
+            try:
+                self.engine = create_engine(
+                    database_url,
+                    pool_pre_ping=True,
+                    connect_args=connect_args,
+                )
+            except SQLAlchemyError:
+                self.engine = None
         self._sessions = (
             sessionmaker(self.engine, expire_on_commit=False) if self.engine is not None else None
         )
@@ -653,5 +705,8 @@ class Database:
             return False
 
     def dispose(self) -> None:
-        if self.engine is not None:
+        # Never the shared one. Its whole purpose is to outlive the task that
+        # borrowed it, and disposing it here would close connections the other
+        # threads of this worker are mid-query on.
+        if self.engine is not None and not self._is_shared:
             self.engine.dispose()

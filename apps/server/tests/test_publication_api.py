@@ -430,7 +430,7 @@ def test_a_publication_that_could_not_be_queued_does_not_wait_forever(
 ) -> None:
     client, headers, dispatcher, task_id, revision = ready_to_publish(tmp_path)
 
-    def refuse(execution_id: object) -> None:
+    def refuse(execution_id: object, operation: str) -> None:
         raise RuntimeError("The broker is unreachable.")
 
     dispatcher.dispatch = refuse  # type: ignore[method-assign]

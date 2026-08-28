@@ -713,12 +713,19 @@ export function AppShell({
     if (currentTaskId === taskId) navigate("/task");
   }
 
-  const sidebar = (
+  /*
+   * Collapsing to a rail is a desktop preference, and it is persisted — so the
+   * drawer, which reuses this, was opening as a column of unlabelled icons for
+   * anyone who had ever collapsed the sidebar on a wide screen. There is no rail
+   * on a phone to collapse into and, now that the drawer hides the collapse
+   * button, no way back out of it either. The drawer always renders expanded.
+   */
+  const sidebarFor = (isCollapsed: boolean) => (
     <Sidebar
       identity={identity}
       accessToken={accessToken}
       tasks={tasks}
-      collapsed={collapsed}
+      collapsed={isCollapsed}
       currentTaskId={currentTaskId}
       theme={preferences.theme}
       text={preferences.text}
@@ -746,6 +753,7 @@ export function AppShell({
       onLoadMore={() => void taskQuery.fetchNextPage()}
     />
   );
+  const sidebar = sidebarFor(collapsed);
 
   return (
     <InterfaceLocaleProvider locale={preferences.locale}>
@@ -774,7 +782,7 @@ export function AppShell({
           <Dialog.Content className="mobile-drawer">
             <Dialog.Title className="sr-only">{preferences.text.navigation}</Dialog.Title>
             <Dialog.Close className="icon-button mobile-drawer__close" aria-label={preferences.text.closeNavigation}><X size={20} /></Dialog.Close>
-            {sidebar}
+            {sidebarFor(false)}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

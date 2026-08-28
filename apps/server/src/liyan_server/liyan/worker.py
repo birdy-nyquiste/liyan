@@ -140,7 +140,12 @@ def _finish_failed(
         if task is None or task.deleted_at is not None:
             execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
-        _record_cost(session, execution, result, chargeable=False)
+        if result is not None:
+            # The article that was refused, kept verbatim, for the same reason
+            # its 知言 counterpart is: the rule it broke is recorded, and only
+            # the text says why it broke it.
+            execution.stale_result = _stale_result(result)
+        _record_failed_cost(session, execution, failure, result)
         recovery = _automatic_attempt(session, execution)
         session.commit()
         follow_up = recovery.id if recovery is not None else None
@@ -259,6 +264,27 @@ def _finish_succeeded(
         record_task_activity(task, at=now)
         _record_cost(session, execution, provider_result, chargeable=True)
         session.commit()
+
+
+def _record_failed_cost(
+    session: Session,
+    execution: Execution,
+    failure: LiyanRunFailure,
+    result: LiyanProviderResult | None,
+) -> None:
+    """What a run that produced no 立言文章 nevertheless consumed.
+
+    A refused article arrives as a `result` and an unusable response does not,
+    but the provider invoiced both. Reading the bill off whichever of the two is
+    present is how a failed 立言 run stops costing an unknown amount.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=False,
+        usage=result.usage if result else failure.usage,
+        model=result.model if result else failure.model,
+    )
 
 
 def _record_cost(

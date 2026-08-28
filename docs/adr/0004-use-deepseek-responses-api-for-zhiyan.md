@@ -8,11 +8,15 @@ The built-in `web_search` and versioned `web_search_2025_08_26` tool types execu
 
 The confirmed MVP model is `deepseek-v4-flash`, matching the 服务端 模块总纲 and Technical Spec §10. The model identifier remains server configuration, so `deepseek-v4-pro` can be evaluated as a higher-quality candidate without changing the domain contract; that evaluation is the open task recorded in Technical Spec §11.1. API keys and account balance are deployment configuration and must never be stored in source control or exposed to the browser.
 
+One 知言 run is one request only while the provider answers in one. Server-side search auto-continuation is capped at ten rounds, and a run that spends all ten searching comes back `completed` with `reasoning` and `web_search_call` items and no message — every search billed and no report. That is not a transport failure and must not be treated as one: the adapter re-sends the stopped call's own output items as `input` (`message`, `reasoning`, and `web_search_call` are accepted input types) and asks it to conclude, at most twice, the last time with `tools` removed so the run cannot spend another turn searching. Search actions and `usage` accumulate across every call, because acceptance admits only evidence the *run* opened and the meter owes what the *run* consumed. This stays within the stateless contract: no `previous_response_id`, no server-side conversation, and every request still carries its complete approved input. Confirmed 2026-08-28.
+
 Strict structured output accepts only a subset of JSON Schema, so the provider-facing report schema omits string-tightening keywords such as `minLength`. Those constraints are still enforced, but by deterministic application acceptance rather than by the provider.
 
 Three live runs against `deepseek-v4-flash` on 2026-08-22 established what the adapter must absorb. Strict `json_schema` does not enforce `additionalProperties`, so the model may add keys the schema never declared; the adapter and report models must drop them rather than fail. Structured output arrives inside a ```json fence intermittently — raw JSON on one call and fenced on the next for the identical request — so the adapter unwraps a fence before the domain sees the text. `web_search_call` `open_page` actions report their URL with a `#ws_call_id=…` fragment appended while the model cites the clean URL, so evidence matching must compare URLs with the fragment removed. A run took 78–96 seconds and consumed roughly 140k input tokens, most of it opened page content, which is what the 300-second default timeout is sized for.
 
-References, verified 2026-08-22:
+`max_tool_calls` is accepted and not enforced — a run capped at six made twenty searches — and there is no top-level `max_output_tokens` on this endpoint at all; the only field of that name is under `reasoning`. Neither may be sent as though it bounded a run. Web search carries no separate fee: results are billed as ordinary input tokens, mostly at the cache-hit rate.
+
+References, verified 2026-08-22, and re-verified 2026-08-28:
 
 - [DeepSeek Responses API reference](https://api-docs.deepseek.com/api/create-response)
 - [DeepSeek Responses API compatibility guide](https://api-docs.deepseek.com/guides/responses_api)

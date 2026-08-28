@@ -17,7 +17,8 @@ from zhiyan_support import confirm_sources, create_session_sources, zhiyan_clien
 
 from liyan_server import credits
 from liyan_server.app import create_app
-from liyan_server.database import CreditEntry, Database, User
+from liyan_server.database import CreditEntry, Database, ExecutionCost, User
+from liyan_server.provider_usage import ProviderUsage
 from liyan_server.rate_card import CAPTURE_CREDITS
 from liyan_server.settings import Settings
 
@@ -256,3 +257,82 @@ def test_usage_still_reads_after_the_task_it_refers_to_is_gone(tmp_path: Path) -
 
     assert rows[0]["description"] == "知言报告"
     assert rows[0]["task_id"] is None, "a row stops leading anywhere rather than leading nowhere"
+
+
+def test_a_search_heavy_failure_costs_立言阁_and_not_the_user(tmp_path: Path) -> None:
+    """Recording what a failed run consumed is not the same as charging for it.
+
+    A 知言 run that spends DeepSeek's ten search rounds and returns no report is
+    now measured exactly — tokens, model, search count — where it used to record
+    nulls. None of that reaches the user's balance: the run produced nothing, so
+    its charge is nought and the 结算 hands back the whole 预扣.
+
+    The gap between the two numbers is the point. `execution_costs` says what
+    the failure cost 立言阁; the ledger says the user paid none of it.
+    """
+    from uuid import UUID
+
+    from zhiyan_support import DeterministicZhiyanProvider
+
+    from liyan_server.zhiyan.provider import (
+        ZhiyanProviderFailure,
+        ZhiyanProviderResult,
+        ZhiyanRequest,
+    )
+    from liyan_server.zhiyan.worker import process_zhiyan_run
+
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    entitle(dispatcher.database_url, credits=100_000)
+    before = balance(dispatcher.database_url)
+    task_id, _ = confirm_sources(client, headers, ["四天工作制已经没有争议"])
+
+    held_amounts = held(dispatcher.database_url, "hold")
+    assert held_amounts and held_amounts[0] < 0, "the 预扣 was taken up front"
+    assert balance(dispatcher.database_url) < before
+
+    class SearchedAndWroteNothing(DeterministicZhiyanProvider):
+        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+            raise ZhiyanProviderFailure(
+                "invalid_provider_response",
+                "知言服务返回了无法使用的结果，请重试。",
+                internal_error="no output text after 3 call(s) and 19 search(es)",
+                usage=ProviderUsage(
+                    input_tokens=180_000,
+                    cached_input_tokens=162_000,
+                    output_tokens=27_000,
+                    reasoning_tokens=27_000,
+                    total_tokens=207_000,
+                ),
+                model="deepseek-v4-flash",
+                search_calls=19,
+            )
+
+    overview = client.get(f"/tasks/{task_id}/zhiyan", headers=headers)
+    execution_id = overview.json()["sources"][0]["execution"]["id"]
+    process_zhiyan_run(
+        dispatcher.database_url,
+        UUID(execution_id),
+        SearchedAndWroteNothing(),
+        dispatcher,
+    )
+
+    database = Database(dispatcher.database_url)
+    assert database.engine is not None
+    try:
+        with Session(database.engine) as session:
+            cost = session.query(ExecutionCost).one()
+            # Measured: this run really did spend this, and 立言阁 really paid it.
+            assert cost.input_tokens == 180_000
+            assert cost.search_calls == 19
+            assert cost.cost_micros is not None and cost.cost_micros > 0
+            # Charged: nothing, because it produced nothing.
+            assert cost.charge_credits == 0
+    finally:
+        database.dispose()
+
+    settlements = held(dispatcher.database_url, "settle")
+    assert len(settlements) == 1
+    assert settlements[0] == -held_amounts[0], "the whole 预扣 came back"
+    # Only the capture fee is gone, and that bought a 来源 the user still has.
+    # The analysis itself cost them nothing.
+    assert balance(dispatcher.database_url) == before - CAPTURE_CREDITS

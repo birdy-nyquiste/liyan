@@ -13,6 +13,7 @@ data and can be counted; the price of the alternative is throwing away real work
 over an accounting field.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -81,4 +82,30 @@ def provider_usage(payload: object) -> ProviderUsage | None:
         output_tokens=output_tokens,
         reasoning_tokens=_detail(block, "output_tokens_details", "reasoning_tokens"),
         total_tokens=_whole(block.get("total_tokens")) or input_tokens + output_tokens,
+    )
+
+
+def combined_usage(usages: Sequence[ProviderUsage | None]) -> ProviderUsage | None:
+    """What a run consumed when it took more than one call to get an answer.
+
+    A 知言 run is one provider call until the provider stops mid-search and has
+    to be asked again (`zhiyan/deepseek`). Each of those calls is invoiced on
+    its own, so what the run cost is their sum — and reading only the last one
+    would report the cheapest call of a run whose whole expense was the earlier
+    ones.
+
+    `None` entries are calls that reported nothing, and they are skipped rather
+    than counted as zero: a run where one call in three came back without a
+    meter has an understated cost, not a wrong one, and the alternative is
+    discarding the two that did report.
+    """
+    present = [usage for usage in usages if usage is not None]
+    if not present:
+        return None
+    return ProviderUsage(
+        input_tokens=sum(usage.input_tokens for usage in present),
+        cached_input_tokens=sum(usage.cached_input_tokens for usage in present),
+        output_tokens=sum(usage.output_tokens for usage in present),
+        reasoning_tokens=sum(usage.reasoning_tokens for usage in present),
+        total_tokens=sum(usage.total_tokens for usage in present),
     )

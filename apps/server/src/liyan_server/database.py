@@ -271,8 +271,16 @@ class Execution(Base):
     result_id: Mapped[UUID | None] = mapped_column(
         Uuid,
     )
-    #: Provider output that arrived too late to become business content, kept for
-    #: tracing only (Technical Spec §6.4). Never returned to a client.
+    #: Provider output that did not become business content, kept for tracing
+    #: only (Technical Spec §6.4). Never returned to a client.
+    #:
+    #: Two ways that happens, and both are kept. Output that arrived too late —
+    #: the run was cancelled, or another run won. And output that arrived and
+    #: was *refused*: a report that failed acceptance is the only evidence of
+    #: why, and discarding it made `invalid_report_schema` a dead end — three
+    #: local runs failed with `JSONDecodeError` at character zero and there is
+    #: no way to find out what the model actually wrote, because this column
+    #: was not written on that path.
     stale_result: Mapped[dict[str, object] | None] = mapped_column(JSON)
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
     request_hash: Mapped[str | None] = mapped_column(String(64))

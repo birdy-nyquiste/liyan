@@ -161,7 +161,12 @@ def _finish_failed(
         if task is None or task.deleted_at is not None:
             execution.cancellation_requested_at = datetime.now(UTC)
         _fail_within(execution, failure)
-        _record_cost(session, execution, result, chargeable=False)
+        if result is not None:
+            # The report that was refused, kept verbatim. Acceptance says which
+            # rule it broke; only the text says why, and the two together are
+            # what turns a recurring rejection into something anybody can fix.
+            execution.stale_result = _stale_result(result)
+        _record_failed_cost(session, execution, failure, result)
         recovery = _automatic_attempt(session, execution)
         session.commit()
         follow_up = recovery.id if recovery is not None else None
@@ -275,6 +280,39 @@ def _finish_succeeded(
         execution.result_id = report.id
         _record_cost(session, execution, result, chargeable=True)
         session.commit()
+
+
+def _record_failed_cost(
+    session: Session,
+    execution: Execution,
+    failure: ZhiyanRunFailure,
+    result: ZhiyanProviderResult | None,
+) -> None:
+    """What a run that produced no 知言报告 nevertheless consumed.
+
+    Two failures with the same code cost very different amounts, and until this
+    existed neither was recorded. An acceptance failure has a `result`, because
+    the report came back and was refused. A provider failure has none — it is
+    raised inside the adapter, after the call has returned and been invoiced but
+    before there is anything to return — so it carries its own bill instead, and
+    that is the expensive kind: a run that searched twenty times and wrote no
+    report is the most costly thing 知言 does.
+
+    The result wins when both are present. It is the whole run, tallied across
+    every call the adapter made; the failure carries only what reached it.
+    """
+    record_execution_cost(
+        session,
+        execution,
+        chargeable=False,
+        usage=result.usage if result else failure.usage,
+        model=result.model if result else failure.model,
+        search_calls=(
+            sum(1 for action in result.search_actions if action.kind == "search")
+            if result
+            else failure.search_calls
+        ),
+    )
 
 
 def _record_cost(

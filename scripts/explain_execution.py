@@ -25,7 +25,7 @@ from liyan_server.settings import Settings
 RECENT = text(
     """
     SELECT id, operation, status, attempt, error_code, error_message,
-           internal_error, created_at, started_at, finished_at
+           internal_error, stale_result, created_at, started_at, finished_at
     FROM executions
     WHERE status IN ('failed', 'stale', 'cancelled')
     ORDER BY COALESCE(finished_at, created_at) DESC
@@ -36,7 +36,7 @@ RECENT = text(
 ONE = text(
     """
     SELECT id, operation, status, attempt, error_code, error_message,
-           internal_error, created_at, started_at, finished_at
+           internal_error, stale_result, created_at, started_at, finished_at
     FROM executions WHERE id = :execution_id
     """
 )
@@ -63,6 +63,47 @@ def _show(row: Any) -> None:
     print(f"  started   {row.started_at or '—'}")
     print(f"  finished  {row.finished_at or '—'}")
     print("  reason    " + (row.internal_error or "— (nothing recorded)"))
+    _show_refused(row)
+
+
+#: How much of a refused report to print. Enough to see how it opens, which is
+#: where a malformed one goes wrong — a `JSONDecodeError` at character zero is
+#: answered by the first line and by nothing after it. The whole of it is on the
+#: row for anyone who wants the rest.
+REFUSED_PREVIEW = 2_000
+
+
+def _show_refused(row: Any) -> None:
+    """What the provider actually returned, when it returned something unusable.
+
+    The code says which rule the output broke. Only the output says why, and
+    without it a recurring rejection is a dead end: three local runs failed
+    `invalid_report_schema` with `JSONDecodeError` at character zero, and no
+    part of the record said whether the model had written prose, a fence this
+    adapter does not unwrap, or nothing recognisable at all.
+
+    Printed here rather than logged, for the reason this whole script exists:
+    the text quotes 来源 bodies back, and that must not reach shipped logs.
+    """
+    refused = row.stale_result
+    if not isinstance(refused, dict):
+        return
+    text_key = next(
+        (key for key in ("report_text", "article_text") if isinstance(refused.get(key), str)),
+        None,
+    )
+    if text_key is None:
+        return
+    body: str = refused[text_key]
+    searches = refused.get("search_actions")
+    if isinstance(searches, list):
+        opened = [action.get("url") for action in searches if isinstance(action, dict)]
+        print(f"  searched  {len(searches)} action(s), {len([u for u in opened if u])} opened")
+    print(f"  returned  {len(body)} characters, refused:")
+    for line in body[:REFUSED_PREVIEW].splitlines() or [""]:
+        print(f"      | {line}")
+    if len(body) > REFUSED_PREVIEW:
+        print(f"      | … {len(body) - REFUSED_PREVIEW} more characters on the row")
 
 
 def main() -> None:

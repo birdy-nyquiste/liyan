@@ -25,7 +25,11 @@ from zhiyan_support import (
 from liyan_server.database import Database, ExecutionCost
 from liyan_server.provider_usage import ProviderUsage
 from liyan_server.rate_card import CAPTURE_CREDITS, RATE_CARD_VERSION
-from liyan_server.zhiyan.provider import ZhiyanProviderResult, ZhiyanRequest
+from liyan_server.zhiyan.provider import (
+    ZhiyanProviderFailure,
+    ZhiyanProviderResult,
+    ZhiyanRequest,
+)
 from liyan_server.zhiyan.worker import process_zhiyan_run
 
 SOURCES = ["四天工作制已经没有争议"]
@@ -211,3 +215,41 @@ def test_a_failed_run_is_free_even_when_nobody_could_price_it(tmp_path: Path) ->
     (cost,) = costs(database_url)
     assert cost.cost_micros is None, "nothing measurable came back"
     assert cost.charge_credits == 0, "and nothing to charge for either"
+
+
+def test_a_search_heavy_run_that_wrote_nothing_is_costed_from_its_own_failure(
+    tmp_path: Path,
+) -> None:
+    """The most expensive thing 知言 does, and until now the least measured.
+
+    A run that spends DeepSeek's ten search rounds and returns no report fails
+    inside the adapter — after the calls returned and were invoiced, and before
+    there is any result object to hand back. So the worker had nothing to meter
+    and wrote a row of nulls, on precisely the runs that spent the most.
+
+    Twelve of twenty-seven local 知言 runs ended this way. Their cost is not
+    recoverable; this is what stops the next twelve from being.
+    """
+
+    class Provider(DeterministicZhiyanProvider):
+        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+            raise ZhiyanProviderFailure(
+                "invalid_provider_response",
+                "知言服务返回了无法使用的结果，请重试。",
+                internal_error="no output text after 3 call(s) and 19 search(es)",
+                usage=USAGE,
+                model="deepseek-v4-flash",
+                search_calls=19,
+            )
+
+    database_url, _ = run_one(tmp_path, Provider())
+
+    (cost,) = costs(database_url)
+    assert cost.operation == "analyze_source"
+    assert cost.model == "deepseek-v4-flash"
+    assert cost.input_tokens == 18_200
+    assert cost.output_tokens == 4_000
+    assert cost.search_calls == 19, "what the run actually did, not what it produced"
+    assert cost.cost_micros is not None and cost.cost_micros > 0
+    # Known exactly, and charged to nobody. That gap is what this product absorbs.
+    assert cost.charge_credits == 0

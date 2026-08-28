@@ -353,3 +353,230 @@ def test_a_report_still_arrives_when_the_provider_reports_no_usage() -> None:
 
     assert result.usage is None
     assert result.report_text
+
+
+# --- Surviving the provider's own search cap ---------------------------------
+#
+# DeepSeek caps server-side search auto-continuation at ten rounds. A model that
+# spends all ten searching returns `status: "completed"` carrying `reasoning`
+# and `web_search_call` items and no message: every search billed, no report.
+#
+# This is not hypothetical. Twelve of twenty-seven local 知言 runs failed with
+# exactly `output items were ['reasoning', 'web_search_call']`, and the
+# provider's search appetite tripled between 2026-08-24 and 2026-08-27 for
+# byte-identical requests — so the more thoroughly 知言 did its job, the more
+# likely it was to lose the whole run.
+
+
+def searched_but_silent(searches: int = 2) -> dict[str, Any]:
+    """A response that used its search rounds up and never wrote the report."""
+    return {
+        "id": "resp_search",
+        "model": "deepseek-v4-flash",
+        "status": "completed",
+        "output": [
+            {"type": "reasoning", "id": "rs_1", "summary": []},
+            *(
+                {
+                    "type": "web_search_call",
+                    "id": f"ws_{index}",
+                    "status": "completed",
+                    "action": {"type": "search", "query": f"查询 {index}"},
+                }
+                for index in range(searches)
+            ),
+            {
+                "type": "web_search_call",
+                "id": "ws_open",
+                "status": "completed",
+                "action": {"type": "open_page", "url": "https://gov.example/report"},
+            },
+        ],
+        "usage": {
+            "input_tokens": 60_000,
+            "input_tokens_details": {"cached_tokens": 54_000},
+            "output_tokens": 9_000,
+            "output_tokens_details": {"reasoning_tokens": 9_000},
+            "total_tokens": 69_000,
+        },
+    }
+
+
+def replying(payloads: list[dict[str, Any]], recorder: list[Any]) -> Any:
+    """A provider that answers each successive call from `payloads`."""
+
+    def post(url: str, headers: dict[str, str], body: dict[str, Any]) -> ProviderHttpResponse:
+        recorder.append(body)
+        return ProviderHttpResponse(200, payloads[min(len(recorder) - 1, len(payloads) - 1)])
+
+    return DeepSeekZhiyanProvider(api_key="test-key", post=post)
+
+
+def test_a_run_that_spent_its_searches_is_asked_again_rather_than_failed() -> None:
+    sent: list[Any] = []
+    finished = completed_payload()
+    finished["usage"] = {
+        "input_tokens": 70_000,
+        "input_tokens_details": {"cached_tokens": 68_000},
+        "output_tokens": 4_000,
+        "total_tokens": 74_000,
+    }
+
+    result = replying([searched_but_silent(), finished], sent).analyze(a_request())
+
+    assert len(sent) == 2, "the silent first call is continued, not surrendered"
+    assert result.report_text == '{"overview": "ok"}'
+
+
+def test_a_continued_run_keeps_the_pages_the_earlier_call_opened() -> None:
+    """Acceptance only admits evidence the run actually opened, so a run that
+    searched in call one and wrote in call two must carry call one's pages —
+    otherwise every citation it makes is rejected as `unopened_evidence`."""
+    sent: list[Any] = []
+
+    result = replying([searched_but_silent(), completed_payload()], sent).analyze(a_request())
+
+    assert "https://gov.example/report" in result.opened_urls
+    assert [action.kind for action in result.search_actions] == [
+        "search",
+        "search",
+        "open_page",
+        "search",
+        "open_page",
+        "find_in_page",
+    ]
+
+
+def test_a_continuation_hands_the_provider_back_what_it_already_did() -> None:
+    """The API is stateless, so resuming means re-sending. The items go back
+    verbatim: `web_search_call` carries provider-owned ids and fields this
+    adapter does not model, and a reconstructed item is a different item."""
+    sent: list[Any] = []
+
+    replying([searched_but_silent(), completed_payload()], sent).analyze(a_request())
+
+    resumed = sent[1]["input"]
+    assert resumed[0]["content"][0]["text"].startswith("<run-metadata>")
+    assert {"type": "reasoning", "id": "rs_1", "summary": []} in resumed
+    assert any(item.get("id") == "ws_open" for item in resumed)
+    assert "知言报告 JSON" in resumed[-1]["content"][0]["text"]
+
+
+def test_the_last_call_of_a_run_takes_the_search_tool_away() -> None:
+    """A model asked to conclude while it can still search will sometimes search
+    instead, and the last call of a run has to return something."""
+    sent: list[Any] = []
+
+    with pytest.raises(ZhiyanProviderFailure):
+        replying([searched_but_silent()], sent).analyze(a_request())
+
+    assert len(sent) == 3
+    assert sent[0]["tools"] == [{"type": "web_search"}]
+    assert sent[1]["tools"] == [{"type": "web_search"}], "one more chance to finish searching"
+    assert sent[2]["tools"] == []
+    assert sent[2]["tool_choice"] == "none"
+
+
+def test_a_run_that_never_writes_a_report_still_records_what_it_spent() -> None:
+    """The failure that costs the most is the one that recorded nothing.
+
+    Every one of these calls searched, and every one was invoiced. Before the
+    failure carried its own bill, `execution_costs` held nulls for exactly the
+    runs that spent the most — so the meter was blindest where the money was.
+    """
+    sent: list[Any] = []
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        replying([searched_but_silent()], sent).analyze(a_request())
+
+    assert failure.value.code == "invalid_provider_response"
+    assert failure.value.model == "deepseek-v4-flash"
+    assert failure.value.usage is not None
+    assert failure.value.usage.input_tokens == 180_000, "three calls, summed"
+    assert failure.value.usage.cached_input_tokens == 162_000
+    assert failure.value.usage.output_tokens == 27_000
+    assert failure.value.search_calls == 6
+    assert "3 call(s) and 6 search(es)" in (failure.value.internal_error or "")
+
+
+def test_a_transport_failure_mid_run_still_owes_the_calls_that_went_through() -> None:
+    sent: list[Any] = []
+
+    def post(url: str, headers: dict[str, str], body: dict[str, Any]) -> ProviderHttpResponse:
+        sent.append(body)
+        if len(sent) == 1:
+            return ProviderHttpResponse(200, searched_but_silent())
+        return ProviderHttpResponse(503, None, body_text="upstream is unwell")
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        DeepSeekZhiyanProvider(api_key="test-key", post=post).analyze(a_request())
+
+    assert failure.value.code == "provider_unavailable"
+    assert failure.value.usage is not None
+    assert failure.value.usage.input_tokens == 60_000
+
+
+def test_a_run_forbidden_to_search_is_never_continued() -> None:
+    """Nothing was resumed from, so asking again is a retry — which is
+    `recovery`'s decision and subject to `recovery`'s limits, not a free extra
+    call hidden inside one run."""
+    sent: list[Any] = []
+    payload = completed_payload()
+    payload["output"] = [{"type": "reasoning", "id": "rs_1"}]
+
+    with pytest.raises(ZhiyanProviderFailure):
+        replying([payload], sent).analyze(a_request(ToolPolicy(web_search_enabled=False)))
+
+    assert len(sent) == 1
+
+
+def test_a_completed_run_needs_no_continuation() -> None:
+    sent: list[Any] = []
+
+    replying([completed_payload()], sent).analyze(a_request())
+
+    assert len(sent) == 1
+
+
+def test_a_refusal_is_not_something_to_ask_again_about() -> None:
+    sent: list[Any] = []
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "message", "content": [{"type": "refusal", "refusal": "不能协助"}]}
+    ]
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        replying([payload], sent).analyze(a_request())
+
+    assert failure.value.code == "provider_refused"
+    assert len(sent) == 1
+
+
+def test_the_request_sends_no_max_tool_calls() -> None:
+    """DeepSeek accepts it and does not enforce it — a run capped at six made
+    twenty — so sending it would read as a bound that is not one."""
+    assert "max_tool_calls" not in request_body(a_request())
+
+
+def test_a_socket_that_dies_late_still_owes_the_calls_that_went_through() -> None:
+    """`_post` cannot see the run's tally, so without this a run whose third
+    call timed out would report having cost nothing — when the first two are
+    the whole of what a search-heavy run spends."""
+    sent: list[Any] = []
+
+    def post(url: str, headers: dict[str, str], body: dict[str, Any]) -> ProviderHttpResponse:
+        sent.append(body)
+        if len(sent) == 1:
+            return ProviderHttpResponse(200, searched_but_silent())
+        raise ZhiyanProviderFailure(
+            "provider_unavailable", "知言服务暂时不可用，请稍后重试。", "ReadTimeout()"
+        )
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        DeepSeekZhiyanProvider(api_key="test-key", post=post).analyze(a_request())
+
+    assert failure.value.code == "provider_unavailable"
+    assert failure.value.internal_error == "ReadTimeout()"
+    assert failure.value.usage is not None
+    assert failure.value.usage.input_tokens == 60_000
+    assert failure.value.search_calls == 2

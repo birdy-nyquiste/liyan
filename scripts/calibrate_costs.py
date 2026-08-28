@@ -373,6 +373,95 @@ def report(rows: list[Measured]) -> None:
     )
 
 
+def deepseek_balance(api_key: str, base_url: str) -> dict[str, float] | None:
+    """What DeepSeek says is left on the account, per currency.
+
+    The only number in this whole system that comes from the provider as money
+    rather than as tokens. `usage` reports tokens and `rate_card` turns them
+    into dollars, and nothing has ever checked that arithmetic against what
+    DeepSeek actually took — not the peak/off-peak split, not the assumption
+    that `input_tokens` includes `cached_tokens`, not the claim that web search
+    carries no separate fee. If any of those is wrong, every cost in
+    `execution_costs` is wrong the same way, and silently.
+
+    Every currency, not the one this script would prefer. An account carries a
+    slot per currency and spends the one it was funded in: the account this was
+    written against reads `USD 0.00` beside `CNY 10.07`, so picking USD would
+    have reported that a batch of real runs cost nothing at all.
+
+    `GET /user/balance` is account-wide and the only billing endpoint DeepSeek
+    offers: there is no per-request cost, no usage history, and no lookup by
+    response id. So this is a before-and-after on a quiet key, not an audit.
+    """
+    try:
+        response = httpx.get(
+            f"{base_url.rstrip('/')}/user/balance",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        infos = response.json().get("balance_infos") or []
+        return {str(info["currency"]): float(info["total_balance"]) for info in infos}
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
+        print(f"  (could not read the DeepSeek balance: {error!r})")
+        return None
+
+
+def reconcile(
+    before: dict[str, float] | None,
+    after: dict[str, float] | None,
+    rows: list[Measured],
+) -> None:
+    """What the meter computed, against what the account actually lost.
+
+    A close match is the only evidence available that the rate card is right.
+    A gap says one of its assumptions is not, and which one is then worth
+    hunting: a factor of about two points at the peak/off-peak window, and a
+    factor of tens points at cache accounting.
+
+    The rate card is quoted in USD, from DeepSeek's published USD price list.
+    An account spending CNY is not being charged those numbers, and no CNY list
+    is documented — so a CNY fall is reported as what it is and converted by
+    nobody. Comparing it to the USD figure is a decision for whoever reads this,
+    with today's rate in hand.
+    """
+    print("\nWhat DeepSeek actually charged")
+    if before is None or after is None:
+        print("  — no balance reading; set LIYAN_DEEPSEEK_API_KEY to reconcile.")
+        return
+    metered = sum(row.cost_micros for row in rows if row.cost_micros is not None) / 1e6
+    unpriced = sum(1 for row in rows if row.cost_micros is None)
+    print(f"  execution_costs total      {metered:.6f} USD over {len(rows)} run(s)")
+    if unpriced:
+        print(f"    — {unpriced} run(s) recorded no cost and are not in that total")
+
+    moved = {
+        currency: before.get(currency, 0.0) - amount
+        for currency, amount in after.items()
+        if abs(before.get(currency, 0.0) - amount) > 1e-9
+    }
+    if not moved:
+        print("  account did not measurably fall.")
+        print("  DeepSeek settles asynchronously: three live runs on 2026-08-28")
+        print("  left the balance reading unchanged immediately afterwards. Read")
+        print("  it again later rather than concluding the runs were free.")
+        return
+    for currency, spent in sorted(moved.items()):
+        print(f"  account fell by            {spent:.6f} {currency}")
+        if currency != "USD":
+            print("    — the rate card is in USD and DeepSeek publishes no CNY list.")
+            print("      Convert at today's rate before drawing a conclusion.")
+            continue
+        if spent <= 0:
+            continue
+        print(f"  meter / actual             {metered / spent:.2f}×")
+        if not 0.8 <= metered / spent <= 1.25:
+            print("    — off by more than a quarter. Suspect, in order: the")
+            print("      peak/off-peak window (≈2×), cache accounting (≈30×), or")
+            print("      a search fee this rate card says does not exist.")
+    print("  This is account-wide. Anything else using the same key is in it too.")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)
@@ -391,6 +480,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="A URL 来源, repeatable. Measures what capturing one costs.",
     )
     parser.add_argument("--timeout", type=float, default=600.0)
+    parser.add_argument(
+        "--deepseek-key",
+        default=os.environ.get("LIYAN_DEEPSEEK_API_KEY", ""),
+        help="Reconcile the meter against the real account balance.",
+    )
+    parser.add_argument(
+        "--deepseek-base-url",
+        default=os.environ.get("LIYAN_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+    )
     parser.add_argument(
         "--articles",
         action="store_true",
@@ -417,6 +515,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{len(args.urls)} URL 来源")
     by_name: dict[str, Piece] = {piece.name: piece for piece in pieces}
 
+    opening = (
+        deepseek_balance(args.deepseek_key, args.deepseek_base_url)
+        if args.deepseek_key
+        else None
+    )
+    if opening:
+        stated = ", ".join(f"{amount:.6f} {code}" for code, amount in sorted(opening.items()))
+        print(f"DeepSeek balance before    {stated}")
+
     with _client(args.base_url, args.token) as client:
         for piece in pieces:
             _, task_id, revision_id = submit(client, piece)
@@ -434,7 +541,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             if state == "succeeded" and args.articles:
                 print(f"  {'':<30} 立言 {generate_article(client, task_id, args.timeout)}")
 
-    report(measured_costs(args.database_url, by_name))
+    rows = measured_costs(args.database_url, by_name)
+    report(rows)
+    closing = (
+        deepseek_balance(args.deepseek_key, args.deepseek_base_url)
+        if args.deepseek_key
+        else None
+    )
+    reconcile(opening, closing, rows)
     return 0
 
 

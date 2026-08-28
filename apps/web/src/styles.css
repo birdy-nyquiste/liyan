@@ -3332,3 +3332,25 @@ a.source-meta:focus-visible .source-meta__value {
   margin-right: var(--space-3xs);
   opacity: 0.7;
 }
+
+/* What spends 额度 and what does not, side by side so neither reads as a caveat. */
+.account-spending {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+.account-spending h2 {
+  margin: 0 0 var(--space-2xs);
+}
+
+.account-spending ul {
+  margin: 0;
+  padding-left: var(--space-sm);
+  color: var(--ink-muted);
+}
+
+.account-spending li {
+  margin-bottom: var(--space-3xs);
+}

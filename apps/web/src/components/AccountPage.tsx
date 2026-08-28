@@ -21,7 +21,14 @@ const copy = {
     loadMore: "加载更多",
     failed: "账户信息加载失败，请稍后重试。",
     locked: "购买额度后可使用公共文章链接与上传文件作为来源。",
-    unlocked: "公共文章链接与上传文件已解锁。",
+    spends: "消耗额度",
+    spendsFree: "不消耗额度",
+    spendCapture: "添加来源",
+    spendZhiyan: "知言分析",
+    spendLiyan: "立言生成（含每次重新生成）",
+    freePublish: "发布",
+    freeFailed: "失败的分析与生成",
+    freeUnchanged: "重复分析未改动的来源",
     running: "进行中",
     done: "已完成",
     failedRun: "失败",
@@ -39,7 +46,14 @@ const copy = {
     loadMore: "Load more",
     failed: "The account could not be loaded. Try again shortly.",
     locked: "Buying credits unlocks article links and uploaded files as sources.",
-    unlocked: "Article links and uploaded files are unlocked.",
+    spends: "Spends credits",
+    spendsFree: "Free",
+    spendCapture: "Adding a source",
+    spendZhiyan: "知言 analysis",
+    spendLiyan: "立言 generation, including every regeneration",
+    freePublish: "Publishing",
+    freeFailed: "Analyses and generations that failed",
+    freeUnchanged: "Re-analysing an unchanged source",
     running: "Running",
     done: "Done",
     failedRun: "Failed",
@@ -120,9 +134,30 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
         </output>
       </div>
 
-      <p className="account-entitlement">
-        {account?.is_paying_user ? text.unlocked : text.locked}
-      </p>
+      {/*
+        What spends 额度, said here because nothing quotes a price before an act
+        and 使用记录 only explains one afterwards. The second column matters as
+        much as the first: a user who does not know a failed run is free will
+        assume it was not.
+      */}
+      <div className="account-spending">
+        <div>
+          <h2>{text.spends}</h2>
+          <ul>
+            <li>{text.spendCapture}</li>
+            <li>{text.spendZhiyan}</li>
+            <li>{text.spendLiyan}</li>
+          </ul>
+        </div>
+        <div>
+          <h2>{text.spendsFree}</h2>
+          <ul>
+            <li>{text.freePublish}</li>
+            <li>{text.freeFailed}</li>
+            <li>{text.freeUnchanged}</li>
+          </ul>
+        </div>
+      </div>
 
       <h2>{text.packs}</h2>
       <ul className="account-packs">
@@ -135,6 +170,9 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
           </li>
         ))}
       </ul>
+      {!account?.is_paying_user ? (
+        <p className="account-entitlement">{text.locked}</p>
+      ) : null}
       <p className="account-packs__note">{text.packsSoon}</p>
 
       <h2>{text.history}</h2>

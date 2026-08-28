@@ -1685,6 +1685,8 @@ export interface components {
             kind: string;
             /** Description */
             description: string;
+            /** Task Id */
+            task_id: string | null;
             status: components["schemas"]["ActivityStatus"];
             /** Amount */
             amount: number;

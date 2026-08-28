@@ -94,6 +94,8 @@ def test_a_run_that_never_reached_the_provider_is_costed_as_unknown(tmp_path: Pa
     have been billed for what the model generated before it broke, or may not
     have been billed at all, and 立言阁 cannot tell which from here. A null says
     that; a zero would claim to know.
+
+    The charge is a different question, and it is nought — see below.
     """
 
     class Provider(DeterministicZhiyanProvider):
@@ -106,7 +108,6 @@ def test_a_run_that_never_reached_the_provider_is_costed_as_unknown(tmp_path: Pa
     assert cost.operation == "analyze_source"
     assert cost.input_tokens is None
     assert cost.cost_micros is None
-    assert cost.charge_credits is None
 
 
 def test_a_report_nobody_kept_was_invoiced_all_the_same(tmp_path: Path) -> None:
@@ -188,3 +189,25 @@ def test_a_url_capture_is_costed_from_the_worker_it_held(tmp_path: Path) -> None
     assert cost.cost_micros is not None
     assert cost.worker_milliseconds is not None
     assert cost.charge_credits == CAPTURE_CREDITS
+
+
+def test_a_failed_run_is_free_even_when_nobody_could_price_it(tmp_path: Path) -> None:
+    """The two questions are asked in order: is there anything to charge for,
+    and only then what did it cost.
+
+    A 知言 run that fails in transport leaves its cost unknown — the provider may
+    have billed for what it generated before it broke, or not at all. Recording
+    that as an unknown *charge* is a different claim, and `settle` reads an
+    unknown charge as "the 预扣 stands": the user pays the full estimate for a
+    run that gave them nothing. This is how 170 额度 went missing once.
+    """
+
+    class Provider(DeterministicZhiyanProvider):
+        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+            raise unavailable()
+
+    database_url, _ = run_one(tmp_path, Provider())
+
+    (cost,) = costs(database_url)
+    assert cost.cost_micros is None, "nothing measurable came back"
+    assert cost.charge_credits == 0, "and nothing to charge for either"

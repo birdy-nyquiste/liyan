@@ -5220,6 +5220,17 @@
             "type": "string",
             "title": "Description"
           },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
           "status": {
             "$ref": "#/components/schemas/ActivityStatus"
           },
@@ -5249,6 +5260,7 @@
           "id",
           "kind",
           "description",
+          "task_id",
           "status",
           "amount",
           "held",

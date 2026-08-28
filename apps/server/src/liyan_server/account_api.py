@@ -25,9 +25,10 @@ from liyan_server.database import (
     Database,
     Execution,
     LiyanArticle,
+    Source,
     SourcePreparation,
     SourceRevision,
-    Task,
+    TaskVersion,
     User,
 )
 from liyan_server.execution_states import TERMINAL_EXECUTION_STATUSES
@@ -50,10 +51,12 @@ class AccountResponse(BaseModel):
 class UsageEntry(BaseModel):
     id: str
     kind: str
-    #: What this was, in the user's own terms — a 来源's title, an article, a
-    #: purchase. Falls back to the act's name when whatever it referred to has
-    #: since been deleted: the ledger outlives the 立言任务.
+    #: What this act was — 来源抓取, 知言报告, 立言文章 — and nothing about what it
+    #: was on. The 立言任务 it belongs to is a link rather than a title.
     description: str
+    #: Where this leads, when it still leads anywhere. Absent once the 立言任务
+    #: has been deleted: the ledger outlives it.
+    task_id: str | None
     status: ActivityStatus
     #: Signed, and already net of any 结算. What the balance actually moved by.
     amount: int
@@ -68,39 +71,57 @@ class UsageResponse(BaseModel):
     has_more: bool
 
 
+#: What each act is called, in the same words the rest of the product uses for
+#: it. `CONTEXT.md` defines them; the account page should not invent its own.
 _LABELS = {
     "grant": "赠送额度",
     "purchase": "购买额度",
     "clawback": "额度退回",
-    "capture": "添加来源",
+    "capture": "来源抓取",
+}
+
+_TARGET_LABELS = {
+    credits.SOURCE_PREPARATION: "来源抓取",
+    "source_revision": "知言报告",
+    "liyan_article": "立言文章",
 }
 
 
-def _describe(session: Session, entry: CreditEntry) -> str:
-    """Name this act the way the user would.
+def _label(entry: CreditEntry) -> str:
+    """What this act was.
 
-    Every lookup can miss. `cleanup` removes 立言任务 and cascades into their
-    来源, while these rows are deliberately kept — so a 使用记录 older than a
-    deleted task still has to read as something.
+    The name alone, without the 来源 it was about: a row that read 分析来源《…》
+    named the thing twice over, once in words this product does not use, and the
+    title it appended is better reached by going there.
     """
-    if entry.target_type == credits.SOURCE_PREPARATION and entry.target_id:
-        source = session.get(SourcePreparation, entry.target_id)
-        return f"添加来源《{source.title}》" if source and source.title else "添加来源"
-    if entry.target_type == "source_revision" and entry.target_id:
-        revision = session.get(SourceRevision, entry.target_id)
-        return f"分析来源《{revision.title}》" if revision else "分析来源"
-    if entry.target_type == "liyan_article" and entry.target_id:
-        article = session.get(LiyanArticle, entry.target_id)
-        task = (
-            session.scalar(
-                select(Task).where(Task.current_version_id == article.task_version_id)
-            )
-            if article
-            else None
-        )
-        name = task.display_name if task and task.display_name else None
-        return f"生成文章《{name}》" if name else "生成文章"
+    if entry.target_type:
+        return _TARGET_LABELS.get(entry.target_type, "额度变动")
     return _LABELS.get(entry.kind, "额度变动")
+
+
+def _task_id(session: Session, entry: CreditEntry) -> str | None:
+    """The 立言任务 this act belongs to, so the row can lead back to it.
+
+    Every hop can miss. `cleanup` removes 立言任务 and cascades into their 来源
+    while these rows are deliberately kept, so a 使用记录 older than a deleted
+    task simply stops being a link rather than becoming a broken one.
+    """
+    if entry.target_id is None:
+        return None
+    if entry.target_type == credits.SOURCE_PREPARATION:
+        preparation = session.get(SourcePreparation, entry.target_id)
+        if preparation is None or preparation.confirmed_task_id is None:
+            return None
+        return str(preparation.confirmed_task_id)
+    if entry.target_type == "source_revision":
+        revision = session.get(SourceRevision, entry.target_id)
+        source = session.get(Source, revision.source_id) if revision else None
+        return str(source.task_id) if source else None
+    if entry.target_type == "liyan_article":
+        article = session.get(LiyanArticle, entry.target_id)
+        version = session.get(TaskVersion, article.task_version_id) if article else None
+        return str(version.task_id) if version else None
+    return None
 
 
 def _status(session: Session, entry: CreditEntry, settled: bool) -> ActivityStatus:
@@ -184,7 +205,8 @@ def account_router(database: Database, current_user: CurrentUserDependency) -> A
                 UsageEntry(
                     id=str(entry.id),
                     kind=entry.kind,
-                    description=_describe(session, entry),
+                    description=_label(entry),
+                    task_id=_task_id(session, entry),
                     status=_status(session, entry, settlement is not None),
                     amount=entry.amount + (settlement.amount if settlement else 0),
                     held=abs(entry.amount) if entry.kind == "hold" else None,

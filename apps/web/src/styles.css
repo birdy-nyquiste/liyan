@@ -3347,3 +3347,14 @@ a.source-meta:focus-visible .source-meta__value {
   margin: var(--space-sm) 0 0;
   color: var(--ink-muted);
 }
+
+/* A 使用记录 row leads to the 立言任务 it belongs to. */
+a.account-usage__what {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.account-usage__what:hover,
+a.account-usage__what:focus-visible {
+  text-decoration: underline;
+}

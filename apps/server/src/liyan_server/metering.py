@@ -62,12 +62,20 @@ def _charge(operation: str, cost_micros: int | None, chargeable: bool) -> int | 
 
     Capture is a flat fee and is known before it runs, so its charge does not
     follow its measurement — which is the point of recording both.
+
+    Whether there is anything to charge for is asked before what it cost. A run
+    that produced nothing is free however much it cost, and a cost recorded as
+    unknown must not be read later as a charge nobody could put a number to:
+    `settle` treats an unknown charge as "the 预扣 stands", which for a failed run
+    means the user paying in full for nothing.
     """
+    if not chargeable:
+        return 0
     if operation in FLAT_CHARGED_OPERATIONS:
-        return CAPTURE_CREDITS if chargeable else 0
+        return CAPTURE_CREDITS
     if cost_micros is None:
         return None
-    return credits_for(cost_micros) if chargeable else 0
+    return credits_for(cost_micros)
 
 
 def record_execution_cost(

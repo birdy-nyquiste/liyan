@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import {
   getAccount,
@@ -150,7 +151,19 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
         <ul className="account-usage">
           {entries.map((entry) => (
             <li key={entry.id} className="account-usage__row">
-              <span className="account-usage__what">{entry.description}</span>
+              {/*
+                The act's name is the link. It leads to the 立言任务 the act
+                belongs to, which is where anything more about it lives — the
+                row used to append the 来源's title instead, naming the same
+                thing twice and taking you nowhere.
+              */}
+              {entry.task_id ? (
+                <Link className="account-usage__what" to={`/task/${entry.task_id}`}>
+                  {entry.description}
+                </Link>
+              ) : (
+                <span className="account-usage__what">{entry.description}</span>
+              )}
               {statusLabel[entry.status] ? (
                 <span className="account-usage__status">{statusLabel[entry.status]}</span>
               ) : null}

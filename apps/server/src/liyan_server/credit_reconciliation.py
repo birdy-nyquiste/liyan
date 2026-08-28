@@ -84,8 +84,17 @@ def reconcile_settlements(database_url: str, *, now: datetime | None = None) -> 
                         continue
                     actual: int | None = 0
                 elif execution.status in TERMINAL_EXECUTION_STATUSES:
+                    # A run that did not succeed is free, whatever it cost and
+                    # whatever was recorded about it. Reading a stored charge
+                    # here would trust a row that may have been written by an
+                    # older worker — and one written as unknown would be settled
+                    # as "the 预扣 stands", which is a user paying for nothing.
                     cost = session.get(ExecutionCost, execution.id)
-                    actual = 0 if cost is None else cost.charge_credits
+                    actual = (
+                        0
+                        if execution.status != "succeeded" or cost is None
+                        else cost.charge_credits
+                    )
                 else:
                     continue
                 entry = settle(

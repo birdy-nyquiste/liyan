@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext } from "react";
 export type InterfaceLocale = "zh" | "en";
 
 const ENGLISH: Record<string, string> = {
+  "购买额度": "Buy credits",
   "恢复这个历史 Revision？": "Restore this historical Revision?",
   "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？": "Restoring a historical Revision overwrites the unsaved changes in your working copy.",
   "恢复": "Restore",
@@ -278,6 +279,8 @@ const DOMAIN_MESSAGES: Record<string, { zh: string; en: string }> = {
   worker_never_started: { zh: "这次运行未能启动，可以重新发起。", en: "This run did not start. You can start it again." },
   dispatch_failed: { zh: "提交未能启动，请稍后重试。", en: "The submission could not start. Please try again later." },
   outcome_unknown: { zh: "本次提交结果未知，立言阁不会重发；请到 Blog 查看后再决定。", en: "The outcome is unknown, so Liyan Pavilion will not resend. Check Blog before deciding what to do." },
+  "额度不足，购买后可继续。": { zh: "额度不足，购买后可继续。", en: "Not enough credits. Buy more to continue." },
+  "公共文章链接与上传文件需购买额度后解锁。": { zh: "公共文章链接与上传文件需购买额度后解锁。", en: "Article links and uploaded files unlock once you have bought credits." },
   "关联的发布任务仍在执行，结束后才能删除立言任务。": { zh: "关联的发布任务仍在执行，结束后才能删除立言任务。", en: "This task cannot be deleted while its publication is still running." },
   "Blog 暂时无法提交，请稍后重试。": { zh: "Blog 暂时无法提交，请稍后重试。", en: "Blog is temporarily unable to accept the submission. Please try again later." },
   "发布未能启动，请稍后重试。": { zh: "发布未能启动，请稍后重试。", en: "Publication could not start. Please try again later." },

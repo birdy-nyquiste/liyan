@@ -22,3 +22,17 @@ export const SOURCE_PREPARATION_POLL_MS = 750;
 
 /** 知言 runs, 立言 generation, and Blog submission: provider-paced work. */
 export const EXECUTION_POLL_MS = 2000;
+
+/**
+ * A return from Stripe Checkout, waiting for the webhook that credits 额度.
+ *
+ * Fast, like intake, and for the same reason: a user is watching, having just
+ * paid. It is also the one poll here with an end — `CHECKOUT_POLL_TIMEOUT_MS`,
+ * after which the page stops asking and says the 额度 are coming, because Alipay
+ * and WeChat Pay settle late by design and a spinner that never stops reads as
+ * a payment that failed.
+ */
+export const CHECKOUT_POLL_MS = 1000;
+
+/** How long the return waits before saying so. Not an error when it elapses. */
+export const CHECKOUT_POLL_TIMEOUT_MS = 20_000;

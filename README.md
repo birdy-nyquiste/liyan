@@ -18,6 +18,7 @@ cp .env.example .env
 | `LIYAN_R2_*` | Uploading PDF, DOCX, TXT, or Markdown 来源 | Everything else, including pasted text and URL 来源 |
 | `LIYAN_DEEPSEEK_API_KEY` | Producing 知言报告 and 立言文章 | Task creation and 来源 intake |
 | `LIYAN_PUBLICATION_TARGETS`, `LIYAN_BLOG_INGEST_TOKEN` | Publishing a Revision to Blog | Everything up to publication |
+| `LIYAN_STRIPE_*` | Buying 额度 | Everything else, including spending the 额度 a user already has |
 
 Each of these announces itself at startup and through `/health/ready`, so a gap
 is visible before a user trips over it rather than after.
@@ -54,6 +55,35 @@ LIYAN_LIVE_R2=1 .venv/bin/python -m pytest apps/server/tests/test_r2_live_contra
 
 It writes one object to the configured bucket and deletes it again. The default
 suite skips it and stays offline.
+
+### Buying 额度 needs Stripe
+
+Three settings, required together: `LIYAN_STRIPE_SECRET_KEY`,
+`LIYAN_STRIPE_WEBHOOK_SECRET`, and `LIYAN_STRIPE_CREDIT_PACKS`. With any of
+them blank the workbench says 购买功能尚未开放 rather than offering a button that
+cannot work, and `/health/ready` reports `checks.billing: "unconfigured"`.
+
+A secret key without a signing secret is the half-configuration worth naming:
+Checkout would open and nothing would ever credit, so it reports as
+unconfigured too.
+
+Fulfillment happens on the webhook, never on the redirect back — a user who
+closes the tab after paying has still paid. Developing against it therefore
+needs Stripe's own forwarder, which prints the signing secret to use:
+
+```bash
+stripe listen --forward-to localhost:8000/webhooks/stripe
+```
+
+Once it is configured, an opt-in test proves the 额度包 in `.env` are Prices
+that actually exist in that account, and that they still charge what
+`docs/operations/credits.md` says an 额度包 costs:
+
+```bash
+LIYAN_LIVE_STRIPE=1 .venv/bin/python -m pytest apps/server/tests/test_stripe_live_contract.py
+```
+
+It opens a Checkout Session and pays nothing. Point it at a sandbox.
 
 ### Background work needs two processes
 

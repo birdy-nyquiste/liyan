@@ -160,6 +160,80 @@
         }
       }
     },
+    "/account/credit-packs": {
+      "get": {
+        "tags": [
+          "billing"
+        ],
+        "summary": "List Credit Packs",
+        "description": "Every 额度包 on offer, in the order an operator configured them.\n\nEmpty is a legitimate answer, not an error: a deployment without Stripe\nconfigured sells nothing, and the workbench says so rather than\noffering a button that cannot work.",
+        "operationId": "list_credit_packs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPacksResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/account/checkout-session": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "summary": "Create Checkout Session",
+        "description": "Open a Stripe Checkout Session for one 额度包.\n\nA Price this deployment does not sell is refused here rather than at\nfulfillment. Passing it through would open a Session that takes money\nand then credits nothing, which is the worst available ordering of\nthose two events.",
+        "operationId": "create_checkout_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/tasks": {
       "get": {
         "tags": [
@@ -2385,6 +2459,13 @@
           "none"
         ]
       },
+      "BillingState": {
+        "type": "string",
+        "enum": [
+          "configured",
+          "unconfigured"
+        ]
+      },
       "Body_create_file_source": {
         "properties": {
           "client_session_id": {
@@ -2422,6 +2503,34 @@
           "file"
         ],
         "title": "Body_replace_file_source"
+      },
+      "CheckoutRequest": {
+        "properties": {
+          "price_id": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Price Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "price_id"
+        ],
+        "title": "CheckoutRequest"
+      },
+      "CheckoutResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "CheckoutResponse"
       },
       "ConfirmPublicationRequest": {
         "properties": {
@@ -2613,6 +2722,64 @@
           "url"
         ],
         "title": "CreateUrlSourceRequest"
+      },
+      "CreditPackResponse": {
+        "properties": {
+          "price_id": {
+            "type": "string",
+            "title": "Price Id"
+          },
+          "credits": {
+            "type": "integer",
+            "title": "Credits"
+          },
+          "unit_amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "price_id",
+          "credits",
+          "unit_amount",
+          "currency"
+        ],
+        "title": "CreditPackResponse"
+      },
+      "CreditPacksResponse": {
+        "properties": {
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/CreditPackResponse"
+            },
+            "type": "array",
+            "title": "Packs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "packs"
+        ],
+        "title": "CreditPacksResponse"
       },
       "CurrentUserResponse": {
         "properties": {
@@ -4217,6 +4384,9 @@
           },
           "object_storage": {
             "$ref": "#/components/schemas/ObjectStorageState"
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingState"
           }
         },
         "type": "object",
@@ -4224,7 +4394,8 @@
           "database",
           "queue",
           "worker",
-          "object_storage"
+          "object_storage",
+          "billing"
         ],
         "title": "ReadinessChecks"
       },

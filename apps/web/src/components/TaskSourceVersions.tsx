@@ -19,6 +19,8 @@ import {
   type TaskVersionSnapshot,
   type VersionSource,
 } from "../api/client";
+import { BuyCreditsLink } from "./BuyCreditsLink";
+import { isCreditRefusal } from "./creditRefusal";
 import { EXECUTION_POLL_MS } from "./pollIntervals";
 import { useInterfaceLocale } from "../interfaceLocale";
 
@@ -451,7 +453,12 @@ export function TaskSourceVersions({
           ) : null}
         </div>
       </div>
-      {error ? <p role="alert" className="form-error">{t(error)}</p> : null}
+      {error ? (
+        <p role="alert" className="form-error">
+          {domainMessage(error)}
+          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+        </p>
+      ) : null}
       {editSessionId ? (
         <>
           <p className="form-hint">

@@ -97,6 +97,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/account/credit-packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Credit Packs
+         * @description Every 额度包 on offer, in the order an operator configured them.
+         *
+         *     Empty is a legitimate answer, not an error: a deployment without Stripe
+         *     configured sells nothing, and the workbench says so rather than
+         *     offering a button that cannot work.
+         */
+        get: operations["list_credit_packs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/checkout-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Checkout Session
+         * @description Open a Stripe Checkout Session for one 额度包.
+         *
+         *     A Price this deployment does not sell is refused here rather than at
+         *     fulfillment. Passing it through would open a Session that takes money
+         *     and then credits nothing, which is the worst available ordering of
+         *     those two events.
+         */
+        post: operations["create_checkout_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -755,6 +804,8 @@ export interface components {
         };
         /** @enum {string} */
         ActivityStatus: "running" | "done" | "failed" | "none";
+        /** @enum {string} */
+        BillingState: "configured" | "unconfigured";
         /** Body_create_file_source */
         Body_create_file_source: {
             /** Client Session Id */
@@ -768,6 +819,16 @@ export interface components {
         Body_replace_file_source: {
             /** File */
             file: string;
+        };
+        /** CheckoutRequest */
+        CheckoutRequest: {
+            /** Price Id */
+            price_id: string;
+        };
+        /** CheckoutResponse */
+        CheckoutResponse: {
+            /** Url */
+            url: string;
         };
         /** ConfirmPublicationRequest */
         ConfirmPublicationRequest: {
@@ -837,6 +898,22 @@ export interface components {
             client_source_id: string;
             /** Url */
             url: string;
+        };
+        /** CreditPackResponse */
+        CreditPackResponse: {
+            /** Price Id */
+            price_id: string;
+            /** Credits */
+            credits: number;
+            /** Unit Amount */
+            unit_amount: number | null;
+            /** Currency */
+            currency: string | null;
+        };
+        /** CreditPacksResponse */
+        CreditPacksResponse: {
+            /** Packs */
+            packs: components["schemas"]["CreditPackResponse"][];
         };
         /** CurrentUserResponse */
         CurrentUserResponse: {
@@ -1346,6 +1423,7 @@ export interface components {
             queue: "available" | "unavailable";
             worker: components["schemas"]["WorkerState"];
             object_storage: components["schemas"]["ObjectStorageState"];
+            billing: components["schemas"]["BillingState"];
         };
         /** ReadinessResponse */
         ReadinessResponse: {
@@ -1941,6 +2019,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_credit_packs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditPacksResponse"];
+                };
+            };
+        };
+    };
+    create_checkout_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutResponse"];
                 };
             };
             /** @description Validation Error */

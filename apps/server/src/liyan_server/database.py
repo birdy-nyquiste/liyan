@@ -538,13 +538,13 @@ class CreditEntry(Base):
             postgresql_where=text("kind = 'capture'"),
             sqlite_where=text("kind = 'capture'"),
         ),
-        #: A redelivered Stripe event collides here rather than crediting twice.
+        #: A redelivered Stripe webhook collides here rather than crediting twice.
         Index(
-            "uq_credit_entries_stripe_event",
-            "stripe_event_id",
+            "uq_credit_entries_stripe_reference",
+            "stripe_reference",
             unique=True,
-            postgresql_where=text("stripe_event_id IS NOT NULL"),
-            sqlite_where=text("stripe_event_id IS NOT NULL"),
+            postgresql_where=text("stripe_reference IS NOT NULL"),
+            sqlite_where=text("stripe_reference IS NOT NULL"),
         ),
         Index("ix_credit_entries_owner_created", "owner_id", "created_at"),
     )
@@ -561,7 +561,12 @@ class CreditEntry(Base):
     target_id: Mapped[UUID | None] = mapped_column(Uuid)
     attempt: Mapped[int | None] = mapped_column(Integer)
     execution_id: Mapped[UUID | None] = mapped_column(Uuid)
-    stripe_event_id: Mapped[str | None] = mapped_column(String(255))
+    #: What makes a Stripe-backed entry idempotent, and it is not always an
+    #: event: a 购买 is keyed to the PaymentIntent that paid for it, because one
+    #: payment can arrive as two events. `billing/fulfillment.py` owns the
+    #: shape, and the shared `pi_…` prefix is how a refund finds what it
+    #: reverses.
+    stripe_reference: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

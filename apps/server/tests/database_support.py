@@ -183,7 +183,7 @@ def entitle(
                 session.add(user)
                 session.flush()
             _credits.purchase(
-                session, user.id, credits, stripe_event_id=f"evt_test_{user.id}"
+                session, user.id, credits, stripe_reference=f"pi_test_{user.id}"
             )
             session.commit()
     finally:

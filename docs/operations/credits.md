@@ -177,14 +177,61 @@ common case, and `checkout.session.async_payment_succeeded` covers Alipay and
 WeChat Pay settling late — with `..._failed` as its counterpart. Fulfilling only
 the first silently loses the delayed ones.
 
-**Redelivery is a primary-key violation, not a double credit.** Stripe retries
-webhooks, so a `stripe_events` table keyed on the event id is written *inside
-the same transaction* as the 购买 entry. A repeat delivery then collides and is
-swallowed rather than crediting twice. `charge.refunded` and
-`charge.dispute.created` write a clawback through the same path.
+**Redelivery is a unique-index violation, not a double credit.** Every
+Stripe-backed entry carries a `stripe_reference` under a partial unique index on
+`credit_entries`, written in the same transaction as the entry itself. A repeat
+delivery collides rather than crediting twice, and no second table is needed to
+hold what the ledger row already holds.
+
+The reference is **not the event id**, which is the one change this made to the
+plan. One payment can arrive as two events — `checkout.session.completed` and
+then `checkout.session.async_payment_succeeded`, which is exactly how Alipay and
+WeChat Pay settle — so a 购买 keyed on the event id would credit each of them.
+It is keyed on the PaymentIntent instead:
+
+    购买      pi_xxx
+    clawback  pi_xxx#refunded:1500        cumulative cents refunded
+              pi_xxx#dispute:du_xxx
+
+Sharing the `pi_xxx` prefix is also how a refund finds the 购买 it reverses and
+how much of it has already been taken back, with no second column pointing
+sideways. That matters because `charge.refunded` reports the **cumulative**
+`amount_refunded`: two partial refunds each report the total so far, and
+reclaiming what the event says would reclaim the first one twice. Each clawback
+takes the difference, so a sequence of partials adds up to exactly the whole.
+
+A refund's share is rounded **down**, so a rounding error is always in the
+user's favour. A dispute claws back the whole purchase at `charge.dispute.created`
+rather than when the dispute resolves: the money is already gone from 立言阁's
+balance while it is open, and 额度 left spendable in the meantime are 额度 that
+will have been spent by the time anybody knows the outcome.
 
 Charges are in USD. A payer in China sees their wallet convert, and 立言阁 sees
 the 1% conversion fee in the table above.
+
+Card only at launch. Alipay and WeChat Pay each have to be activated on the
+Stripe account before a Session may request them, and WeChat Pay is reviewed
+rather than switched on — so they are a configuration change on a webhook path
+that already handles late settlement, not a rewrite. `checkout.session.
+async_payment_succeeded` and its `..._failed` counterpart are handled from the
+first day for exactly that reason.
+
+### The Prices these 额度包 are
+
+Not secrets, and worth writing down: an 额度包 whose Price id lives only in one
+environment's settings is one nobody can reproduce. `LIYAN_STRIPE_CREDIT_PACKS`
+is where they are configured, and the opt-in live contract test is what checks
+they still charge 400 额度 per dollar.
+
+| 额度包 | Sandbox `acct_1U9us2BHefkuel13` | Live `acct_1SlCT9BSLUr4xpoF` |
+| --- | --- | --- |
+| $5 / 2,000 | `price_1U9v5BBHefkuel13ZdKCOjTO` | `price_1U9vNDBSLUr4xpoF47fG64nD` |
+| $20 / 8,000 | `price_1U9v5HBHefkuel13MD44eymu` | `price_1U9vNJBSLUr4xpoFpLihueuS` |
+| $50 / 20,000 | `price_1U9v5NBHefkuel13gabf3A0Q` | `price_1U9vNQBSLUr4xpoFZsCSQOKa` |
+
+The live account also hosts another product's Price. That is the case
+`pack_for` refuses rather than defaults on: a Price nobody configured as an
+额度包 credits nothing, because crediting it would invent an amount.
 
 ## What a new user gets
 
@@ -555,7 +602,9 @@ measurement.
    the 赠送额度 amount and the caps, and replace the assumptions table with
    measurements.
 5. Ledger, 预扣, enforcement.
-6. Stripe.
+6. Stripe. **Done** — `billing/` holds the Checkout endpoint, the webhook, and
+   the Price→额度 map; `test_stripe_live_contract.py` is the opt-in check that
+   the configured Prices exist and still charge 400 额度 per dollar.
 
 The free grant in particular cannot be chosen before step 4 without picking a
 number for a task cost nobody has measured.

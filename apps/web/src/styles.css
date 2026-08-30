@@ -3275,6 +3275,32 @@ a.source-meta:focus-visible .source-meta__value {
   color: var(--ink-muted);
 }
 
+/* The 购买 button sits at the foot of its card however tall the card is, so a
+   row of 额度包 has one line of buttons rather than three heights of one. */
+.account-pack .button {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+/*
+  The return from Checkout. Deliberately not styled as an error in any of its
+  states, including the one where the 额度 have not arrived yet: the money has
+  left the user's account, and a red box saying so is the worst thing this
+  product could show at that moment.
+*/
+.account-checkout {
+  margin: var(--space-xs) 0 var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
+
+.account-checkout[data-state="credited"] {
+  color: var(--ink);
+}
+
 .account-packs__note,
 .account-empty {
   margin: var(--space-xs) 0 0;
@@ -3351,4 +3377,14 @@ a.account-usage__what {
 a.account-usage__what:hover,
 a.account-usage__what:focus-visible {
   text-decoration: underline;
+}
+
+/*
+  购买额度, beside the refusal that needs it. A refusal a user cannot act on has
+  told them off rather than told them something, and this is the only remedy —
+  waiting fixes nothing about an empty balance.
+*/
+.credit-refusal__buy {
+  margin-inline-start: var(--space-xs);
+  vertical-align: baseline;
 }

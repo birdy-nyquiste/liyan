@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
+  createCheckoutSession,
   getAccount,
   listAccountUsage,
+  listCreditPacks,
   type AccountResponse,
+  type CreditPack,
   type UsageEntry,
 } from "../api/client";
 import { useInterfaceLocale } from "../interfaceLocale";
+import { CHECKOUT_POLL_MS, CHECKOUT_POLL_TIMEOUT_MS } from "./pollIntervals";
 
 const copy = {
   zh: {
@@ -16,7 +20,16 @@ const copy = {
     remaining: "剩余额度",
     unit: "额度",
     packs: "购买额度",
-    packsSoon: "购买功能即将开放。",
+    packsClosed: "购买功能尚未开放。",
+    buy: "购买",
+    opening: "正在前往支付…",
+    checkoutFailed: "暂时无法前往支付页面，请稍后重试。",
+    // Never 支付失败. The money has left their account; of everything this
+    // product could say at that moment, that is the worst.
+    confirming: "支付已收到，正在确认额度…",
+    credited: "额度已到账。",
+    pending: "支付已收到，额度稍后到账。你可以先离开这里。",
+    cancelled: "本次购买已取消，未产生扣款。",
     history: "使用记录",
     empty: "还没有使用记录",
     loadMore: "加载更多",
@@ -32,7 +45,14 @@ const copy = {
     remaining: "Credits remaining",
     unit: "credits",
     packs: "Buy credits",
-    packsSoon: "Buying is not open yet.",
+    packsClosed: "Buying is not open yet.",
+    buy: "Buy",
+    opening: "Opening checkout…",
+    checkoutFailed: "Checkout could not be opened. Try again shortly.",
+    confirming: "Payment received. Confirming your credits…",
+    credited: "Your credits have arrived.",
+    pending: "Payment received. Your credits will arrive shortly — you can leave this page.",
+    cancelled: "This purchase was cancelled. You have not been charged.",
     history: "Usage history",
     empty: "Nothing used yet",
     loadMore: "Load more",
@@ -45,21 +65,82 @@ const copy = {
   },
 } as const;
 
-/** What one 额度包 offers. Prices are USD; the 额度 are 立言阁's own arithmetic. */
-const PACKS = [
-  { price: "$5", credits: 2_000 },
-  { price: "$20", credits: 8_000 },
-  { price: "$50", credits: 20_000 },
-] as const;
+/**
+ * The balance as it stood when the user left for Stripe.
+ *
+ * Kept because the return is a fresh page load with no memory of what the
+ * number was, and "has it changed" is the only question the return can actually
+ * answer — the webhook that credits is on its own schedule, and the redirect
+ * routinely arrives first.
+ */
+const BASELINE_KEY = "liyan.checkout.baseline";
+
+function rememberBaseline(credits: number): void {
+  try {
+    window.sessionStorage.setItem(BASELINE_KEY, String(credits));
+  } catch {
+    // A browser refusing storage costs the return its baseline, not the
+    // payment. It falls back to waiting the same timeout and saying the same
+    // reassuring thing.
+  }
+}
+
+function baselineBalance(): number | null {
+  try {
+    const stored = window.sessionStorage.getItem(BASELINE_KEY);
+    return stored === null ? null : Number(stored);
+  } catch {
+    return null;
+  }
+}
+
+function forgetBaseline(): void {
+  try {
+    window.sessionStorage.removeItem(BASELINE_KEY);
+  } catch {
+    // Nothing to do, and nothing that depends on it.
+  }
+}
+
+/** What the page is doing about a return from Checkout, if anything. */
+type ReturnState = "none" | "confirming" | "credited" | "pending" | "cancelled";
+
+function priceLabel(pack: CreditPack): string {
+  if (pack.unit_amount === null || pack.currency === null) return "";
+  const amount = pack.unit_amount / 100;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: pack.currency.toUpperCase(),
+    }).format(amount);
+  } catch {
+    return `${amount} ${pack.currency.toUpperCase()}`;
+  }
+}
 
 export function AccountPage({ accessToken }: { accessToken: string }): React.ReactElement {
   const { locale } = useInterfaceLocale();
   const text = copy[locale];
+  const [searchParams, setSearchParams] = useSearchParams();
   const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [packs, setPacks] = useState<CreditPack[]>([]);
   const [entries, setEntries] = useState<UsageEntry[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [checkoutFailed, setCheckoutFailed] = useState(false);
+  const [returnState, setReturnState] = useState<ReturnState>("none");
+  //: Read once, then dropped from the URL, so a reload is not a second return.
+  const checkout = useRef(searchParams.get("checkout"));
+  /*
+    Held in a ref rather than named as a dependency. `setSearchParams` takes a
+    new identity whenever the location changes — including from this effect's
+    own rewrite of the URL — and depending on it tore the poll down one tick
+    after starting it, which looked exactly like a payment that never landed.
+  */
+  const rewriteUrl = useRef(setSearchParams);
+  rewriteUrl.current = setSearchParams;
 
   const load = useCallback(async () => {
     try {
@@ -71,14 +152,98 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
       setEntries(usage.entries);
       setHasMore(usage.has_more);
       setFailed(false);
+      return next;
     } catch {
       setFailed(true);
+      return null;
     }
   }, [accessToken]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    // Empty is a legitimate answer — a deployment that sells nothing — so a
+    // failure here is not distinguished from it. Either way there is nothing
+    // to buy, and the page says so rather than offering a dead button.
+    listCreditPacks(accessToken)
+      .then(setPacks)
+      .catch(() => setPacks([]));
+  }, [accessToken]);
+
+  /**
+   * Wait for the webhook, and stop waiting without ever calling it a failure.
+   *
+   * Fulfillment happens on the webhook, deliberately — a user who closes the
+   * tab after paying has still paid. But Checkout also redirects them back, and
+   * that redirect frequently arrives first, so a return that simply read the
+   * balance would show the old number and read as a payment that failed.
+   */
+  useEffect(() => {
+    const returned = checkout.current;
+    if (returned === null) return;
+    // Read and spent: a reload should not replay the return.
+    checkout.current = null;
+    rewriteUrl.current(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("checkout");
+        return next;
+      },
+      { replace: true },
+    );
+
+    if (returned === "cancelled") {
+      forgetBaseline();
+      setReturnState("cancelled");
+      return;
+    }
+
+    const before = baselineBalance();
+    setReturnState("confirming");
+    let stopped = false;
+    const startedAt = Date.now();
+
+    const poll = async (): Promise<void> => {
+      if (stopped) return;
+      const next = await load();
+      if (stopped) return;
+      if (next !== null && (before === null || next.remaining_credits !== before)) {
+        forgetBaseline();
+        setReturnState("credited");
+        return;
+      }
+      if (Date.now() - startedAt >= CHECKOUT_POLL_TIMEOUT_MS) {
+        // Not an error. The money has left their account.
+        forgetBaseline();
+        setReturnState("pending");
+        return;
+      }
+      timer = window.setTimeout(() => void poll(), CHECKOUT_POLL_MS);
+    };
+
+    let timer = window.setTimeout(() => void poll(), CHECKOUT_POLL_MS);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [load]);
+
+  const buy = async (pack: CreditPack) => {
+    setOpening(pack.price_id);
+    setCheckoutFailed(false);
+    // Remembered before leaving, because the page that comes back has no memory
+    // of what the balance was.
+    rememberBaseline(account?.remaining_credits ?? 0);
+    try {
+      window.location.assign(await createCheckoutSession(accessToken, pack.price_id));
+    } catch {
+      forgetBaseline();
+      setCheckoutFailed(true);
+      setOpening(null);
+    }
+  };
 
   const loadMore = async () => {
     setBusy(true);
@@ -98,6 +263,14 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
     done: text.done,
     failed: text.failedRun,
     none: null,
+  };
+
+  const returnMessage: Record<ReturnState, string | null> = {
+    none: null,
+    confirming: text.confirming,
+    credited: text.credited,
+    pending: text.pending,
+    cancelled: text.cancelled,
   };
 
   return (
@@ -125,20 +298,42 @@ export function AccountPage({ accessToken }: { accessToken: string }): React.Rea
       <p className="account-spending">{text.spends}</p>
 
       <h2>{text.packs}</h2>
-      <ul className="account-packs">
-        {PACKS.map((pack) => (
-          <li key={pack.price} className="account-pack">
-            <span className="account-pack__price">{pack.price}</span>
-            <span className="account-pack__credits">
-              {pack.credits.toLocaleString()} {text.unit}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {/*
+        The return from Checkout, and it is never an alert: none of these
+        states is an error, including the one where the 额度 have not arrived
+        yet. `aria-live` announces it because the user is waiting on it.
+      */}
+      {returnMessage[returnState] ? (
+        <p className="account-checkout" data-state={returnState} aria-live="polite">
+          {returnMessage[returnState]}
+        </p>
+      ) : null}
+      {packs.length === 0 ? (
+        <p className="account-packs__note">{text.packsClosed}</p>
+      ) : (
+        <ul className="account-packs">
+          {packs.map((pack) => (
+            <li key={pack.price_id} className="account-pack">
+              <span className="account-pack__price">{priceLabel(pack)}</span>
+              <span className="account-pack__credits">
+                {pack.credits.toLocaleString()} {text.unit}
+              </span>
+              <button
+                className="button"
+                type="button"
+                disabled={opening !== null}
+                onClick={() => void buy(pack)}
+              >
+                {opening === pack.price_id ? text.opening : text.buy}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {checkoutFailed ? <p role="alert">{text.checkoutFailed}</p> : null}
       {!account?.is_paying_user ? (
         <p className="account-entitlement">{text.locked}</p>
       ) : null}
-      <p className="account-packs__note">{text.packsSoon}</p>
 
       <h2>{text.history}</h2>
       {entries.length === 0 ? (

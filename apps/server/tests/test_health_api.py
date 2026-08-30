@@ -1,4 +1,4 @@
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import pytest
 from database_support import QueueSaying
@@ -10,13 +10,23 @@ from liyan_server.settings import Settings
 
 
 def configured(database_url: str) -> Settings:
-    """Settings whose storage is fully configured, so only the double decides."""
+    """Settings whose storage is fully configured, so only the double decides.
+
+    Stripe is blanked explicitly rather than left to default. `Settings` reads
+    the developer's own `.env`, so a machine with real keys in it would make
+    these tests report `billing: "configured"` and fail — a suite that passes
+    or fails on what somebody happens to have locally, which is the thing
+    `.env.e2e` exists to argue against.
+    """
     return Settings(
         database_url=database_url,
         r2_endpoint_url="https://account.r2.cloudflarestorage.com",
         r2_access_key_id="key-id",
         r2_secret_access_key="secret",
         r2_bucket="liyan-local",
+        stripe_secret_key="",
+        stripe_webhook_secret="",
+        stripe_credit_packs="",
     )
 
 
@@ -79,6 +89,7 @@ def test_readiness_reports_when_required_dependencies_are_usable() -> None:
             "queue": "available",
             "worker": "unknown",
             "object_storage": "ready",
+            "billing": "unconfigured",
         },
     }
 
@@ -110,6 +121,44 @@ def test_an_unconfigured_bucket_is_never_mistaken_for_an_outage() -> None:
     )
 
 
+def test_a_deployment_that_cannot_sell_额度_is_still_ready() -> None:
+    """Reported, never gating. Everything a user already holds still spends, and
+    taking the API out of rotation would turn a missing feature into an outage."""
+    client = client_for("sqlite+pysqlite:///:memory:")
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json()["checks"]["billing"] == "unconfigured"
+
+
+def test_billing_reports_configured_only_when_it_could_actually_fulfill() -> None:
+    """A secret key without a signing secret is the dangerous half: Checkout
+    opens, and nothing ever credits. That is not most of the way configured."""
+    settings = configured("sqlite+pysqlite:///:memory:")
+    half = settings.model_copy(
+        update={
+            "stripe_secret_key": "sk_test_x",
+            "stripe_credit_packs": '[{"price_id": "price_x", "credits": 2000}]',
+        }
+    )
+    whole = half.model_copy(update={"stripe_webhook_secret": "whsec_x"})
+
+    assert _readiness(half)["checks"]["billing"] == "unconfigured"
+    assert _readiness(whole)["checks"]["billing"] == "configured"
+
+
+def _readiness(settings: Settings) -> Any:
+    client = TestClient(
+        create_app(
+            settings,
+            object_storage=StorageSaying("ready"),
+            execution_dispatcher=QueueSaying(True),
+        )
+    )
+    return dict(client.get("/health/ready").json())
+
+
 @pytest.mark.parametrize(
     "database_url",
     [
@@ -131,5 +180,6 @@ def test_readiness_is_unavailable_when_the_database_cannot_be_used(database_url:
             "queue": "available",
             "worker": "unknown",
             "object_storage": "ready",
+            "billing": "unconfigured",
         },
     }

@@ -117,19 +117,21 @@ def purchase(
     owner_id: UUID,
     amount: int,
     *,
-    stripe_event_id: str,
+    stripe_reference: str,
     now: datetime | None = None,
 ) -> CreditEntry | None:
-    """购买额度, keyed to the Stripe event that paid for them.
+    """购买额度, keyed to the payment that bought them.
 
-    Returns nothing when that event has already been credited. Stripe retries
+    The reference is the PaymentIntent rather than the webhook event, because
+    one payment can arrive as two events — `checkout.session.completed` and then
+    `checkout.session.async_payment_succeeded`, which is how Alipay and WeChat
+    Pay settle. Keyed on the event id, fulfilling both would credit twice.
+
+    Returns nothing when that payment has already been credited. Stripe retries
     webhooks, and fulfilling one twice is the most expensive mistake available
-    here, so the event id is the key and a redelivery finds its own row.
+    here, so a redelivery finds the row already there.
     """
-    already = session.scalar(
-        select(CreditEntry).where(CreditEntry.stripe_event_id == stripe_event_id)
-    )
-    if already is not None:
+    if find_by_reference(session, stripe_reference) is not None:
         return None
     return _add(
         session,
@@ -137,7 +139,7 @@ def purchase(
         kind="purchase",
         amount=abs(amount),
         now=now,
-        stripe_event_id=stripe_event_id,
+        stripe_reference=stripe_reference,
     )
 
 
@@ -257,7 +259,7 @@ def clawback(
     owner_id: UUID,
     amount: int,
     *,
-    stripe_event_id: str,
+    stripe_reference: str,
     now: datetime | None = None,
 ) -> CreditEntry | None:
     """额度 reclaimed by a refund or a payment dispute.
@@ -265,11 +267,12 @@ def clawback(
     The only movement allowed to take a balance below zero. What is left is a
     debt rather than a spend, and hiding it at zero would let the same person
     start again for free.
+
+    The reference names the state being reversed rather than the delivery that
+    reported it — `pi_…#refunded:1500` — so a refund reported twice collides,
+    and a second, larger refund on the same charge does not.
     """
-    already = session.scalar(
-        select(CreditEntry).where(CreditEntry.stripe_event_id == stripe_event_id)
-    )
-    if already is not None:
+    if find_by_reference(session, stripe_reference) is not None:
         return None
     return _add(
         session,
@@ -277,5 +280,34 @@ def clawback(
         kind="clawback",
         amount=-abs(amount),
         now=now,
-        stripe_event_id=stripe_event_id,
+        stripe_reference=stripe_reference,
     )
+
+
+def find_by_reference(session: Session, stripe_reference: str) -> CreditEntry | None:
+    """The entry a given Stripe object already wrote, if it wrote one.
+
+    A redelivered webhook finds its own row here rather than at the unique
+    index, which is how fulfillment stays an ordinary path instead of a caught
+    IntegrityError. The index is still what enforces it.
+    """
+    return session.scalar(
+        select(CreditEntry).where(CreditEntry.stripe_reference == stripe_reference)
+    )
+
+
+def reclaimed_against(session: Session, payment_reference: str) -> int:
+    """How much of one payment has already been clawed back, as a positive count.
+
+    Every clawback for a payment shares its `pi_…` prefix, so the sum is what a
+    later refund subtracts to reclaim only the part nobody has reclaimed yet.
+    `charge.refunded` reports the *cumulative* amount refunded, so without this
+    two partial refunds would reclaim the first one twice.
+    """
+    total = session.scalar(
+        select(func.coalesce(func.sum(CreditEntry.amount), 0)).where(
+            CreditEntry.kind == "clawback",
+            CreditEntry.stripe_reference.startswith(f"{payment_reference}#"),
+        )
+    )
+    return abs(int(total or 0))

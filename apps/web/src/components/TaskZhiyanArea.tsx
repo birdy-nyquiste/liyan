@@ -12,6 +12,8 @@ import {
 } from "../api/client";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
+import { BuyCreditsLink } from "./BuyCreditsLink";
+import { isCreditRefusal } from "./creditRefusal";
 import { ZhiyanPanel } from "./ZhiyanPanel";
 import { STATUS_LABELS } from "./zhiyanStatus";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -181,7 +183,10 @@ export function TaskZhiyanArea({
         {locale === "en" ? `${overview.sources.length} independent source reports` : `共 ${overview.sources.length} 个来源的独立报告`}
       </h3>
       {error ? (
-        <p role="alert" className="form-error">{domainMessage(error)}</p>
+        <p role="alert" className="form-error">
+          {domainMessage(error)}
+          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+        </p>
       ) : null}
       {/*
         * One report at a time. Each is six sections of prose, so stacked they

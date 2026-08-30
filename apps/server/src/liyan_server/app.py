@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from liyan_server.account_api import account_router
 from liyan_server.auth import HttpJwksLoader, JwksJwtVerifier, JwtVerifier
 from liyan_server.authentication import Authenticator, current_user_dependency
+from liyan_server.billing.api import billing_router
+from liyan_server.billing.packs import billing_state, configured_packs
+from liyan_server.billing.stripe_api import StripeApi, stripe_api_for
 from liyan_server.database import Database
 from liyan_server.execution_dispatch import CeleryExecutionDispatcher, ExecutionDispatcher
 from liyan_server.health import health_router
@@ -35,6 +38,7 @@ def create_app(
     jwt_verifier: JwtVerifier | None = None,
     execution_dispatcher: ExecutionDispatcher | None = None,
     object_storage: ObjectStorage | None = None,
+    stripe_api: StripeApi | None = None,
 ) -> FastAPI:
     # Before anything else logs: the startup warnings below are the first
     # lines an operator reads, and they should arrive in the same shape as
@@ -53,6 +57,7 @@ def create_app(
     )
     dispatcher = execution_dispatcher or CeleryExecutionDispatcher(current_settings.broker_url)
     storage = object_storage or R2ObjectStorage(current_settings)
+    payments = stripe_api or stripe_api_for(current_settings)
 
     # Configuration is checked once, here, so an operator learns about a gap at
     # startup instead of from the first user who trips over it.
@@ -68,6 +73,15 @@ def create_app(
         logger.warning(
             "object_storage_unconfigured",
             extra={"missing": list(missing_storage), "affects": "file source intake"},
+        )
+    # Read the 额度包 now so a malformed one fails the boot rather than the first
+    # 购买. An empty configuration is not malformed — it is a deployment that
+    # sells nothing — so it warns instead.
+    configured_packs(current_settings)
+    if billing_state(current_settings) == "unconfigured":
+        logger.warning(
+            "billing_unconfigured",
+            extra={"affects": "buying 额度"},
         )
 
     @asynccontextmanager
@@ -88,9 +102,12 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    application.include_router(health_router(database, storage, dispatcher))
+    application.include_router(health_router(current_settings, database, storage, dispatcher))
     application.include_router(identity_router(current_user))
     application.include_router(account_router(database, current_user))
+    application.include_router(
+        billing_router(current_settings, database, current_user, payments)
+    )
     application.include_router(task_router(database, current_user))
     application.include_router(
         task_creation_router(current_settings, database, current_user, dispatcher)

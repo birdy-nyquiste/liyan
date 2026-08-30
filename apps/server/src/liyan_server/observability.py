@@ -43,6 +43,18 @@ SAFE_FIELDS: frozenset[str] = frozenset(
         "removed_objects",
         "stalled_executions",
         "worker",
+        # Billing. Every one of these is a Stripe identifier or a fixed word
+        # from `fulfillment.Outcome` — never a name, an email, or an amount of
+        # money. The webhook is the one unauthenticated path that moves 额度, so
+        # its log line has to say what it did, and `dropped_fields` was saying
+        # it did something unidentifiable.
+        "event_type",
+        "event_id",
+        "action",
+        "credits",
+        "payment_reference",
+        "checkout_session",
+        "price_id",
     }
 )
 

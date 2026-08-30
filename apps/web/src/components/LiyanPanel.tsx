@@ -13,6 +13,8 @@ import {
   type LiyanStateResponse,
   type StartLiyanRunRequest,
 } from "../api/client";
+import { BuyCreditsLink } from "./BuyCreditsLink";
+import { isCreditRefusal } from "./creditRefusal";
 import { useFocusWhen } from "./useFocusWhen";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { ArticleRevisionHistory } from "./ArticleRevisionHistory";
@@ -392,7 +394,12 @@ export function LiyanPanel({
 
       <div className="liyan-panel__document">
 
-      {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
+      {error ? (
+        <p role="alert" className="form-error">
+          {domainMessage(error)}
+          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+        </p>
+      ) : null}
       {state?.status === "failed" && failureMessage ? (
         <p role="alert" className="form-error">{domainMessage(failureMessage, state.execution?.error?.code)}</p>
       ) : null}

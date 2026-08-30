@@ -70,6 +70,25 @@ class Settings(BaseSettings):
     #: assumptions `scripts/calibrate_costs.py` has not yet been able to settle.
     #: Raise it in Local, where one developer competes with nobody.
     signup_grant_credits: int = 150
+    #: Stripe. Blank is a legitimate deployment: `/account` still reads, work
+    #: still spends, and only buying is unavailable — announced at startup and
+    #: through `/health/ready` rather than discovered at a checkout that 500s.
+    stripe_secret_key: str = ""
+    #: The signing secret of the webhook endpoint, from the Stripe dashboard.
+    #: Required alongside the key: an endpoint that cannot verify a signature
+    #: must not be open, because anything that reaches it credits 额度.
+    stripe_webhook_secret: str = ""
+    #: What one 额度包 is, as a JSON array of {price_id, credits}. This mapping
+    #: is the *only* authority on how much 额度 a payment buys —
+    #: `docs/operations/credits.md` says never the client and never session
+    #: metadata, and this is what that rule points at. The price in money lives
+    #: in Stripe; the 额度 are 立言阁's own and stay here.
+    stripe_credit_packs: str = ""
+    stripe_api_base_url: str = "https://api.stripe.com"
+    stripe_timeout_seconds: int = 30
+    #: Where Checkout returns a user. `/account` reads it back and polls, since
+    #: the redirect routinely beats the webhook that credits them.
+    web_base_url: str = "http://localhost:5173"
     #: Names this worker in its heartbeat. Render sets it per service, so
     #: one silent worker among several is identifiable.
     worker_name: str = "celery-worker"

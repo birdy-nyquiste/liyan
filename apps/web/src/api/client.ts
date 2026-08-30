@@ -32,6 +32,7 @@ export type ConfirmPublicationRequest = components["schemas"]["ConfirmPublicatio
 export type AccountResponse = components["schemas"]["AccountResponse"];
 export type UsageEntry = components["schemas"]["UsageEntry"];
 export type UsageResponse = components["schemas"]["UsageResponse"];
+export type CreditPack = components["schemas"]["CreditPackResponse"];
 
 export class ApiError extends Error {
   constructor(
@@ -68,6 +69,10 @@ function refusalOf(result: { error?: unknown; response: Response }): ApiError {
  */
 export function refusalWithoutTiming(thrown: unknown): string | null {
   if (!(thrown instanceof ApiError)) return null;
+  // 402 是额度不足或来源类型未解锁。两者都没有 Retry-After，因为等待改变不了
+  // 什么 — 补救办法是购买，而这句话是唯一说出这一点的东西。A generic
+  // "something went wrong" here would send a user to support instead.
+  if (thrown.status === 402) return thrown.detail;
   if (thrown.status !== 429 || thrown.retryAfterSeconds !== null) return null;
   return thrown.detail;
 }
@@ -142,6 +147,30 @@ export async function listAccountUsage(
   });
   if (!result.data) throw refusalOf(result);
   return result.data;
+}
+
+export async function listCreditPacks(accessToken: string): Promise<CreditPack[]> {
+  const result = await authenticatedApi(accessToken).GET("/account/credit-packs", {});
+  if (!result.data) throw refusalOf(result);
+  return result.data.packs;
+}
+
+/**
+ * Open a Stripe Checkout Session and answer with where to send the user.
+ *
+ * The Price is all that goes up. What it buys is decided on the server, from a
+ * mapping the client never sees — `docs/operations/credits.md` is explicit that
+ * the 额度 amount may never come from anything a client could have influenced.
+ */
+export async function createCheckoutSession(
+  accessToken: string,
+  priceId: string,
+): Promise<string> {
+  const result = await authenticatedApi(accessToken).POST("/account/checkout-session", {
+    body: { price_id: priceId },
+  });
+  if (!result.data) throw refusalOf(result);
+  return result.data.url;
 }
 
 function authenticatedApi(accessToken: string) {

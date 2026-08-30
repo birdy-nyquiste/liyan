@@ -507,8 +507,8 @@ class CreditEntry(Base):
     literal, not a phrase — and the workbench renders it as 赠送, 购买, 预扣, or
     结算. What each one means is in `CONTEXT.md`.
 
-    The target columns mirror the `(target_type, target_id, attempt)` triple
-    `Execution` already uses. They are plain identifiers rather than foreign
+    The target columns mirror the `(target_id, input_version, attempt)` triple
+    `Execution` is unique on. They are plain identifiers rather than foreign
     keys, following `publish_tasks`: `cleanup` removes tasks and cascades into
     their Executions, and 额度 that vanished with one would change a balance
     retroactively. Only `owner_id` cascades, because deleting a person should
@@ -517,13 +517,22 @@ class CreditEntry(Base):
 
     __tablename__ = "credit_entries"
     __table_args__ = (
-        #: One 预扣 and one 结算 for any attempt, so a worker that runs twice or a
+        #: One 预扣 and one 结算 per run, so a worker that runs twice or a
         #: settlement written both eagerly and by the sweep cannot double-count.
+        #:
+        #: `input_version` is in here because without it this index does not
+        #: identify a run. Regenerating a 立言文章 after a success is not a retry:
+        #: it takes the next `input_version` and restarts `attempt` at 1, so the
+        #: second generation collided with the first, its 预扣 was silently
+        #: dropped, and the user was neither charged for it nor shown it in
+        #: 使用记录. 知言 and capture only ever run at version 1, so this changes
+        #: nothing for them.
         Index(
             "uq_credit_entries_run",
             "kind",
             "target_type",
             "target_id",
+            "input_version",
             "attempt",
             unique=True,
             postgresql_where=text("kind IN ('hold', 'settle')"),
@@ -559,6 +568,9 @@ class CreditEntry(Base):
     amount: Mapped[int] = mapped_column(Integer)
     target_type: Mapped[str | None] = mapped_column(String(64))
     target_id: Mapped[UUID | None] = mapped_column(Uuid)
+    #: Which input the run was against, alongside `attempt`. Null on the
+    #: movements that are not about a run at all — 赠送, 购买, 额度退回.
+    input_version: Mapped[int | None] = mapped_column(Integer)
     attempt: Mapped[int | None] = mapped_column(Integer)
     execution_id: Mapped[UUID | None] = mapped_column(Uuid)
     #: What makes a Stripe-backed entry idempotent, and it is not always an

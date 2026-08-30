@@ -72,6 +72,7 @@ def _existing(
     kind: CreditEntryKind,
     target_type: str,
     target_id: UUID,
+    input_version: int | None = None,
     attempt: int | None = None,
 ) -> CreditEntry | None:
     statement = select(CreditEntry).where(
@@ -79,6 +80,8 @@ def _existing(
         CreditEntry.target_type == target_type,
         CreditEntry.target_id == target_id,
     )
+    if input_version is not None:
+        statement = statement.where(CreditEntry.input_version == input_version)
     if attempt is not None:
         statement = statement.where(CreditEntry.attempt == attempt)
     return session.scalar(statement)
@@ -178,6 +181,7 @@ def hold(
     *,
     target_type: str,
     target_id: UUID,
+    input_version: int,
     attempt: int,
     credits: int,
     now: datetime | None = None,
@@ -186,10 +190,18 @@ def hold(
 
     Keyed to the target rather than to an Execution, because a 知言 run's 预扣 is
     taken inside the transaction that confirms a 任务创建会话 — before the
-    Execution it pays for exists.
+    Execution it pays for exists. `input_version` and `attempt` together are
+    what make that key name one run: 立言 regenerates at a new input version and
+    an attempt of 1, so the attempt alone said "the same run" about work the
+    provider had genuinely been paid for twice.
     """
     if _existing(
-        session, kind="hold", target_type=target_type, target_id=target_id, attempt=attempt
+        session,
+        kind="hold",
+        target_type=target_type,
+        target_id=target_id,
+        input_version=input_version,
+        attempt=attempt,
     ):
         return None
     return _add(
@@ -200,6 +212,7 @@ def hold(
         now=now,
         target_type=target_type,
         target_id=target_id,
+        input_version=input_version,
         attempt=attempt,
     )
 
@@ -210,6 +223,7 @@ def settle(
     *,
     target_type: str,
     target_id: UUID,
+    input_version: int,
     attempt: int,
     actual: int | None,
     execution_id: UUID | None = None,
@@ -233,12 +247,22 @@ def settle(
     sweep stay safe together.
     """
     held = _existing(
-        session, kind="hold", target_type=target_type, target_id=target_id, attempt=attempt
+        session,
+        kind="hold",
+        target_type=target_type,
+        target_id=target_id,
+        input_version=input_version,
+        attempt=attempt,
     )
     if held is None:
         return None
     if _existing(
-        session, kind="settle", target_type=target_type, target_id=target_id, attempt=attempt
+        session,
+        kind="settle",
+        target_type=target_type,
+        target_id=target_id,
+        input_version=input_version,
+        attempt=attempt,
     ):
         return None
     return _add(
@@ -249,6 +273,7 @@ def settle(
         now=now,
         target_type=target_type,
         target_id=target_id,
+        input_version=input_version,
         attempt=attempt,
         execution_id=execution_id,
     )

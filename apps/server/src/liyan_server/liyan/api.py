@@ -513,6 +513,15 @@ def liyan_router(
                 )
         refuse_when_at_capacity(session, settings, owner_id=user.id)
         liyan_attempt = previous.attempt + 1 if retrying and previous else 1
+        # A retry runs against the same input; anything else is a regeneration,
+        # which is a new one. The 预扣 is keyed on this as well as the attempt,
+        # so it has to be settled before the hold rather than inside the
+        # `queue_run` call below.
+        liyan_input_version = (
+            previous.input_version
+            if retrying and previous
+            else (previous.input_version + 1 if previous else 1)
+        )
         # `input_text` is the whole of what this run sends: the 知言报告 and the
         # 立言指令 are both already written, so only the article's own length is
         # being predicted.
@@ -520,6 +529,7 @@ def liyan_router(
             session,
             user.id,
             article.id,
+            input_version=liyan_input_version,
             attempt=liyan_attempt,
             input_characters=len(input_text),
             model=settings.liyan_model,
@@ -532,9 +542,7 @@ def liyan_router(
             input_text=input_text,
             instruction=request.instruction,
             working_copy=working_copy,
-            input_version=previous.input_version if retrying and previous else (
-                previous.input_version + 1 if previous else 1
-            ),
+            input_version=liyan_input_version,
             attempt=liyan_attempt,
             origin="manual" if retrying else "initial",
             idempotency_key=request.idempotency_key,

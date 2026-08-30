@@ -399,6 +399,7 @@ def test_a_dispute_may_take_a_balance_below_zero(tmp_path: Path) -> None:
             owner,
             target_type="source_revision",
             target_id=uuid4(),
+            input_version=1,
             attempt=1,
             credits=1_500,
         )

@@ -148,6 +148,7 @@ def record_execution_cost(
                 execution.owner_id,
                 target_type=execution.target_type,
                 target_id=execution.target_id,
+                input_version=execution.input_version,
                 attempt=execution.attempt,
                 actual=charge if cost_micros is not None else (0 if not chargeable else None),
                 execution_id=execution.id,

@@ -19,6 +19,7 @@ from liyan_server import credits
 from liyan_server.database import CreditEntry, Database, User
 
 REVISION = "source_revision"
+ARTICLE = "liyan_article"
 NOW = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
 
 
@@ -48,12 +49,35 @@ def test_a_run_that_cost_less_than_expected_gives_the_difference_back(tmp_path: 
     with Session(database.engine) as session:
         credits.grant(session, user.id, 8_000, now=NOW)
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         assert credits.remaining(session, user.id) == 7_970
 
         credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, actual=26, now=NOW
+
+            session,
+
+            user.id,
+
+            target_type=REVISION,
+
+            target_id=target,
+
+            input_version=1,
+
+            attempt=1,
+
+            actual=26,
+
+            now=NOW,
+
         )
 
         assert credits.remaining(session, user.id) == 7_974
@@ -68,10 +92,24 @@ def test_a_run_that_produced_nothing_costs_nothing(tmp_path: Path) -> None:
     with Session(database.engine) as session:
         credits.grant(session, user.id, 100, now=NOW)
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, actual=0, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            actual=0,
+            now=NOW,
         )
 
         assert credits.remaining(session, user.id) == 100
@@ -86,10 +124,24 @@ def test_a_run_that_overshot_its_estimate_collects_the_shortfall(tmp_path: Path)
     with Session(database.engine) as session:
         credits.grant(session, user.id, 100, now=NOW)
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, actual=41, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            actual=41,
+            now=NOW,
         )
 
         assert credits.remaining(session, user.id) == 59
@@ -105,16 +157,31 @@ def test_settling_twice_does_not_pay_twice(tmp_path: Path) -> None:
     with Session(database.engine) as session:
         credits.grant(session, user.id, 100, now=NOW)
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         first = credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, actual=26, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            actual=26,
+            now=NOW,
         )
         second = credits.settle(
             session,
             user.id,
             target_type=REVISION,
             target_id=target,
+            input_version=1,
             attempt=1,
             actual=26,
             now=NOW + timedelta(minutes=5),
@@ -135,16 +202,44 @@ def test_a_retry_holds_again_after_the_failed_attempt_gave_its_credits_back(
     with Session(database.engine) as session:
         credits.grant(session, user.id, 100, now=NOW)
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, actual=0, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            actual=0,
+            now=NOW,
         )
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=2, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=2,
+            credits=30,
+            now=NOW,
         )
         credits.settle(
-            session, user.id, target_type=REVISION, target_id=target, attempt=2, actual=28, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=2,
+            actual=28,
+            now=NOW,
         )
 
         assert credits.remaining(session, user.id) == 72
@@ -162,6 +257,7 @@ def test_settling_work_that_was_never_held_writes_nothing(tmp_path: Path) -> Non
                 user.id,
                 target_type=REVISION,
                 target_id=uuid4(),
+                input_version=1,
                 attempt=1,
                 actual=26,
                 now=NOW,
@@ -215,6 +311,7 @@ def test_a_dispute_may_take_a_balance_below_zero(tmp_path: Path) -> None:
             user.id,
             target_type=REVISION,
             target_id=uuid4(),
+            input_version=1,
             attempt=1,
             credits=2_000,
             now=NOW,
@@ -234,7 +331,14 @@ def test_the_database_refuses_a_second_hold_even_if_the_check_is_skipped(
     target = uuid4()
     with Session(database.engine) as session:
         credits.hold(
-            session, user.id, target_type=REVISION, target_id=target, attempt=1, credits=30, now=NOW
+            session,
+            user.id,
+            target_type=REVISION,
+            target_id=target,
+            input_version=1,
+            attempt=1,
+            credits=30,
+            now=NOW,
         )
         session.add(
             CreditEntry(
@@ -243,6 +347,141 @@ def test_the_database_refuses_a_second_hold_even_if_the_check_is_skipped(
                 amount=-30,
                 target_type=REVISION,
                 target_id=target,
+                input_version=1,
+                attempt=1,
+                created_at=NOW,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.flush()
+
+
+def test_regenerating_an_article_is_held_for_separately(tmp_path: Path) -> None:
+    """The bug this exists for.
+
+    A 立言 regeneration after a success is not a retry: it runs against the next
+    `input_version` and its attempt starts again at 1. Keyed on the attempt
+    alone, the second generation found the first one's 预扣 and took none of its
+    own — so the provider was paid twice, the user once, and 使用记录 showed a
+    single run.
+    """
+    database, user = a_user(tmp_path)
+    assert database.engine is not None
+    article = uuid4()
+    with Session(database.engine) as session:
+        credits.grant(session, user.id, 8_000, now=NOW)
+
+        first = credits.hold(
+            session,
+            user.id,
+            target_type=ARTICLE,
+            target_id=article,
+            input_version=1,
+            attempt=1,
+            credits=57,
+            now=NOW,
+        )
+        second = credits.hold(
+            session,
+            user.id,
+            target_type=ARTICLE,
+            target_id=article,
+            input_version=2,
+            attempt=1,
+            credits=40,
+            now=NOW,
+        )
+
+        assert first is not None
+        assert second is not None
+        assert credits.remaining(session, user.id) == 8_000 - 57 - 40
+
+
+def test_a_regeneration_settles_against_its_own_hold(tmp_path: Path) -> None:
+    """Two generations, two costs, and neither settlement reaching the other."""
+    database, user = a_user(tmp_path)
+    assert database.engine is not None
+    article = uuid4()
+    with Session(database.engine) as session:
+        credits.grant(session, user.id, 8_000, now=NOW)
+        for version, held in ((1, 57), (2, 40)):
+            credits.hold(
+                session,
+                user.id,
+                target_type=ARTICLE,
+                target_id=article,
+                input_version=version,
+                attempt=1,
+                credits=held,
+                now=NOW,
+            )
+
+        credits.settle(
+            session,
+            user.id,
+            target_type=ARTICLE,
+            target_id=article,
+            input_version=1,
+            attempt=1,
+            actual=24,
+            now=NOW,
+        )
+        # The second is still running: settling the first must not have settled
+        # it, and must not have given its 额度 back.
+        assert credits.remaining(session, user.id) == 8_000 - 24 - 40
+
+        credits.settle(
+            session,
+            user.id,
+            target_type=ARTICLE,
+            target_id=article,
+            input_version=2,
+            attempt=1,
+            actual=13,
+            now=NOW,
+        )
+        assert credits.remaining(session, user.id) == 8_000 - 24 - 13
+
+
+def test_the_database_allows_one_hold_per_generation(tmp_path: Path) -> None:
+    """The index has to agree with the functions, or a race writes what they refuse."""
+    database, user = a_user(tmp_path)
+    assert database.engine is not None
+    article = uuid4()
+    with Session(database.engine) as session:
+        credits.hold(
+            session,
+            user.id,
+            target_type=ARTICLE,
+            target_id=article,
+            input_version=1,
+            attempt=1,
+            credits=57,
+            now=NOW,
+        )
+        session.add(
+            CreditEntry(
+                owner_id=user.id,
+                kind="hold",
+                amount=-40,
+                target_type=ARTICLE,
+                target_id=article,
+                input_version=2,
+                attempt=1,
+                created_at=NOW,
+            )
+        )
+        session.flush()
+
+        # ...but a second 预扣 for the *same* generation is still refused.
+        session.add(
+            CreditEntry(
+                owner_id=user.id,
+                kind="hold",
+                amount=-40,
+                target_type=ARTICLE,
+                target_id=article,
+                input_version=2,
                 attempt=1,
                 created_at=NOW,
             )

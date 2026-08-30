@@ -246,6 +246,7 @@ def test_usage_still_reads_after_the_task_it_refers_to_is_gone(tmp_path: Path) -
                 user.id,
                 target_type="source_revision",
                 target_id=uuid4(),
+                input_version=1,
                 attempt=1,
                 credits=56,
             )
@@ -336,3 +337,35 @@ def test_a_search_heavy_failure_costs_立言阁_and_not_the_user(tmp_path: Path)
     # Only the capture fee is gone, and that bought a 来源 the user still has.
     # The analysis itself cost them nothing.
     assert balance(dispatcher.database_url) == before - CAPTURE_CREDITS
+
+
+def test_每次立言生成都记一笔(tmp_path: Path) -> None:
+    """Two generations of one article are two acts, and 使用记录 has to show both.
+
+    Reported as "I ran 立言 two or three times and only one shows up". The
+    missing rows were the visible half: a regeneration is not a retry, so it
+    restarts `attempt` at 1, and while the ledger keyed a 预扣 on the attempt
+    alone the second generation collided with the first, took nothing, and was
+    never charged for.
+    """
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    entitle(dispatcher.database_url, credits=100_000)
+    task_id, _ = confirm_sources(client, headers, ["四天工作制已经没有争议"])
+    dispatcher.run_all()
+
+    for key in ("first-generation", "second-generation"):
+        started = client.post(
+            f"/tasks/{task_id}/liyan-runs",
+            headers=headers,
+            json={"idempotency_key": key, "instruction": {"content": []}},
+        )
+        assert started.status_code == 202, started.text
+        dispatcher.run_all()
+
+    rows = client.get("/account/usage", headers=headers).json()["entries"]
+    articles = [row for row in rows if row["description"] == "立言文章"]
+
+    assert len(articles) == 2
+    # Each settled against its own run rather than reading the other's.
+    assert {row["status"] for row in articles} == {"done"}
+    assert all(row["amount"] < 0 for row in articles)

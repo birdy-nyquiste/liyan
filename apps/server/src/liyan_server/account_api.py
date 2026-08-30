@@ -138,6 +138,7 @@ def _status(session: Session, entry: CreditEntry, settled: bool) -> ActivityStat
         select(Execution).where(
             Execution.target_type == entry.target_type,
             Execution.target_id == entry.target_id,
+            Execution.input_version == entry.input_version,
             Execution.attempt == entry.attempt,
         )
     )
@@ -194,6 +195,7 @@ def account_router(database: Database, current_user: CurrentUserDependency) -> A
                         CreditEntry.kind == "settle",
                         CreditEntry.target_type == entry.target_type,
                         CreditEntry.target_id == entry.target_id,
+                        CreditEntry.input_version == entry.input_version,
                         CreditEntry.attempt == entry.attempt,
                     )
                 )

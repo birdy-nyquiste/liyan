@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from liyan_server import credits
 from liyan_server.credit_reconciliation import ORPHANED_HOLD_GRACE, reconcile_settlements
 from liyan_server.database import Database, Execution, User
+from liyan_server.liyan.runs import LIYAN_TARGET_TYPE
 from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
 NOW = datetime(2026, 8, 27, 12, 0, tzinfo=UTC)
@@ -70,6 +71,7 @@ def hold_for(database: Database, user: User, target: object, *, at: datetime = N
             user.id,
             target_type=ZHIYAN_TARGET_TYPE,
             target_id=target,  # type: ignore[arg-type]
+            input_version=1,
             attempt=1,
             credits=56,
             now=at,
@@ -130,3 +132,56 @@ def test_reconciling_twice_settles_once(tmp_path: Path) -> None:
     assert reconcile_settlements(database_url, now=NOW) == 1
     assert reconcile_settlements(database_url, now=NOW) == 0
     assert balance(database, user) == 1_000
+
+
+def test_one_generation_settling_does_not_settle_the_next(tmp_path: Path) -> None:
+    """The sweep looked for unsettled 预扣 by target, which was fine while a
+    target could only ever hold one. A 立言文章 holds one per generation, so a
+    target that had settled once looked entirely settled — leaving every later
+    generation's 额度 taken for work that had already finished, permanently, and
+    with nothing anywhere to say so."""
+    database_url, database, user = a_writer(tmp_path)
+    article = uuid4()
+    assert database.engine is not None
+    with Session(database.engine) as session:
+        for version, held in ((1, 57), (2, 40)):
+            credits.hold(
+                session,
+                user.id,
+                target_type=LIYAN_TARGET_TYPE,
+                target_id=article,
+                input_version=version,
+                attempt=1,
+                credits=held,
+                now=NOW,
+            )
+            session.add(
+                Execution(
+                    owner_id=user.id,
+                    operation="generate_article",
+                    target_type=LIYAN_TARGET_TYPE,
+                    target_id=article,
+                    input_version=version,
+                    input_identity="a" * 64,
+                    input_snapshot={},
+                    attempt=1,
+                    status="stale",
+                    created_at=NOW,
+                )
+            )
+        # The first generation settled on the eager path, as it normally would.
+        credits.settle(
+            session,
+            user.id,
+            target_type=LIYAN_TARGET_TYPE,
+            target_id=article,
+            input_version=1,
+            attempt=1,
+            actual=24,
+            now=NOW,
+        )
+        session.commit()
+
+    # Only the second is outstanding, and the sweep has to still see it.
+    assert reconcile_settlements(database_url, now=NOW) == 1
+    assert balance(database, user) == 1_000 - 24

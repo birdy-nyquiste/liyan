@@ -32,6 +32,12 @@ from liyan_server.rate_card import estimate_liyan_credits, estimate_zhiyan_credi
 from liyan_server.zhiyan.orchestration import accepted_report
 from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
+#: Every 知言 run is against version 1 and nothing else — `zhiyan/runs.py` sets
+#: it there, because a source Revision is immutable, so there is no second
+#: version of the input to run against. Named rather than written as a bare 1 at
+#: the two 预扣 that pass it, so it is findable if that ever stops being true.
+ZHIYAN_INPUT_VERSION = 1
+
 INSUFFICIENT_MESSAGE = "额度不足，购买后可继续。"
 
 #: URL and file 来源 are what a 付费用户 buys. The workbench shows both as locked
@@ -109,6 +115,7 @@ def hold_zhiyan_batch(
             owner_id,
             target_type=ZHIYAN_TARGET_TYPE,
             target_id=revision_id,
+            input_version=ZHIYAN_INPUT_VERSION,
             attempt=1,
             credits=estimate,
         )
@@ -135,6 +142,7 @@ def hold_zhiyan_attempt(
         owner_id,
         target_type=ZHIYAN_TARGET_TYPE,
         target_id=revision.id,
+        input_version=ZHIYAN_INPUT_VERSION,
         attempt=attempt,
         credits=estimate,
     )
@@ -145,6 +153,7 @@ def hold_liyan_attempt(
     owner_id: UUID,
     article_id: UUID,
     *,
+    input_version: int,
     attempt: int,
     input_characters: int,
     model: str,
@@ -155,6 +164,11 @@ def hold_liyan_attempt(
     Unlike a 知言报告 — which is immutable and bound to one source Revision, so
     asking for it twice returns the one that exists — an article is produced
     afresh each time, and the provider is paid afresh each time.
+
+    `input_version` is what makes that true rather than merely intended. A
+    regeneration after a success is not a retry, so it restarts `attempt` at 1;
+    keyed on the attempt alone, the second generation's 预扣 collided with the
+    first's and was dropped, and the run was free and invisible in 使用记录.
     """
     estimate = estimate_liyan_credits(input_characters=input_characters, model=model)
     refuse_when_short(session, owner_id, needed=estimate)
@@ -163,6 +177,7 @@ def hold_liyan_attempt(
         owner_id,
         target_type=LIYAN_TARGET_TYPE,
         target_id=article_id,
+        input_version=input_version,
         attempt=attempt,
         credits=estimate,
     )

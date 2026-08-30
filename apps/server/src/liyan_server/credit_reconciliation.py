@@ -22,7 +22,7 @@ ordinary case rather than a race.
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from liyan_server.credits import settle
@@ -38,12 +38,29 @@ ORPHANED_HOLD_GRACE = timedelta(minutes=30)
 
 
 def _unsettled(session: Session) -> list[CreditEntry]:
-    settled = select(CreditEntry.target_id).where(CreditEntry.kind == "settle")
+    """预扣 with no 结算 of their own.
+
+    Matched on the whole run key, not on the target. One 立言文章 can carry a
+    hold per generation, so a target that has settled once is not a target that
+    has settled — reading it that way would leave every later generation's 预扣
+    standing forever, which is a user's 额度 taken for work that finished.
+    """
+    settled = select(
+        CreditEntry.target_type,
+        CreditEntry.target_id,
+        CreditEntry.input_version,
+        CreditEntry.attempt,
+    ).where(CreditEntry.kind == "settle")
     return list(
         session.scalars(
             select(CreditEntry).where(
                 CreditEntry.kind == "hold",
-                CreditEntry.target_id.not_in(settled),
+                tuple_(
+                    CreditEntry.target_type,
+                    CreditEntry.target_id,
+                    CreditEntry.input_version,
+                    CreditEntry.attempt,
+                ).not_in(settled),
             )
         )
     )
@@ -54,6 +71,7 @@ def _execution_for(session: Session, held: CreditEntry) -> Execution | None:
         select(Execution).where(
             Execution.target_type == held.target_type,
             Execution.target_id == held.target_id,
+            Execution.input_version == held.input_version,
             Execution.attempt == held.attempt,
         )
     )
@@ -73,7 +91,12 @@ def reconcile_settlements(database_url: str, *, now: datetime | None = None) -> 
     try:
         with Session(database.engine) as session:
             for held in _unsettled(session):
-                if held.target_type is None or held.target_id is None or held.attempt is None:
+                if (
+                    held.target_type is None
+                    or held.target_id is None
+                    or held.input_version is None
+                    or held.attempt is None
+                ):
                     continue
                 execution = _execution_for(session, held)
                 if execution is None:
@@ -102,6 +125,7 @@ def reconcile_settlements(database_url: str, *, now: datetime | None = None) -> 
                     held.owner_id,
                     target_type=held.target_type,
                     target_id=held.target_id,
+                    input_version=held.input_version,
                     attempt=held.attempt,
                     actual=actual,
                     execution_id=execution.id if execution else None,

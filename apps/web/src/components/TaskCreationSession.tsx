@@ -22,6 +22,7 @@ import {
   type SessionSourceResponse,
   type SourceInput,
   type TaskCreationSessionResponse,
+  type AccessToken,
 } from "../api/client";
 import { BuyCreditsLink } from "./BuyCreditsLink";
 import { isCreditRefusal } from "./creditRefusal";
@@ -55,7 +56,7 @@ function SourceCard({
   expanded,
   onToggle,
 }: {
-  accessToken: string;
+  accessToken: AccessToken;
   source: SessionSourceResponse;
   index: number;
   busy: boolean;
@@ -221,7 +222,7 @@ export function TaskCreationSession({
   onCreated,
   onDirtyChange,
 }: {
-  accessToken: string;
+  accessToken: AccessToken;
   onCreated(task: TaskSummary): void;
   onDirtyChange(dirty: boolean): void;
 }) {

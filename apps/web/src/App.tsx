@@ -1,10 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Languages, MonitorCog, MoonStar, Sun } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 
-import { ApiError, loadTaskWorkspace, serverIsAlive } from "./api/client";
+import {
+  ApiError,
+  loadTaskWorkspace,
+  onSessionExpired,
+  serverIsAlive,
+  type AccessToken,
+} from "./api/client";
 import { type AuthProvider, supabaseAuthProvider } from "./auth/provider";
 import type { AuthViewState, SignedOutState } from "./auth/state";
 import { AuthPanel } from "./components/AuthPanel";
@@ -30,12 +36,37 @@ const signedOut = (message: string | null = null): SignedOutState => ({
   message,
 });
 
+/**
+ * What a writer is told when their login ran out under them.
+ *
+ * Worth saying rather than dropping them at a blank form: they were in the
+ * middle of something, and the form on its own reads as the workbench having
+ * forgotten them.
+ */
+const SESSION_EXPIRED = "登录已过期，请重新登录。";
+
 function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
   const [health, setHealth] = useState<HealthState>("checking");
   const [auth, setAuth] = useState<AuthViewState>({ screen: "checking" });
+  /** Set while the writer's own sign-out is in flight. See the expiry effect. */
+  const signingOut = useRef(false);
+
+  /**
+   * The token to sign the next request with, asked for at the moment it is
+   * needed rather than read once and kept.
+   *
+   * This one function is what every request in the workbench ends up calling,
+   * because it is what gets threaded down as `accessToken`. A provider that
+   * cannot answer is the same situation as a session that has ended, so it
+   * takes the same path: no token, and the request is refused as 401.
+   */
+  const accessToken = useMemo<AccessToken>(
+    () => () => authProvider.getAccessToken().catch(() => null),
+    [authProvider],
+  );
 
   const openWorkspace = useCallback(
-    async (accessToken: string) => {
+    async () => {
       setAuth((current) =>
         current.screen === "email" || current.screen === "otp"
           ? { ...current, busy: true, message: null }
@@ -61,7 +92,7 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
         );
       }
     },
-    [authProvider],
+    [accessToken, authProvider],
   );
 
   useEffect(() => {
@@ -82,9 +113,9 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
     let active = true;
     void authProvider
       .getAccessToken()
-      .then((accessToken) => {
+      .then((token) => {
         if (!active) return;
-        if (accessToken) void openWorkspace(accessToken);
+        if (token) void openWorkspace();
         else setAuth(signedOut());
       })
       .catch(() => {
@@ -94,6 +125,43 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
       active = false;
     };
   }, [authProvider, openWorkspace]);
+
+  /**
+   * Return to sign-in when the session ends, however the workbench finds out.
+   *
+   * Two things can tell it. Supabase says so directly when a session can no
+   * longer be refreshed, which is the ordinary case — a tab left open past the
+   * refresh token's life. The server says so as a 401 on some request, which
+   * covers everything Supabase cannot know about, an account removed
+   * mid-session among them.
+   *
+   * Both are ignored unless a workbench is actually on screen. A writer who
+   * has just signed out themselves is already where this would send them, and
+   * telling them their login expired would be a lie about what they just did.
+   */
+  useEffect(() => {
+    if (auth.screen !== "workspace") return;
+    const expire = () =>
+      setAuth((current) => {
+        // A writer who has just signed out themselves is already where this
+        // would send them, and telling them their login expired would be a lie
+        // about what they just did. Supabase announces a deliberate sign-out
+        // through this same listener, and announces it *during* `signOut`,
+        // before the screen has changed — so the screen alone cannot tell the
+        // two apart and `signingOut` is what does.
+        if (signingOut.current || current.screen !== "workspace") return current;
+        queryClient.clear();
+        return signedOut(SESSION_EXPIRED);
+      });
+    const stopWatchingSession = authProvider.onAuthStateChange((token) => {
+      if (!token) expire();
+    });
+    const stopWatchingRefusals = onSessionExpired(expire);
+    return () => {
+      stopWatchingSession();
+      stopWatchingRefusals();
+    };
+  }, [auth.screen, authProvider]);
 
   async function requestOtp(email: string) {
     // A resend is this same call from the 验证码 screen, and it must not throw the
@@ -118,8 +186,8 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
   async function verifyOtp(email: string, otp: string) {
     setAuth({ screen: "otp", email, otp, busy: true, message: null });
     try {
-      const accessToken = await authProvider.verifyEmailOtp(email.trim(), otp.trim());
-      await openWorkspace(accessToken);
+      await authProvider.verifyEmailOtp(email.trim(), otp.trim());
+      await openWorkspace();
     } catch {
       setAuth({
         screen: "otp",
@@ -162,9 +230,14 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
       initialTasks={auth.tasks}
       serviceUnavailable={health === "unavailable"}
       onSignOut={async () => {
-        await authProvider.signOut();
-        queryClient.clear();
-        setAuth(signedOut());
+        signingOut.current = true;
+        try {
+          await authProvider.signOut();
+          queryClient.clear();
+          setAuth(signedOut());
+        } finally {
+          signingOut.current = false;
+        }
       }}
     />
   ) : auth.screen === "checking" ? null : (

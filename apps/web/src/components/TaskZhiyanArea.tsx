@@ -9,6 +9,7 @@ import {
   refusalWithoutTiming,
   startZhiyanRun,
   type TaskVersionZhiyanResponse,
+  type AccessToken,
 } from "../api/client";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
@@ -49,7 +50,7 @@ export function TaskZhiyanArea({
   onZhiyanState,
   onCapsuleSelect,
 }: {
-  accessToken: string;
+  accessToken: AccessToken;
   taskId: string;
   versionId?: string | null;
   pollIntervalMs?: number;

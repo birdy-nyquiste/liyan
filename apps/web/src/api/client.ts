@@ -90,7 +90,7 @@ export async function serverIsAlive(): Promise<boolean> {
   return true;
 }
 
-export async function loadTaskWorkspace(accessToken: string) {
+export async function loadTaskWorkspace(accessToken: AccessToken) {
   const api = authenticatedApi(accessToken);
   const identityResult = await api.GET("/auth/me");
   if (!identityResult.data) {
@@ -106,12 +106,12 @@ export async function loadTaskWorkspace(accessToken: string) {
   };
 }
 
-export async function listTasks(accessToken: string): Promise<TaskSummaryResponse[]> {
+export async function listTasks(accessToken: AccessToken): Promise<TaskSummaryResponse[]> {
   return (await listTaskPage(accessToken)).items;
 }
 
 export async function listTaskPage(
-  accessToken: string,
+  accessToken: AccessToken,
   cursor: string | null = null,
 ): Promise<TaskListResponse> {
   const result = await authenticatedApi(accessToken).GET("/tasks", {
@@ -122,7 +122,7 @@ export async function listTaskPage(
 }
 
 export async function getTask(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
 ): Promise<TaskSummaryResponse> {
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}", {
@@ -132,14 +132,14 @@ export async function getTask(
   return result.data;
 }
 
-export async function getAccount(accessToken: string): Promise<AccountResponse> {
+export async function getAccount(accessToken: AccessToken): Promise<AccountResponse> {
   const result = await authenticatedApi(accessToken).GET("/account", {});
   if (!result.data) throw refusalOf(result);
   return result.data;
 }
 
 export async function listAccountUsage(
-  accessToken: string,
+  accessToken: AccessToken,
   offset = 0,
 ): Promise<UsageResponse> {
   const result = await authenticatedApi(accessToken).GET("/account/usage", {
@@ -149,7 +149,7 @@ export async function listAccountUsage(
   return result.data;
 }
 
-export async function listCreditPacks(accessToken: string): Promise<CreditPack[]> {
+export async function listCreditPacks(accessToken: AccessToken): Promise<CreditPack[]> {
   const result = await authenticatedApi(accessToken).GET("/account/credit-packs", {});
   if (!result.data) throw refusalOf(result);
   return result.data.packs;
@@ -163,7 +163,7 @@ export async function listCreditPacks(accessToken: string): Promise<CreditPack[]
  * the 额度 amount may never come from anything a client could have influenced.
  */
 export async function createCheckoutSession(
-  accessToken: string,
+  accessToken: AccessToken,
   priceId: string,
 ): Promise<string> {
   const result = await authenticatedApi(accessToken).POST("/account/checkout-session", {
@@ -173,15 +173,77 @@ export async function createCheckoutSession(
   return result.data.url;
 }
 
-function authenticatedApi(accessToken: string) {
-  return createClient<paths>({
+/**
+ * Where a request gets its bearer token.
+ *
+ * A string is a token frozen at the moment it was read. That is what the
+ * workbench used to thread through every component, and it is why a tab left
+ * open for an hour began refusing everything: Supabase access tokens expire,
+ * supabase-js quietly refreshed the session in the background, and nothing
+ * ever read the new token. Every call then failed with whatever message the
+ * caller had for its own operation — "立言生成未能启动" for an expired login.
+ *
+ * A function is asked again for every single request, so the token that goes
+ * out is the one the session holds now. Sign-in passes one of those; a plain
+ * string remains accepted because a test that means one fixed token should be
+ * able to say so.
+ */
+export type AccessToken = string | (() => Promise<string | null>);
+
+/** Told when the server refuses a request because the session is no longer good. */
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+/**
+ * Hear about a 401 from anywhere in the workbench.
+ *
+ * A refused request surfaces wherever it was made, and every caller there has
+ * its own sentence for its own failure — none of which is "your login ran
+ * out". Returning to sign-in is a whole-application decision, so it is made
+ * once, here, rather than by each panel guessing at it.
+ */
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
+}
+
+function announceSessionExpired(): void {
+  for (const listener of sessionExpiredListeners) listener();
+}
+
+async function bearerToken(accessToken: AccessToken): Promise<string | null> {
+  return typeof accessToken === "string" ? accessToken : await accessToken();
+}
+
+function authenticatedApi(accessToken: AccessToken) {
+  const api = createClient<paths>({
     baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
-    headers: { Authorization: `Bearer ${accessToken}` },
   });
+  api.use({
+    async onRequest({ request }) {
+      const token = await bearerToken(accessToken);
+      // No token at all is the session having ended while the workbench was
+      // still open. Answering 401 here rather than sending the request
+      // unsigned gives the caller the same refusal the server would have, but
+      // the announcement has to be made explicitly: returning a Response from
+      // `onRequest` short-circuits the request, and `onResponse` does not run
+      // for one that never went out.
+      if (!token) {
+        announceSessionExpired();
+        return new Response(null, { status: 401 });
+      }
+      request.headers.set("Authorization", `Bearer ${token}`);
+      return request;
+    },
+    onResponse({ response }) {
+      if (response.status === 401) announceSessionExpired();
+    },
+  });
+  return api;
 }
 
 export async function confirmTaskCreationSession(
-  accessToken: string,
+  accessToken: AccessToken,
   idempotencyKey: string,
   clientSessionId: string,
   sourceIds: string[],
@@ -200,7 +262,7 @@ export async function confirmTaskCreationSession(
 }
 
 export async function getTaskCreationSession(
-  accessToken: string,
+  accessToken: AccessToken,
   clientSessionId: string,
 ): Promise<TaskCreationSessionResponse> {
   const result = await authenticatedApi(accessToken).GET(
@@ -212,7 +274,7 @@ export async function getTaskCreationSession(
 }
 
 export async function createPastedSource(
-  accessToken: string,
+  accessToken: AccessToken,
   clientSessionId: string,
   clientSourceId: string,
   source: SourceInput,
@@ -229,7 +291,7 @@ export async function createPastedSource(
 }
 
 export async function editPastedSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
   source: SourceInput,
 ): Promise<SessionSourceResponse> {
@@ -242,7 +304,7 @@ export async function editPastedSource(
 }
 
 export async function deleteTaskCreationSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
 ): Promise<void> {
   const result = await authenticatedApi(accessToken).DELETE(
@@ -253,7 +315,7 @@ export async function deleteTaskCreationSource(
 }
 
 export async function renameTask(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   displayName: string,
 ): Promise<TaskSummaryResponse> {
@@ -265,7 +327,7 @@ export async function renameTask(
   return result.data;
 }
 
-export async function deleteTask(accessToken: string, taskId: string): Promise<void> {
+export async function deleteTask(accessToken: AccessToken, taskId: string): Promise<void> {
   const result = await authenticatedApi(accessToken).DELETE("/tasks/{task_id}", {
     params: { path: { task_id: taskId } },
     body: { confirmed: true },
@@ -280,7 +342,7 @@ export async function deleteTask(accessToken: string, taskId: string): Promise<v
 }
 
 export async function createUrlSource(
-  accessToken: string,
+  accessToken: AccessToken,
   clientSessionId: string,
   clientSourceId: string,
   url: string,
@@ -297,7 +359,7 @@ export async function createUrlSource(
 }
 
 export async function getUrlSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
 ): Promise<UrlSourceResponse> {
   const result = await authenticatedApi(accessToken).GET(
@@ -309,7 +371,7 @@ export async function getUrlSource(
 }
 
 export async function retryUrlSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
 ): Promise<UrlSourceResponse> {
   const result = await authenticatedApi(accessToken).POST(
@@ -321,7 +383,7 @@ export async function retryUrlSource(
 }
 
 export async function editUrlSourceContent(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
   source: SourceInput,
 ): Promise<UrlSourceResponse> {
@@ -334,7 +396,7 @@ export async function editUrlSourceContent(
 }
 
 export async function cancelExecution(
-  accessToken: string,
+  accessToken: AccessToken,
   executionId: string,
 ): Promise<void> {
   const result = await authenticatedApi(accessToken).POST(
@@ -345,7 +407,7 @@ export async function cancelExecution(
 }
 
 export async function createFileSource(
-  accessToken: string,
+  accessToken: AccessToken,
   clientSessionId: string,
   clientSourceId: string,
   file: File,
@@ -367,7 +429,7 @@ export async function createFileSource(
 }
 
 export async function getFileSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
 ): Promise<FileSourceResponse> {
   const result = await authenticatedApi(accessToken).GET(
@@ -379,7 +441,7 @@ export async function getFileSource(
 }
 
 export async function retryFileSource(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
 ): Promise<FileSourceResponse> {
   const result = await authenticatedApi(accessToken).POST(
@@ -391,7 +453,7 @@ export async function retryFileSource(
 }
 
 export async function editFileSourceContent(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceId: string,
   source: SourceInput,
 ): Promise<FileSourceResponse> {
@@ -404,7 +466,7 @@ export async function editFileSourceContent(
 }
 
 export async function getTaskZhiyan(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
 ): Promise<TaskVersionZhiyanResponse> {
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/zhiyan", {
@@ -415,7 +477,7 @@ export async function getTaskZhiyan(
 }
 
 export async function getTaskVersionZhiyan(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   versionId: string,
 ): Promise<TaskVersionZhiyanResponse> {
@@ -428,7 +490,7 @@ export async function getTaskVersionZhiyan(
 }
 
 export async function listTaskVersions(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
 ): Promise<TaskVersionHistory> {
   const result = await authenticatedApi(accessToken).GET("/tasks/{task_id}/versions", {
@@ -439,7 +501,7 @@ export async function listTaskVersions(
 }
 
 export async function createSourceEditSession(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
 ): Promise<SourceEditSessionResponse> {
   const result = await authenticatedApi(accessToken).POST(
@@ -451,7 +513,7 @@ export async function createSourceEditSession(
 }
 
 export async function saveSourceEditSession(
-  accessToken: string,
+  accessToken: AccessToken,
   editSessionId: string,
   request: SaveSourceEditRequest,
 ): Promise<TaskVersionSnapshot> {
@@ -464,24 +526,33 @@ export async function saveSourceEditSession(
 }
 
 export async function discardSourceEditSession(
-  accessToken: string,
+  accessToken: AccessToken,
   editSessionId: string,
   keepalive = false,
 ): Promise<void> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  // Hand-rolled rather than through `authenticatedApi`, because `keepalive` is
+  // what lets this survive the page it was sent from — so the token has to be
+  // resolved here too, and the 401 reported by the same route as every other.
+  const token = await bearerToken(accessToken);
+  if (!token) {
+    announceSessionExpired();
+    throw new ApiError(401);
+  }
   const response = await fetch(new Request(
     `${baseUrl}/source-edit-sessions/${editSessionId}/discard`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${token}` },
       keepalive,
     },
   ));
+  if (response.status === 401) announceSessionExpired();
   if (!response.ok) throw new ApiError(response.status);
 }
 
 export async function restoreTaskVersion(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   versionId: string,
   idempotencyKey: string,
@@ -498,7 +569,7 @@ export async function restoreTaskVersion(
 }
 
 export async function startZhiyanRun(
-  accessToken: string,
+  accessToken: AccessToken,
   sourceRevisionId: string,
 ): Promise<ZhiyanStateResponse> {
   const result = await authenticatedApi(accessToken).POST(
@@ -510,7 +581,7 @@ export async function startZhiyanRun(
 }
 
 export async function getTaskLiyan(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   workingCopyHash: string | null = null,
 ): Promise<LiyanStateResponse> {
@@ -525,7 +596,7 @@ export async function getTaskLiyan(
 }
 
 export async function saveLiyanRevision(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   request: SaveLiyanRevisionRequest,
 ): Promise<LiyanStateResponse> {
@@ -538,7 +609,7 @@ export async function saveLiyanRevision(
 }
 
 export async function restoreLiyanRevision(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   revisionId: string,
   idempotencyKey: string,
@@ -555,7 +626,7 @@ export async function restoreLiyanRevision(
 }
 
 export async function startLiyanRun(
-  accessToken: string,
+  accessToken: AccessToken,
   taskId: string,
   request: StartLiyanRunRequest,
 ): Promise<LiyanStateResponse> {
@@ -568,7 +639,7 @@ export async function startLiyanRun(
 }
 
 export async function listPublicationTargets(
-  accessToken: string,
+  accessToken: AccessToken,
 ): Promise<PublicationTargetResponse[]> {
   const result = await authenticatedApi(accessToken).GET("/publication/targets");
   if (!result.data) throw refusalOf(result);
@@ -576,13 +647,13 @@ export async function listPublicationTargets(
 }
 
 export async function listEligibleArticles(
-  accessToken: string,
+  accessToken: AccessToken,
 ): Promise<EligibleArticleResponse[]> {
   return (await listEligibleArticlePage(accessToken)).items;
 }
 
 export async function listEligibleArticlePage(
-  accessToken: string,
+  accessToken: AccessToken,
   cursor?: string | null,
 ): Promise<EligibleArticleListResponse> {
   const result = await authenticatedApi(accessToken).GET("/publication/eligible-articles", {
@@ -593,7 +664,7 @@ export async function listEligibleArticlePage(
 }
 
 export async function confirmPublication(
-  accessToken: string,
+  accessToken: AccessToken,
   request: ConfirmPublicationRequest,
 ): Promise<PublishTaskResponse> {
   const result = await authenticatedApi(accessToken).POST("/publication/publish-tasks", {
@@ -607,7 +678,7 @@ export async function confirmPublication(
 
 /** Send the locked snapshot again. Only a definitive failure may be retried. */
 export async function retryPublication(
-  accessToken: string,
+  accessToken: AccessToken,
   publishTaskId: string,
   idempotencyKey: string,
   acknowledgeExistingPreview = false,
@@ -627,7 +698,7 @@ export async function retryPublication(
 }
 
 export async function getPublishTask(
-  accessToken: string,
+  accessToken: AccessToken,
   publishTaskId: string,
 ): Promise<PublishTaskResponse> {
   const result = await authenticatedApi(accessToken).GET(
@@ -638,12 +709,12 @@ export async function getPublishTask(
   return result.data;
 }
 
-export async function listPublishTasks(accessToken: string): Promise<PublishTaskResponse[]> {
+export async function listPublishTasks(accessToken: AccessToken): Promise<PublishTaskResponse[]> {
   return (await listPublishTaskPage(accessToken)).items;
 }
 
 export async function listPublishTaskPage(
-  accessToken: string,
+  accessToken: AccessToken,
   cursor?: string | null,
 ): Promise<PublishTaskListResponse> {
   const result = await authenticatedApi(accessToken).GET("/publication/publish-tasks", {

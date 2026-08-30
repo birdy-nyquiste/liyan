@@ -18,6 +18,7 @@ import {
   type SessionSourceResponse,
   type TaskVersionSnapshot,
   type VersionSource,
+  type AccessToken,
 } from "../api/client";
 import { BuyCreditsLink } from "./BuyCreditsLink";
 import { isCreditRefusal } from "./creditRefusal";
@@ -69,7 +70,7 @@ export function TaskSourceVersions({
   onCurrentVersionChanged,
   onEditingChange = ignoreEditingChange,
 }: {
-  accessToken: string;
+  accessToken: AccessToken;
   taskId: string;
   onVersionSelected(versionId: string): void;
   onCurrentVersionChanged(version: TaskVersionSnapshot): void;

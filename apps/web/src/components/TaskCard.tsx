@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, deleteTask, renameTask } from "../api/client";
+import { ApiError, deleteTask, renameTask, type AccessToken } from "../api/client";
 import type { TaskSummary } from "../auth/state";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -22,7 +22,7 @@ export function TaskCard({
 }: {
   task: TaskSummary;
   userId: string;
-  accessToken: string;
+  accessToken: AccessToken;
   opened?: boolean;
   onOpen?(taskId: string): void;
   onSourceEditingChange?(taskId: string, editing: boolean): void;

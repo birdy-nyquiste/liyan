@@ -8,6 +8,7 @@ import {
   retryPublication,
   type EligibleArticleResponse,
   type PublishTaskResponse,
+  type AccessToken,
 } from "../api/client";
 import { articleContentHash } from "./articleContentHash";
 import {
@@ -54,7 +55,7 @@ export function PublicationCenter({
   initialRevisionId,
 }: {
   userId: string;
-  accessToken: string;
+  accessToken: AccessToken;
   onPublicationChanged?(): void;
   onOpenTask?(taskId: string): void;
   initialTaskId?: string | null;

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -47,11 +47,16 @@ describe("Email OTP sign in", () => {
   });
 
   it("opens the authenticated user's empty task list after OTP verification", async () => {
+    let session: string | null = null;
     const authProvider: AuthProvider = {
-      getAccessToken: vi.fn().mockResolvedValue(null),
+      getAccessToken: vi.fn().mockImplementation(async () => session),
       sendEmailOtp: vi.fn().mockResolvedValue(undefined),
-      verifyEmailOtp: vi.fn().mockResolvedValue("verified-access-token"),
+      verifyEmailOtp: vi.fn().mockImplementation(async () => {
+        session = "verified-access-token";
+        return session;
+      }),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
       if (request.url.endsWith("/health/live")) {
@@ -91,11 +96,16 @@ describe("Email OTP sign in", () => {
   });
 
   it("shows a safe denial and clears the session for a non-allowlisted account", async () => {
+    let session: string | null = null;
     const authProvider: AuthProvider = {
-      getAccessToken: vi.fn().mockResolvedValue(null),
+      getAccessToken: vi.fn().mockImplementation(async () => session),
       sendEmailOtp: vi.fn().mockResolvedValue(undefined),
-      verifyEmailOtp: vi.fn().mockResolvedValue("outsider-access-token"),
+      verifyEmailOtp: vi.fn().mockImplementation(async () => {
+        session = "outsider-access-token";
+        return session;
+      }),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal(
       "fetch",
@@ -127,6 +137,7 @@ describe("Email OTP sign in", () => {
       sendEmailOtp: vi.fn().mockResolvedValue(undefined),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
     const user = userEvent.setup();
@@ -147,6 +158,7 @@ describe("Email OTP sign in", () => {
       sendEmailOtp: vi.fn().mockResolvedValue(undefined),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
     const user = userEvent.setup();
@@ -170,6 +182,7 @@ describe("Email OTP sign in", () => {
       sendEmailOtp: vi.fn(),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
     const user = userEvent.setup();
@@ -187,6 +200,154 @@ describe("Email OTP sign in", () => {
   });
 });
 
+describe("a session that outlives its access token", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState({}, "", "/");
+    window.localStorage.clear();
+  });
+
+  /** A workbench signed in with `first`, whose session later holds `second`. */
+  function signedIn(session: { token: string | null }) {
+    return {
+      getAccessToken: vi.fn().mockImplementation(async () => session.token),
+      sendEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
+    } satisfies AuthProvider;
+  }
+
+  function workbenchFetch(respond?: (request: Request) => Response | undefined) {
+    return vi.fn().mockImplementation(async (request: Request) => {
+      const override = respond?.(request);
+      if (override) return override;
+      if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
+      if (request.url.endsWith("/auth/me")) {
+        return Response.json({ id: "user-1", email: "writer@example.com" });
+      }
+      if (request.url.includes("/tasks")) return Response.json({ items: [], next_cursor: null });
+      if (request.url.includes("/publication/")) {
+        return Response.json({ items: [], next_cursor: null });
+      }
+      return new Response(null, { status: 404 });
+    });
+  }
+
+  it("signs each request with the session's current token, not sign-in's", async () => {
+    // The bug this exists for: the token was read once and threaded through
+    // every component, so an hour after sign-in the workbench was still
+    // presenting the token it opened with and the server refused all of it.
+    const session = { token: "token-at-sign-in" };
+    const fetch = workbenchFetch();
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+
+    render(<App authProvider={signedIn(session)} />);
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+
+    // What supabase-js does in the background once the first token expires.
+    session.token = "token-after-refresh";
+    await user.click(screen.getByRole("link", { name: "发布" }));
+    expect(await screen.findByRole("heading", { name: "选择草稿" })).toBeInTheDocument();
+
+    const publicationRequests = fetch.mock.calls
+      .map(([request]) => request as Request)
+      .filter((request) => request.url.includes("/publication/"));
+    expect(publicationRequests.length).toBeGreaterThan(0);
+    for (const request of publicationRequests) {
+      expect(request.headers.get("Authorization")).toBe("Bearer token-after-refresh");
+    }
+  });
+
+  it("returns to sign-in, saying so, when the server refuses a token", async () => {
+    const session = { token: "token-the-server-no-longer-accepts" };
+    vi.stubGlobal(
+      "fetch",
+      workbenchFetch((request) =>
+        request.url.includes("/publication/") ? new Response(null, { status: 401 }) : undefined,
+      ),
+    );
+    const user = userEvent.setup();
+
+    render(<App authProvider={signedIn(session)} />);
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "发布" }));
+
+    expect(await screen.findByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("登录已过期，请重新登录。");
+  });
+
+  it("returns to sign-in when there is no token left to sign a request with", async () => {
+    // The session can be gone before a request is even attempted. That request
+    // is refused without going out, which means it never produces a response —
+    // so the refusal has to be announced by the code that short-circuits it.
+    const session: { token: string | null } = { token: "token" };
+    vi.stubGlobal("fetch", workbenchFetch());
+    const user = userEvent.setup();
+
+    render(<App authProvider={signedIn(session)} />);
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+
+    session.token = null;
+    await user.click(screen.getByRole("link", { name: "发布" }));
+
+    expect(await screen.findByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("登录已过期，请重新登录。");
+  });
+
+  it("returns to sign-in when the session ends without a request being made", async () => {
+    const session = { token: "token" };
+    let announce: ((token: string | null) => void) | null = null;
+    const authProvider: AuthProvider = {
+      ...signedIn(session),
+      onAuthStateChange: vi.fn().mockImplementation((listener) => {
+        announce = listener;
+        return () => undefined;
+      }),
+    };
+    vi.stubGlobal("fetch", workbenchFetch());
+
+    render(<App authProvider={authProvider} />);
+    expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
+
+    // Supabase, having failed to refresh: there is no session any more.
+    act(() => announce?.(null));
+
+    expect(await screen.findByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("登录已过期，请重新登录。");
+  });
+
+  it("does not tell a writer who signed out that their login expired", async () => {
+    const session: { token: string | null } = { token: "token" };
+    let announce: ((token: string | null) => void) | null = null;
+    const authProvider: AuthProvider = {
+      ...signedIn(session),
+      onAuthStateChange: vi.fn().mockImplementation((listener) => {
+        announce = listener;
+        return () => undefined;
+      }),
+    };
+    vi.stubGlobal("fetch", workbenchFetch());
+    const user = userEvent.setup();
+
+    render(<App authProvider={authProvider} />);
+    await user.click(await screen.findByRole("button", { name: /账户与偏好/ }));
+    await user.click(screen.getByRole("button", { name: "退出登录" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "退出登录" }),
+    );
+    expect(await screen.findByLabelText("邮箱")).toBeInTheDocument();
+
+    // Supabase announces the sign-out the writer just performed themselves.
+    session.token = null;
+    act(() => announce?.(null));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
 describe("routed workbench shell", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -200,6 +361,7 @@ describe("routed workbench shell", () => {
       sendEmailOtp: vi.fn().mockResolvedValue(undefined),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
 
@@ -217,6 +379,7 @@ describe("routed workbench shell", () => {
       sendEmailOtp: vi.fn(),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
       if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
@@ -255,6 +418,7 @@ describe("routed workbench shell", () => {
       sendEmailOtp: vi.fn(),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "alive" })));
     const user = userEvent.setup();
@@ -276,6 +440,7 @@ describe("routed workbench shell", () => {
       sendEmailOtp: vi.fn(),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal(
       "fetch",
@@ -306,6 +471,7 @@ describe("routed workbench shell", () => {
       sendEmailOtp: vi.fn(),
       verifyEmailOtp: vi.fn(),
       signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
     };
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
       if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });

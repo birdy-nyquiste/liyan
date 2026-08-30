@@ -10,6 +10,7 @@ import {
   type AccountResponse,
   type CreditPack,
   type UsageEntry,
+  type AccessToken,
 } from "../api/client";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { CHECKOUT_POLL_MS, CHECKOUT_POLL_TIMEOUT_MS } from "./pollIntervals";
@@ -118,7 +119,7 @@ function priceLabel(pack: CreditPack): string {
   }
 }
 
-export function AccountPage({ accessToken }: { accessToken: string }): React.ReactElement {
+export function AccountPage({ accessToken }: { accessToken: AccessToken }): React.ReactElement {
   const { locale } = useInterfaceLocale();
   const text = copy[locale];
   const [searchParams, setSearchParams] = useSearchParams();

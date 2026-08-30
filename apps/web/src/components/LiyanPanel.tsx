@@ -12,6 +12,7 @@ import {
   type InstructionDocument,
   type LiyanStateResponse,
   type StartLiyanRunRequest,
+  type AccessToken,
 } from "../api/client";
 import { BuyCreditsLink } from "./BuyCreditsLink";
 import { isCreditRefusal } from "./creditRefusal";
@@ -40,6 +41,7 @@ import { EXECUTION_POLL_MS } from "./pollIntervals";
 
 const TOO_MANY_REQUESTS = 429;
 const CONFLICT = 409;
+const UNAUTHORIZED = 401;
 const STALE_BASE = "文章已有更新的 Revision，请先查看最新内容。";
 const UNSAVED_EDITS = "有未保存的修改，请先保存后再发布。";
 const DISCARD_ON_RESTORE = "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？";
@@ -68,7 +70,7 @@ export function LiyanPanel({
   onPublish,
 }: {
   userId: string;
-  accessToken: string;
+  accessToken: AccessToken;
   taskId: string;
   taskLabel?: string;
   capsuleSelection?: CapsuleSelection | null;
@@ -195,9 +197,15 @@ export function LiyanPanel({
       );
       setError(null);
     } catch (thrown) {
+      // 401 is the session having run out, not 立言 having failed to start.
+      // Saying it did sends the writer to look at the generation pipeline for a
+      // problem that is entirely in their login — which is exactly what this
+      // sentence once cost. The whole workbench is on its way back to the
+      // sign-in form, which says the true thing.
+      const expired = thrown instanceof ApiError && thrown.status === UNAUTHORIZED;
       const refusal =
         refusalWithoutTiming(thrown) ??
-        (thrown instanceof ApiError && thrown.status === TOO_MANY_REQUESTS
+        (expired || (thrown instanceof ApiError && thrown.status === TOO_MANY_REQUESTS)
           ? null
           : "立言生成未能启动，请稍后重试。");
       // The reload has to come first: it clears the error on success, so a

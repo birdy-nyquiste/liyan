@@ -9,6 +9,7 @@ import {
   retryPublication,
   type PublicationTargetResponse,
   type PublishTaskResponse,
+  type AccessToken,
 } from "../api/client";
 import { ArticleReader } from "./ArticleReader";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -79,7 +80,7 @@ export function PublicationConfirmation({
   onClose,
 }: {
   userId: string;
-  accessToken: string;
+  accessToken: AccessToken;
   article: PublicationArticle;
   workingCopyHash?: string | null;
   pollIntervalMs?: number;

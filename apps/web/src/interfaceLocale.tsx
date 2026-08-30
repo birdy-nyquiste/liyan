@@ -243,6 +243,7 @@ const ENGLISH: Record<string, string> = {
   "登录": "Sign in",
   "有感而发，知言而立": "Write from insight, stand through understanding",
   "服务暂不可用，部分操作可能失败。": "The service is temporarily unavailable. Some actions may fail.",
+  "登录已过期，请重新登录。": "Your session has expired. Please sign in again.",
   "此账号暂无访问权限。": "This account does not currently have access.",
   "暂时无法进入工作台，请稍后重试。": "The workbench is temporarily unavailable. Please try again later.",
   "验证码发送失败，请稍后重试。": "The verification code could not be sent. Please try again later.",

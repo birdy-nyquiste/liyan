@@ -35,7 +35,7 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { deleteTask, getAccount, getTask, listTaskPage, renameTask, type TaskListResponse } from "../api/client";
+import { deleteTask, getAccount, getTask, listTaskPage, renameTask, type AccessToken, type TaskListResponse } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
 import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocale";
 import { setHistoryGuard } from "../navigationGuard";
@@ -182,7 +182,7 @@ function SidebarTask({
   active: boolean;
   collapsed: boolean;
   text: (typeof copy)[Locale];
-  accessToken: string;
+  accessToken: AccessToken;
   onRenamed(task: TaskSummary): void;
   onDeleted(taskId: string): void;
   onNavigate(to: string): boolean;
@@ -357,7 +357,7 @@ function Sidebar({
   onLoadMore,
 }: {
   identity: Identity;
-  accessToken: string;
+  accessToken: AccessToken;
   tasks: TaskSummary[];
   collapsed: boolean;
   currentTaskId: string | null;
@@ -581,7 +581,7 @@ function TaskRoute({
 }: {
   tasks: TaskSummary[];
   identity: Identity;
-  accessToken: string;
+  accessToken: AccessToken;
   onDeleted(taskId: string): void;
   onSourceEditing(dirty: boolean): void;
   missingLabel: string;
@@ -623,7 +623,7 @@ export function AppShell({
   onSignOut,
 }: {
   identity: Identity;
-  accessToken: string;
+  accessToken: AccessToken;
   initialTasks: TaskSummary[];
   serviceUnavailable?: boolean;
   onSignOut(): Promise<void>;

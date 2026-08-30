@@ -1,3 +1,4 @@
+import type { AccessToken } from "../api/client";
 import type { components } from "../api/schema";
 
 export type Identity = {
@@ -14,4 +15,4 @@ export type SignedOutState =
 export type AuthViewState =
   | { screen: "checking" }
   | SignedOutState
-  | { screen: "workspace"; identity: Identity; tasks: TaskSummary[]; accessToken: string };
+  | { screen: "workspace"; identity: Identity; tasks: TaskSummary[]; accessToken: AccessToken };

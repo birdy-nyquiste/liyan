@@ -4,9 +4,11 @@ from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from liyan_server.billing.packs import BillingState, billing_state
 from liyan_server.database import Database
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.object_storage import ObjectStorage, ObjectStorageState
+from liyan_server.settings import Settings
 from liyan_server.worker_health import WorkerState, worker_state
 
 
@@ -26,6 +28,10 @@ class ReadinessChecks(BaseModel):
     #: pasted and URL sources never touch it — and the Technical Spec is
     #: explicit that a short R2 outage must not become a restart condition.
     object_storage: ObjectStorageState
+    #: Reported, never gating. Without it a user cannot buy 额度; everything they
+    #: already hold still spends, so this is a feature that is missing rather
+    #: than a server that is broken.
+    billing: BillingState
 
 
 class ReadinessResponse(BaseModel):
@@ -34,7 +40,10 @@ class ReadinessResponse(BaseModel):
 
 
 def health_router(
-    database: Database, storage: ObjectStorage, dispatcher: ExecutionDispatcher
+    settings: Settings,
+    database: Database,
+    storage: ObjectStorage,
+    dispatcher: ExecutionDispatcher,
 ) -> APIRouter:
     router = APIRouter(prefix="/health", tags=["health"])
 
@@ -54,6 +63,7 @@ def health_router(
             queue="available" if dispatcher.is_reachable() else "unavailable",
             worker=worker_state(database),
             object_storage=storage.state(),
+            billing=billing_state(settings),
         )
         # Only the two the server cannot work without decide the verdict. The
         # other two are reported so an operator can see them without a restart

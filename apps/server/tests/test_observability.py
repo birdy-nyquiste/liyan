@@ -173,3 +173,22 @@ def test_celery_is_not_allowed_to_replace_the_formatter() -> None:
 
     assert celery_worker.celery_app.conf.worker_hijack_root_logger is False
     assert celery_worker.celery_app.conf.worker_redirect_stdouts is False
+
+
+def test_the_webhook_can_say_what_it_did_to_somebodys_额度() -> None:
+    """The one unauthenticated path that moves money, and its log line was
+    arriving as `dropped_fields` — every field that identified the delivery
+    withheld, leaving a line that said only that something had happened."""
+    line = _emitted(
+        "stripe_webhook_handled",
+        event_type="checkout.session.completed",
+        event_id="evt_1",
+        action="credited",
+        credits=2_000,
+        payment_reference="pi_1",
+    )
+
+    assert "dropped_fields" not in line
+    assert line["action"] == "credited"
+    assert line["credits"] == 2_000
+    assert line["payment_reference"] == "pi_1"

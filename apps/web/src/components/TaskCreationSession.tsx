@@ -23,6 +23,8 @@ import {
   type SourceInput,
   type TaskCreationSessionResponse,
 } from "../api/client";
+import { BuyCreditsLink } from "./BuyCreditsLink";
+import { isCreditRefusal } from "./creditRefusal";
 import type { TaskSummary } from "../auth/state";
 import { SOURCE_PREPARATION_POLL_MS } from "./pollIntervals";
 import { getAccount } from "../api/client";
@@ -479,7 +481,12 @@ export function TaskCreationSession({
         ) : null
       ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
 
-      {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
+      {error ? (
+        <p role="alert" className="form-error">
+          {domainMessage(error)}
+          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+        </p>
+      ) : null}
       <div className="button-row">
         <button className="button" type="button" disabled={!canConfirm} onClick={() => void confirm()}>{busy ? t("正在创建…") : t("创建任务")}</button>
         {!canConfirm ? (

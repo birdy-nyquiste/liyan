@@ -189,13 +189,14 @@ def test_a_replayed_intake_charges_one_capture(tmp_path: Path) -> None:
 
 
 def test_a_redelivered_stripe_event_credits_once(tmp_path: Path) -> None:
-    """Stripe retries webhooks. Fulfilling one twice is the most expensive
-    mistake available here, so the event id is the key."""
+    """Stripe retries webhooks, and one payment can arrive as two events.
+    Fulfilling either twice is the most expensive mistake available here, so the
+    payment is the key rather than the delivery."""
     database, user = a_user(tmp_path)
     assert database.engine is not None
     with Session(database.engine) as session:
-        first = credits.purchase(session, user.id, 8_000, stripe_event_id="evt_1", now=NOW)
-        second = credits.purchase(session, user.id, 8_000, stripe_event_id="evt_1", now=NOW)
+        first = credits.purchase(session, user.id, 8_000, stripe_reference="pi_1", now=NOW)
+        second = credits.purchase(session, user.id, 8_000, stripe_reference="pi_1", now=NOW)
 
         assert first is not None and second is None
         assert credits.remaining(session, user.id) == 8_000
@@ -208,7 +209,7 @@ def test_a_dispute_may_take_a_balance_below_zero(tmp_path: Path) -> None:
     database, user = a_user(tmp_path)
     assert database.engine is not None
     with Session(database.engine) as session:
-        credits.purchase(session, user.id, 8_000, stripe_event_id="evt_1", now=NOW)
+        credits.purchase(session, user.id, 8_000, stripe_reference="pi_1", now=NOW)
         credits.hold(
             session,
             user.id,
@@ -218,7 +219,7 @@ def test_a_dispute_may_take_a_balance_below_zero(tmp_path: Path) -> None:
             credits=2_000,
             now=NOW,
         )
-        credits.clawback(session, user.id, 8_000, stripe_event_id="evt_2", now=NOW)
+        credits.clawback(session, user.id, 8_000, stripe_reference="pi_1#dispute:du_1", now=NOW)
 
         assert credits.remaining(session, user.id) == -2_000
 

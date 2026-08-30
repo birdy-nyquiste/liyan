@@ -213,5 +213,18 @@ envVarGroups:
         sync: false
       - key: LIYAN_ALLOWED_EMAILS
         sync: false
+      # Stripe. All three together or none: a secret key without a signing
+      # secret opens Checkout and credits nothing, which /health/ready reports
+      # as `billing: "unconfigured"` rather than as most of the way there. The
+      # 额度包 map is the only authority on what a payment buys.
+      - key: LIYAN_STRIPE_SECRET_KEY
+        sync: false
+      - key: LIYAN_STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: LIYAN_STRIPE_CREDIT_PACKS
+        sync: false
+      # Where Checkout returns a user. The workbench origin, not the API's.
+      - key: LIYAN_WEB_BASE_URL
+        sync: false
       - key: LIYAN_SUPABASE_ISSUER
         sync: false

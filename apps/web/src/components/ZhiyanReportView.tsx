@@ -29,20 +29,38 @@ function webAddress(url: string): string | null {
 }
 
 /**
+ * Which sections a reader keeps open is a lasting preference, but a per-report
+ * one: each report is a different piece of reading, so the fold is stored
+ * against the report's own section id and survives a remount and a reload
+ * without reaching into the report beside it.
+ */
+const FOLD_PREFIX = "liyan.zhiyanSection.";
+
+function foldOpen(key: string): boolean {
+  return window.localStorage.getItem(`${FOLD_PREFIX}${key}`) === "open";
+}
+
+function setFoldOpen(key: string, open: boolean) {
+  window.localStorage.setItem(`${FOLD_PREFIX}${key}`, open ? "open" : "closed");
+}
+
+/**
  * A report is six sections deep and each one is prose; reading the 逻辑 section
  * of the second report should not mean scrolling through the 证据 list of the
- * first. Every section folds, and starts open so nothing is hidden by default.
+ * first. Every section folds, and starts closed so a report opens as an index
+ * the reader expands rather than a wall of text.
  */
 function Section({
   id,
   heading,
   children,
 }: {
+  /** Doubles as the fold's storage key: unique per report and per section. */
   id: string;
   heading: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => foldOpen(id));
   return (
     <section className="zhiyan-section" aria-labelledby={id}>
       <h4>
@@ -52,7 +70,10 @@ function Section({
           type="button"
           aria-expanded={open}
           aria-controls={`${id}-body`}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            setFoldOpen(id, !open);
+            setOpen(!open);
+          }}
         >
           {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
           {heading}

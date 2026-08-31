@@ -10,4 +10,9 @@ Range.prototype.getClientRects = () => ({
   [Symbol.iterator]: () => [][Symbol.iterator](),
 }) as DOMRectList;
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // Stored preferences (locale, theme, folded sections) would otherwise leak
+  // from one test into the next.
+  window.localStorage.clear();
+});

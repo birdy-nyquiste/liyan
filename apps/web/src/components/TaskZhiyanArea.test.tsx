@@ -209,7 +209,7 @@ describe("ZhiyanReportView", () => {
     expect(screen.getByText("使用具体数字增强权威感")).toBeInTheDocument();
   });
 
-  it("links only plain web evidence addresses", () => {
+  it("links only plain web evidence addresses", async () => {
     render(
       <ZhiyanReportView
         document={reportDocument({
@@ -235,6 +235,7 @@ describe("ZhiyanReportView", () => {
         idPrefix="report-1"
       />,
     );
+    await userEvent.click(screen.getByRole("button", { name: "“知”依据" }));
 
     const link = screen.getByRole("link", {
       name: "Autonomy: The UK's Four-Day Week Pilot",
@@ -257,6 +258,21 @@ describe("ZhiyanReportView", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain("report-1-facts");
     expect(ids).toContain("report-2-facts");
+  });
+
+  it("folds each report on its own, without moving the report beside it", async () => {
+    render(
+      <>
+        <ZhiyanReportView document={reportDocument()} sourceTitle="来源一" idPrefix="report-1" />
+        <ZhiyanReportView document={reportDocument()} sourceTitle="来源二" idPrefix="report-2" />
+      </>,
+    );
+    const [first, second] = screen.getAllByRole("button", { name: "概要" });
+
+    await userEvent.click(first);
+
+    expect(first).toHaveAttribute("aria-expanded", "true");
+    expect(second).toHaveAttribute("aria-expanded", "false");
   });
 
   it("renders untrusted report text as text rather than markup", () => {
@@ -307,6 +323,7 @@ describe("TaskZhiyanArea", () => {
         onCapsuleSelect={onCapsuleSelect}
       />,
     );
+    await user.click(await screen.findByRole("button", { name: "“知”事实" }));
     await user.click(await screen.findByRole("button", { name: "插入 F-01 到立言指令" }));
 
     expect(onCapsuleSelect).toHaveBeenCalledWith({
@@ -542,22 +559,43 @@ describe("TaskZhiyanArea", () => {
     ).toBeDefined();
   });
 
-  it("folds a report section without losing it", async () => {
+  it("opens a report folded, and keeps a section the reader unfolds", async () => {
     respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
 
     render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
     const overview = await screen.findByRole("button", { name: "概要" });
 
+    expect(overview).toHaveAttribute("aria-expanded", "false");
+    // hidden, not unmounted: unfolding must not re-fetch or re-render the report.
+    expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).not.toBeVisible();
+
+    await userEvent.click(overview);
     expect(overview).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).toBeVisible();
 
     await userEvent.click(overview);
-    expect(overview).toHaveAttribute("aria-expanded", "false");
-    // hidden, not unmounted: reopening must not re-fetch or re-render the report.
     expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).not.toBeVisible();
+  });
 
-    await userEvent.click(overview);
-    expect(screen.getByText("原文以英国四天工作制试验为依据，呼吁全面强制实施。")).toBeVisible();
+  it("remembers which sections were unfolded after the report is mounted again", async () => {
+    respondWith(overviewResponse([stateResponse()], LIYAN_OPEN));
+
+    const first = render(
+      <TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "概要" }));
+    first.unmount();
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={5000} />);
+
+    expect(await screen.findByRole("button", { name: "概要" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "“知”事实" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
 
   it("says a report is being written where the report will appear", async () => {

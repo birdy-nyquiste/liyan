@@ -44,6 +44,48 @@ publication. The manifest asks for the two hosts by name instead, which is what
 lets one build work in every environment without the server being told who is
 calling. `LIYAN_CORS_ORIGINS` needs no extension entry.
 
+## Building for a deployed 立言阁
+
+Do not edit `.env`. `vite build` runs in production mode, so it reads
+`.env.production` from the repo root **on top of** `.env` and the mode-specific
+file wins — for the bundle and for the generated manifest alike. Create it once:
+
+```
+VITE_API_BASE_URL=https://…            # the deployed API
+VITE_WEB_BASE_URL=https://…            # the deployed 工作台
+VITE_SUPABASE_URL=https://….supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…
+```
+
+Then `npm run package:extension`, and your local `.env` still points at
+localhost for everyday work.
+
+It is gitignored and stays out of the repo. Nothing in it is a secret — every
+value reaches every browser that installs the build — but it is the one place
+that says which 立言阁 a package belongs to, and a deployment address is not
+something a checkout should be able to change by being stale. So the manifest
+of a finished package is the record, and `.env.production` is a local thing you
+keep. The sb_secret_ key must never appear here, and must never appear behind a
+`VITE_` name anywhere.
+
+Values passed on the command line win over the file, which is how a one-off
+staging package is made without keeping a second file for it:
+
+```
+VITE_API_BASE_URL=https://staging… npm run package:extension
+```
+
+Whichever route, check what came out before uploading — the manifest names the
+servers the build belongs to:
+
+```
+cat apps/extension/dist/manifest.json
+```
+
+**Bump the version first.** The Web Store refuses a package whose version is
+not higher than the one live, and the manifest takes it from
+`apps/extension/package.json`.
+
 ## Packaging for the Web Store
 
 ```

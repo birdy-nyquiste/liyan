@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -194,5 +194,81 @@ describe("opening a basket", () => {
 
     expect(await screen.findByText(/还没有来源/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "新建任务" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a sign-in interrupted halfway", () => {
+  /**
+   * Reading the code means leaving the panel, which destroys it. Before this,
+   * coming back showed an empty address form — and the only move left was to
+   * spend another code, which required leaving again. Indefinitely.
+   */
+  it("comes back to the code screen, for the address it was sent to", async () => {
+    browser.kept.set(
+      "liyan.sign-in",
+      JSON.stringify({ email: "reader@example.com", sentAt: Date.now() }),
+    );
+    renderPanel(fakeAuthProvider());
+
+    expect(await screen.findByLabelText("验证码")).toBeInTheDocument();
+    expect(screen.getByText(/reader@example.com/)).toBeInTheDocument();
+  });
+
+  it("remembers the address as soon as a code goes out", async () => {
+    const user = userEvent.setup();
+    renderPanel(fakeAuthProvider());
+
+    await user.type(await screen.findByLabelText("邮箱"), "reader@example.com");
+    await user.click(screen.getByRole("button", { name: "发送验证码" }));
+
+    await waitFor(() =>
+      expect(browser.kept.get("liyan.sign-in")).toContain("reader@example.com"),
+    );
+  });
+
+  /**
+   * Past the code's life every code the user could hold is dead, so the field
+   * would refuse anything they typed. The address is still theirs, though, and
+   * asking for it again would be the panel forgetting what it knows.
+   */
+  it("starts over with the address kept once the code must have expired", async () => {
+    browser.kept.set(
+      "liyan.sign-in",
+      JSON.stringify({
+        email: "reader@example.com",
+        sentAt: Date.now() - 3 * 60 * 60 * 1000,
+      }),
+    );
+    renderPanel(fakeAuthProvider());
+
+    expect(await screen.findByLabelText("邮箱")).toHaveValue("reader@example.com");
+    expect(browser.kept.has("liyan.sign-in")).toBe(false);
+  });
+
+  it("forgets it once the reader is signed in", async () => {
+    const user = userEvent.setup();
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
+    renderPanel(fakeAuthProvider());
+
+    await user.type(await screen.findByLabelText("邮箱"), "reader@example.com");
+    await user.click(screen.getByRole("button", { name: "发送验证码" }));
+    await user.type(await screen.findByLabelText("验证码"), "418392");
+    await user.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => expect(browser.kept.has("liyan.sign-in")).toBe(false));
+  });
+
+  it("forgets it when the reader goes back to change the address", async () => {
+    const user = userEvent.setup();
+    browser.kept.set(
+      "liyan.sign-in",
+      JSON.stringify({ email: "typo@example.com", sentAt: Date.now() }),
+    );
+    renderPanel(fakeAuthProvider());
+
+    await user.click(await screen.findByRole("button", { name: "换个邮箱" }));
+
+    await waitFor(() => expect(browser.kept.has("liyan.sign-in")).toBe(false));
+    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
   });
 });

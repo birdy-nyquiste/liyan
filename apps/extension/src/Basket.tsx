@@ -108,7 +108,7 @@ function additionBlocker(
         normalizedSourceUrl(source) === page.normalizedUrl
         || (added[source.id] && normalizeUrl(added[source.id].url) === page.normalizedUrl),
     );
-    if (already) return "这一页已经在来源里了。";
+    if (already) return "该页面已添加。";
   }
   return null;
 }

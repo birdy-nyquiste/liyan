@@ -11,9 +11,16 @@ import type { AuthProvider } from "@workbench/auth/provider";
 import type { SignedOutState } from "@workbench/auth/state";
 import { AuthPanel } from "@workbench/components/AuthPanel";
 
+import markUrl from "@workbench-assets/liyan-mark.svg";
+
 import { extensionAuthProvider } from "./authProvider";
 import { Basket } from "./Basket";
 import { openBasket, readBasketId } from "./basketId";
+import {
+  forgetSignInProgress,
+  readSignInProgress,
+  rememberSignInProgress,
+} from "./signInProgress";
 import { openWorkbench } from "./workbench";
 
 /**
@@ -96,16 +103,35 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
 
   useEffect(() => {
     let active = true;
-    void authProvider
-      .getAccessToken()
-      .then((token) => {
-        if (!active) return;
-        if (token) void enter();
-        else setState(signedOut());
-      })
-      .catch(() => {
-        if (active) setState(signedOut());
-      });
+    /**
+     * Where to start: inside, mid-sign-in, or at the address form.
+     *
+     * The middle one is why this is stored at all. Reading the code means
+     * leaving the panel, which destroys it, and a user who came back to an
+     * empty form had no move except to spend another code — and then the same
+     * trap again. Resuming is the whole point.
+     */
+    async function resume() {
+      const token = await authProvider.getAccessToken().catch(() => null);
+      if (!active) return;
+      if (token) {
+        void enter();
+        return;
+      }
+      const pending = await readSignInProgress();
+      if (!active) return;
+      if (pending?.sentAt) {
+        setState({ screen: "otp", email: pending.email, otp: "", busy: false, message: null });
+      } else if (pending) {
+        // The code it belonged to has expired. The address has not, and asking
+        // for it again would be the panel forgetting something it knows.
+        await forgetSignInProgress();
+        if (active) setState({ screen: "email", email: pending.email, busy: false, message: null });
+      } else {
+        setState(signedOut());
+      }
+    }
+    void resume();
     return () => {
       active = false;
     };
@@ -121,6 +147,9 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
     );
     try {
       await authProvider.sendEmailOtp(email.trim());
+      // Written before the screen changes: what has to survive the panel being
+      // closed is the fact that a code is out there for this address.
+      await rememberSignInProgress(email.trim());
       setState({ screen: "otp", email, otp: "", busy: false, message: null });
     } catch {
       setState((current) => ({
@@ -135,6 +164,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
     setState({ screen: "otp", email, otp, busy: true, message: null });
     try {
       await authProvider.verifyEmailOtp(email.trim(), otp.trim());
+      await forgetSignInProgress();
       await enter();
     } catch {
       setState({ screen: "otp", email, otp, busy: false, message: "验证码无效或已过期。" });
@@ -144,9 +174,10 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
   return (
     <div className="panel">
       <header className="panel__head">
-        <span className="panel__mark" aria-hidden="true">
-          立
-        </span>
+        {/* 工作台's own mark, the same file it serves — not a 立 in a box that
+            would drift from it. Chrome needs PNGs for the toolbar icon, and
+            those are rasterized from this same source. */}
+        <img className="panel__mark" src={markUrl} alt="" />
         <span className="panel__name">立言阁</span>
       </header>
       <Body
@@ -165,7 +196,10 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
         }
         onRequestOtp={requestOtp}
         onVerifyOtp={verifyOtp}
-        onRestartEmail={() => setState(signedOut())}
+        onRestartEmail={() => {
+          void forgetSignInProgress();
+          setState(signedOut());
+        }}
       />
     </div>
   );

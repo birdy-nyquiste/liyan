@@ -18,7 +18,8 @@
     "test:extension": "npm run test --workspace @liyan/extension",
     "typecheck:web": "npm run typecheck --workspace @liyan/web",
     "typecheck:extension": "npm run typecheck --workspace @liyan/extension",
-    "build:extension": "npm run build --workspace @liyan/extension"
+    "build:extension": "npm run build --workspace @liyan/extension",
+    "package:extension": "npm run package --workspace @liyan/extension"
   },
   "engines": {
     "node": ">=22"

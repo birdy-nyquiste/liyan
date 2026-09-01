@@ -7,7 +7,8 @@ import type { SignedOutState } from "@workbench/auth/state";
 import { AuthPanel } from "@workbench/components/AuthPanel";
 
 import { extensionAuthProvider } from "./authProvider";
-import { openBasket, readBasketId } from "./basket";
+import { Basket } from "./Basket";
+import { openBasket, readBasketId } from "./basketId";
 import { openWorkbench } from "./workbench";
 
 /**
@@ -143,6 +144,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
       </header>
       <Body
         state={state}
+        accessToken={accessToken}
         onOpenBasket={async () => setState({ screen: "basket", basketId: await openBasket() })}
         onEmailChange={(email) =>
           setState((current) => (current.screen === "email" ? { ...current, email } : current))
@@ -160,6 +162,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
 
 type BodyProps = {
   state: PanelState;
+  accessToken: AccessToken;
   onOpenBasket(): Promise<void>;
   onEmailChange(email: string): void;
   onOtpChange(otp: string): void;
@@ -168,7 +171,7 @@ type BodyProps = {
   onRestartEmail(): void;
 };
 
-function Body({ state, onOpenBasket, ...handlers }: BodyProps): ReactNode {
+function Body({ state, accessToken, onOpenBasket, ...handlers }: BodyProps): ReactNode {
   if (state.screen === "checking") {
     return (
       <div className="panel__body">
@@ -208,13 +211,7 @@ function Body({ state, onOpenBasket, ...handlers }: BodyProps): ReactNode {
   }
 
   if (state.screen === "basket") {
-    // Filling the basket is the next issue. Until then this says what is true:
-    // a basket is open and holds nothing.
-    return (
-      <div className="panel__body">
-        <p className="form-hint">已开始新建任务，还没有来源。添加来源的功能正在开发中。</p>
-      </div>
-    );
+    return <Basket accessToken={accessToken} basketId={state.basketId} />;
   }
 
   return (

@@ -44,7 +44,9 @@ function stubChrome() {
         },
       },
     },
-    tabs: { create },
+    // The basket reads the tab it would add; Panel renders it once a basket
+    // is open, so every stub here needs an answer for that too.
+    tabs: { create, query: async () => [{ url: "https://example.com/a", title: "A page" }] },
   });
   return { kept, create };
 }

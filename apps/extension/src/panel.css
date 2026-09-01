@@ -79,3 +79,162 @@ body {
   background: none;
   box-shadow: none;
 }
+
+/*
+ * The basket's bottom bar. It is part of the panel rather than of the list so
+ * that the two buttons hold one place from the first screen onward: a control
+ * that moves when the content above it grows is a control the user has to find
+ * again every time.
+ */
+.panel__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  border-top: 1px solid var(--rule);
+  background: var(--surface-sunk);
+}
+
+.panel__foot-note {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.basket {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.basket__empty {
+  margin: 0;
+  padding: var(--space-md) var(--space-xs);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.basket__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  min-width: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+
+.basket__title {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: 13.5px;
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A 来源 still being fetched has no title yet, and the address is not one. */
+.basket__title--pending {
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-weight: var(--weight-normal);
+}
+
+.basket__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.basket__host {
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * State is carried by the pill rather than by the row's border, because a row
+ * has one border and a 来源 has a state and a length to say at once.
+ */
+.basket__pill {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.basket__pill--busy {
+  background: var(--neutral-soft);
+  color: var(--neutral-ink);
+}
+
+.basket__pill--ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.basket__pill--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.basket__pill--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.basket__remove {
+  flex: none;
+  padding: 0 var(--space-3xs);
+  border: none;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.basket__remove:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.basket__why {
+  margin: 0;
+  color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/*
+ * 添加当前页面 is quiet next to 确认创建任务, but it is not a text link — it is
+ * one of the panel's two standing controls. `button--quiet` is transparent and
+ * borderless because in 工作台 it is used for 换个邮箱 and 重新发送, so the
+ * outline is added back here. Inset shadow rather than a border, which is how
+ * this stylesheet draws an outline elsewhere, and it costs no layout.
+ */
+.panel__foot .button--quiet {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border);
+}
+
+.panel__foot .button--quiet:disabled {
+  color: var(--ink-muted);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}

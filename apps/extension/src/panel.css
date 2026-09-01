@@ -29,18 +29,9 @@ body {
 }
 
 .panel__mark {
-  display: grid;
-  place-items: center;
   width: 20px;
   height: 20px;
   flex: none;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-family: "Songti SC", "Noto Serif SC", serif;
-  font-size: 11px;
-  line-height: 1;
 }
 
 .panel__name {

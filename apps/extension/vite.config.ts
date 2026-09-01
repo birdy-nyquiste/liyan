@@ -18,6 +18,16 @@ import packageJson from "./package.json" with { type: "json" };
  */
 const workbench = fileURLToPath(new URL("../web/src", import.meta.url));
 
+/**
+ * What 工作台 serves as static files, the mark among them.
+ *
+ * Separate from the source alias because it is a different kind of thing: the
+ * panel imports the mark so that there is one file, and 工作台 changing it
+ * changes the panel too. The toolbar icons are PNGs rasterized from this same
+ * source, which Chrome requires and cannot be an import.
+ */
+const workbenchAssets = fileURLToPath(new URL("../web/public", import.meta.url));
+
 /** Emit `manifest.json` beside the build, pointed at this build's servers. */
 function manifest(mode: string): Plugin {
   return {
@@ -49,7 +59,7 @@ export default defineConfig(({ mode }) => ({
   // Supabase project and one API without a second place to keep them in step.
   envDir: "../..",
   plugins: [react(), tailwindcss(), manifest(mode)],
-  resolve: { alias: { "@workbench": workbench } },
+  resolve: { alias: { "@workbench": workbench, "@workbench-assets": workbenchAssets } },
   build: {
     // Chrome loads an unpacked directory, so the output is the extension.
     outDir: "dist",

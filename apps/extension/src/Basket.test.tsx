@@ -186,7 +186,7 @@ describe("when the page cannot be added", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "添加当前页面" })).toBeDisabled(),
     );
-    expect(screen.getByText("这一页已经在来源里了。")).toBeInTheDocument();
+    expect(screen.getByText("该页面已添加。")).toBeInTheDocument();
   });
 
   it("is dead at three, and says a source must go first", async () => {
@@ -503,6 +503,6 @@ describe("a 来源 the server has no address for", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "添加当前页面" })).toBeDisabled(),
     );
-    expect(screen.getByText("这一页已经在来源里了。")).toBeInTheDocument();
+    expect(screen.getByText("该页面已添加。")).toBeInTheDocument();
   });
 });

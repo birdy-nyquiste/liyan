@@ -16,7 +16,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "chrome"],
-    "paths": { "@workbench/*": ["../web/src/*"] }
+    "paths": {
+      "@workbench/*": ["../web/src/*"],
+      "@workbench-assets/*": ["../web/public/*"]
+    }
   },
   "include": ["src"]
 }

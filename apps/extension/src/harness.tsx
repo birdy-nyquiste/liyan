@@ -61,8 +61,13 @@ const persist = () => {
   },
 };
 
+// `?signedout=1` withholds the token, which is the only way to reach the
+// sign-in screens here — including the resume, which is what the popup being
+// destroyed mid-sign-in actually looks like.
+const signedOut = params.get("signedout") === "1";
+
 const authProvider: AuthProvider = {
-  getAccessToken: async () => "allowed-token",
+  getAccessToken: async () => (signedOut ? null : "allowed-token"),
   sendEmailOtp: async () => undefined,
   verifyEmailOtp: async () => "allowed-token",
   signOut: async () => undefined,

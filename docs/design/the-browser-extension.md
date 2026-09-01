@@ -189,7 +189,17 @@ who clears `localStorage` today already strands whatever was in their basket.
 
 ## Install-time surface
 
-`activeTab` and nothing else. No content scripts, no host permissions, no
-background page doing work. This is a direct consequence of the server doing
-the fetching, and it is most of what makes the extension cheap to review and
-unalarming to install.
+`activeTab` and `storage`, plus host permissions for 立言阁's own API and its
+Supabase project. No content scripts, no permission over any site the user
+browses, and no background page doing work.
+
+The two host permissions are not a widening of what the extension may read;
+they are how it is allowed to call its own servers. The API keeps a CORS
+allowlist, and an extension's origin is its id — which differs between an
+unpacked build and a published one, and is not known at all until publication.
+Asking for the two hosts by name lets one build work in every environment
+without the server having to be told who is calling.
+
+Because those addresses differ per environment, the manifest is generated at
+build time from the same `VITE_` values the workbench reads, rather than
+committed with a placeholder in it.

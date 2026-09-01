@@ -9,7 +9,9 @@ __pycache__/
 
 node_modules/
 apps/web/dist/
+apps/extension/dist/
 apps/web/*.tsbuildinfo
+apps/extension/*.tsbuildinfo
 
 .coverage
 htmlcov/

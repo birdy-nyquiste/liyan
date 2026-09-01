@@ -1,0 +1,81 @@
+/* The workbench's stylesheet, so the panel is the same product visually. */
+@import "../../web/src/styles.css";
+
+/*
+ * A popup is not a page. Chrome sizes it to its content up to a ceiling, so the
+ * width is fixed here and the height is left to the content — the alternative
+ * is a panel that changes width as the user moves between screens.
+ */
+html,
+body {
+  width: 360px;
+  margin: 0;
+  background: var(--canvas);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-sunk);
+}
+
+.panel__mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.panel__name {
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.02em;
+}
+
+.panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+}
+
+/*
+ * `AuthPanel` is written for a page: it carries `.workspace`, which is a
+ * two-column card floating on a canvas with 36px of padding and a shadow. At
+ * 360px there is no room for a second column and no canvas to float above, so
+ * the card becomes one column and hands its frame back to the panel.
+ *
+ * Both class names are answered rather than only `.auth-card`, because the
+ * columns and the frame come from `.workspace` and overriding the other one
+ * leaves the layout exactly as it was.
+ */
+.panel .workspace.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}

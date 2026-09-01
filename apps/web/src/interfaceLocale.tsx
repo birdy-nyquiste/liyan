@@ -230,7 +230,7 @@ const ENGLISH: Record<string, string> = {
   "替换输入：": "Replacement input:",
   "可从知言报告中引用内容": "You can quote from a Zhiyan report",
   "仅限受邀用户": "Invited users only",
-  "登录工作台": "Sign in to the workbench",
+  "登录立言阁": "Sign in to 立言阁",
   "使用邮箱接收一次性验证码，无需密码。": "Receive a one-time code by email; no password is required.",
   "邮箱": "Email",
   "发送验证码": "Send code",

@@ -3,16 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/web"
+    "apps/web",
+    "apps/extension"
   ],
   "scripts": {
     "api:export": ".venv/bin/python scripts/export_openapi.py",
     "api:generate": "npm run api:export && npm run generate:api --workspace @liyan/web",
     "api:check": "npm run api:generate && git diff --exit-code -- openapi.json apps/web/src/api/schema.d.ts",
     "dev:web": "npm run dev --workspace @liyan/web",
+    "dev:extension": "npm run dev --workspace @liyan/extension",
     "lint:web": "npm run lint --workspace @liyan/web",
+    "lint:extension": "npm run lint --workspace @liyan/extension",
     "test:web": "npm run test --workspace @liyan/web",
-    "typecheck:web": "npm run typecheck --workspace @liyan/web"
+    "test:extension": "npm run test --workspace @liyan/extension",
+    "typecheck:web": "npm run typecheck --workspace @liyan/web",
+    "typecheck:extension": "npm run typecheck --workspace @liyan/extension",
+    "build:extension": "npm run build --workspace @liyan/extension",
+    "package:extension": "npm run package --workspace @liyan/extension"
   },
   "engines": {
     "node": ">=22"

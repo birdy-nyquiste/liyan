@@ -9,7 +9,10 @@ __pycache__/
 
 node_modules/
 apps/web/dist/
+apps/extension/dist/
+apps/extension/liyan-extension.zip
 apps/web/*.tsbuildinfo
+apps/extension/*.tsbuildinfo
 
 .coverage
 htmlcov/

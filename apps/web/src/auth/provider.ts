@@ -16,8 +16,35 @@ export interface AuthProvider {
   onAuthStateChange(listener: (accessToken: string | null) => void): () => void;
 }
 
+/**
+ * Where a signed-in session is kept between page loads.
+ *
+ * Supabase reaches for `localStorage` by default, and that is right for the
+ * workbench and absent from an extension's service worker. It is a parameter
+ * rather than a second copy of this file because what a second copy would also
+ * duplicate is the refresh behaviour below, and that is the part that is easy
+ * to get wrong.
+ */
+export interface SessionStorage {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): void | Promise<void>;
+  removeItem(key: string): void | Promise<void>;
+}
+
+export type AuthProviderOptions = {
+  storage?: SessionStorage;
+  /**
+   * Whether a session may arrive in the page's own URL. True for the workbench,
+   * which Supabase may return to with a fragment; false for a panel, which is
+   * opened by the browser and never navigated to.
+   */
+  detectSessionInUrl?: boolean;
+};
+
 class SupabaseAuthProvider implements AuthProvider {
   private client: SupabaseClient | null = null;
+
+  constructor(private readonly options: AuthProviderOptions = {}) {}
 
   private getClient(): SupabaseClient {
     if (this.client) return this.client;
@@ -27,7 +54,12 @@ class SupabaseAuthProvider implements AuthProvider {
     if (!url || !publishableKey) {
       throw new Error("Supabase Auth is not configured.");
     }
-    this.client = createClient(url, publishableKey);
+    this.client = createClient(url, publishableKey, {
+      auth: {
+        storage: this.options.storage,
+        detectSessionInUrl: this.options.detectSessionInUrl ?? true,
+      },
+    });
     return this.client;
   }
 
@@ -74,4 +106,9 @@ class SupabaseAuthProvider implements AuthProvider {
   }
 }
 
-export const supabaseAuthProvider: AuthProvider = new SupabaseAuthProvider();
+/** An 立言阁 sign-in against whatever storage the client can offer. */
+export function createSupabaseAuthProvider(options: AuthProviderOptions = {}): AuthProvider {
+  return new SupabaseAuthProvider(options);
+}
+
+export const supabaseAuthProvider: AuthProvider = createSupabaseAuthProvider();

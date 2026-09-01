@@ -103,3 +103,7 @@ _Avoid_: 归还, 补扣, 退款 (that is Stripe's, and returns money)
 **付费用户**:
 A user who has bought 额度 at least once. It is what authorizes URL and file 来源 capture; a user who has not is limited to 来源 they paste. It is not a plan, a tier, or a subscription.
 _Avoid_: 会员, 订阅用户, Pro 用户, 套餐
+
+**立言阁浏览器插件**:
+The browser client that turns a page the user is reading into 来源 of a new 立言任务. It collects up to three of them in a 任务创建会话 and confirms them together. It submits the page's address for the server to capture and never reads the page itself, and it does not edit a 立言任务 once created — that is the workbench's.
+_Avoid_: 扩展, Chrome 扩展, 扩展程序, 采集器

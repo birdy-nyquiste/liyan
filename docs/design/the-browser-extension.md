@@ -165,6 +165,30 @@ A capture that succeeds and is never confirmed costs what it cost. The panel
 should be more careful about the second case than the first, which is the
 opposite of the instinct.
 
+## What the panel remembers, and whose words it uses
+
+The server answers with codes and with English. Both are deliberate, and both
+mean the panel has work to do before anything reaches a reader.
+
+A `warning` and a `failure` each carry a code and a message, and the message is
+written for whoever reads the logs. 工作台 already keeps a sentence per code for
+the person looking at the screen, and that table is what both clients read —
+two wordings for one rule is how they come to disagree. The same goes for
+naming a warning: it is named by the code it actually carries, never by the
+commonest one, because a 23,000-character article can come back `warning` for
+having no title and being told 正文偏薄 about it is simply false.
+
+The refusals are the exception, and stay verbatim. 额度不足 and the per-user
+ceiling arrive already written for a user, and rewording them would be the
+panel disagreeing with the server about why it said no.
+
+Two things the server never sends back, which the panel keeps for itself:
+**when** each 来源 was added, and **which page** it was. A settled 来源 carries
+no timestamp and its Execution is gone; a `provenance` exists only once a fetch
+has succeeded, so a failed 来源 has none at all — and which page failed is the
+one thing its row must say. Keeping both locally is right regardless: the
+basket exists only in this browser, so there is nowhere else they could serve.
+
 ## The holes this leaves
 
 **A basket kept overnight loses items.** Cleanup ages each unconfirmed 来源 on

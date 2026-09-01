@@ -28,6 +28,7 @@ only so `npm run test:e2e` has something to talk to.
 """
 
 import argparse
+import os
 import sys
 import tempfile
 import threading
@@ -47,6 +48,7 @@ from database_support import migrated_database  # noqa: E402
 from zhiyan_support import DeterministicJwtVerifier, RecordingDispatcher  # noqa: E402
 
 from liyan_server.app import create_app  # noqa: E402
+from liyan_server.crawl4ai_adapter import Crawl4AiUrlFetcher  # noqa: E402
 from liyan_server.publication.blog import (  # noqa: E402
     BlogOutcomeUnknown,
     BlogPreviewAccepted,
@@ -145,10 +147,23 @@ def main() -> int:
         # enforcement has its own tests. This suite is about the workbench.
         signup_grant_credits=1_000_000,
     )
+    dispatcher = InlineDispatcher(database_url)
+    if os.environ.get("LIYAN_E2E_REAL_URL_FETCH") == "1":
+        # Off by default: a browser suite that reaches the open web fails for
+        # reasons that have nothing to do with 立言阁. On, it is the one way to
+        # watch a real capture end to end, which is what the 插件 is entirely
+        # made of.
+        dispatcher.url_fetcher = Crawl4AiUrlFetcher(
+            base_directory=settings.crawl4ai_base_directory,
+            page_timeout_ms=settings.url_fetch_timeout_seconds * 1000,
+        )
+        print("  URL 来源: real capture, real network", file=sys.stderr)
+    else:
+        print("  URL 来源: deterministic double, no network", file=sys.stderr)
     application = create_app(
         settings,
         jwt_verifier=DeterministicJwtVerifier(),
-        execution_dispatcher=InlineDispatcher(database_url),
+        execution_dispatcher=dispatcher,
     )
 
     print(f"e2e server on http://127.0.0.1:{arguments.port}", file=sys.stderr)

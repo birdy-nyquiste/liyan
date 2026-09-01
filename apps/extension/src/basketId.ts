@@ -26,18 +26,20 @@ const BASKET_KEY = "liyan.creation-session";
 const CONFIRMATION_KEY = "liyan.creation-idempotency-key";
 
 /**
- * When each 来源 in this basket was added, by its server id.
+ * What the panel knows about each 来源 it added, by the server's id for it.
  *
- * Kept here because the server does not send it: a settled 来源 carries no
- * timestamp, and its Execution is gone by then. The panel needs it because
- * cleanup ages each unconfirmed 来源 on its own clock, so a basket filled
- * across two days can quietly become a basket of one. Knowing when a row went
- * in is the only way to warn before that happens.
+ * Two things the server does not send back. **When** it was added: a settled
+ * 来源 carries no timestamp and its Execution is gone by then, and the panel
+ * needs it because cleanup ages each unconfirmed 来源 on its own clock — so a
+ * basket filled across two days can quietly become a basket of one. And
+ * **which page** it was: the server keeps a `provenance`, but only once the
+ * fetch has succeeded. A 来源 that failed has none, and a row that cannot say
+ * which page failed is useless to the person deciding what to do about it.
  *
- * Local is the right place for it regardless: the basket itself exists only in
- * this browser, so there is no other browser this could have been useful in.
+ * Local is the right place for both regardless: the basket itself exists only
+ * in this browser, so there is no other browser this could be useful in.
  */
-const ADDED_KEY = "liyan.creation-added-at";
+const ADDED_KEY = "liyan.creation-added";
 
 export function readBasketId(): Promise<string | null> {
   return readStored(BASKET_KEY);
@@ -67,20 +69,27 @@ export async function readConfirmationKey(): Promise<string> {
   return created;
 }
 
-export type AddedTimes = Record<string, number>;
+export type AddedSource = { at: number; url: string };
+export type AddedSources = Record<string, AddedSource>;
 
-export async function readAddedTimes(): Promise<AddedTimes> {
+function isAddedSource(value: unknown): value is AddedSource {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.at === "number" && typeof entry.url === "string";
+}
+
+export async function readAddedSources(): Promise<AddedSources> {
   const stored = await readStored(ADDED_KEY);
   if (!stored) return {};
   try {
     const parsed: unknown = JSON.parse(stored);
     if (!parsed || typeof parsed !== "object") return {};
-    // Anything that is not a number is dropped rather than trusted: this is
-    // only ever used to say how old a row is, and a wrong answer there is
-    // worse than no answer.
+    // Anything not of this shape is dropped rather than trusted. Every use of
+    // it is a sentence shown to a user, and a wrong sentence is worse than a
+    // missing one.
     return Object.fromEntries(
       Object.entries(parsed as Record<string, unknown>).filter(
-        (entry): entry is [string, number] => typeof entry[1] === "number",
+        (entry): entry is [string, AddedSource] => isAddedSource(entry[1]),
       ),
     );
   } catch {
@@ -88,10 +97,14 @@ export async function readAddedTimes(): Promise<AddedTimes> {
   }
 }
 
-export async function recordAdded(sourceId: string, at = Date.now()): Promise<void> {
-  const times = await readAddedTimes();
-  times[sourceId] = at;
-  await writeStored(ADDED_KEY, JSON.stringify(times));
+export async function recordAdded(
+  sourceId: string,
+  url: string,
+  at = Date.now(),
+): Promise<void> {
+  const added = await readAddedSources();
+  added[sourceId] = { at, url };
+  await writeStored(ADDED_KEY, JSON.stringify(added));
 }
 
 export async function closeBasket(): Promise<void> {

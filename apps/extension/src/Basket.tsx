@@ -12,12 +12,13 @@ import {
   type TaskSummaryResponse,
 } from "@workbench/api/client";
 import { SOURCE_PREPARATION_POLL_MS } from "@workbench/components/pollIntervals";
+import { useInterfaceLocale } from "@workbench/interfaceLocale";
 
 import { describeAge, expiryWarning } from "./age";
 import {
-  type AddedTimes,
+  type AddedSources,
   closeBasket,
-  readAddedTimes,
+  readAddedSources,
   readConfirmationKey,
   recordAdded,
 } from "./basketId";
@@ -90,18 +91,24 @@ function confirmationBlocker(session: TaskCreationSessionResponse | null): strin
 function additionBlocker(
   session: TaskCreationSessionResponse | null,
   page: CurrentPage | null,
+  added: AddedSources,
 ): string | null {
   if (session && !session.can_add) return "已达三条上限，移除一条才能再添加。";
   if (page?.refusal) return page.refusal;
   // The server refuses a repeated URL within one session. The panel holds the
   // session, so it can say so without spending a request to be told.
   //
-  // It compares normalized forms because `provenance` is what the server wrote,
-  // not what the tab said. A 来源 still being fetched has no provenance yet, so
-  // a very fast second click can slip past this — the server refuses that one,
-  // and its refusal is shown.
-  if (session && page && session.sources.some((source) => normalizedSourceUrl(source) === page.normalizedUrl)) {
-    return "这一页已经在来源里了。";
+  // It compares normalized forms because `provenance` is what the server wrote
+  // and not what the tab said. A 来源 still being fetched has no provenance at
+  // all, which is why what the panel submitted is compared too — otherwise this
+  // page could be added a second time for as long as the first fetch runs.
+  if (session && page) {
+    const already = session.sources.some(
+      (source) =>
+        normalizedSourceUrl(source) === page.normalizedUrl
+        || (added[source.id] && normalizeUrl(added[source.id].url) === page.normalizedUrl),
+    );
+    if (already) return "这一页已经在来源里了。";
   }
   return null;
 }
@@ -124,7 +131,7 @@ export function Basket({
 }: BasketProps) {
   const [session, setSession] = useState<TaskCreationSessionResponse | null>(null);
   const [page, setPage] = useState<CurrentPage | null>(null);
-  const [addedTimes, setAddedTimes] = useState<AddedTimes>({});
+  const [added, setAdded] = useState<AddedSources>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Set while this panel is open, so a poll that returns late cannot write. */
@@ -144,8 +151,8 @@ export function Basket({
   }, [accessToken, basketId]);
 
   useEffect(() => {
-    void readAddedTimes().then((times) => {
-      if (open.current) setAddedTimes(times);
+    void readAddedSources().then((known) => {
+      if (open.current) setAdded(known);
     });
     void readCurrentPage()
       .catch(() => describePage(undefined, undefined))
@@ -188,9 +195,9 @@ export function Basket({
     setBusy(true);
     setError(null);
     try {
-      const added = await createUrlSource(accessToken, basketId, crypto.randomUUID(), page.url);
-      await recordAdded(added.id);
-      setAddedTimes(await readAddedTimes());
+      const created = await createUrlSource(accessToken, basketId, crypto.randomUUID(), page.url);
+      await recordAdded(created.id, page.url);
+      setAdded(await readAddedSources());
       await refresh();
     } catch (thrown) {
       // 402 and the per-user ceiling are written for a user and are the only
@@ -240,10 +247,10 @@ export function Basket({
   }
 
   const sources = session?.sources ?? [];
-  const cannotAdd = additionBlocker(session, page);
+  const cannotAdd = additionBlocker(session, page, added);
   const blocker = confirmationBlocker(session);
   const canConfirm = Boolean(session?.can_confirm) && !busy;
-  const expiring = sources.length > 0 ? expiryWarning(addedTimes) : null;
+  const expiring = sources.length > 0 ? expiryWarning(added) : null;
 
   return (
     <>
@@ -263,7 +270,8 @@ export function Basket({
               <SourceRow
                 key={source.id}
                 source={source}
-                age={describeAge(addedTimes[source.id])}
+                age={describeAge(added[source.id]?.at)}
+                submittedUrl={added[source.id]?.url ?? null}
                 busy={busy}
                 onRemove={remove}
               />
@@ -310,24 +318,33 @@ export function Basket({
 function SourceRow({
   source,
   age,
+  submittedUrl,
   busy,
   onRemove,
 }: {
   source: SessionSourceResponse;
   age: string | null;
+  /** The address the panel submitted, which it remembers whatever happens. */
+  submittedUrl: string | null;
   busy: boolean;
   onRemove(sourceId: string): Promise<void>;
 }) {
-  const address = sourceUrl(source);
-  const name = source.title?.trim() || (address ? shortenUrl(address) : "正在抓取…");
+  const { domainMessage } = useInterfaceLocale();
+  // `provenance` only exists once a fetch has succeeded, so a failed 来源 has
+  // none — and a row that cannot say which page failed is no use at all to the
+  // person deciding what to do about it. What the panel submitted stands in.
+  const address = sourceUrl(source) ?? submittedUrl;
+  const title = source.title?.trim();
+  const name = title || (address ? shortenUrl(address) : "正在抓取…");
   return (
     <li className="basket__item">
-      <p className={`basket__title${source.title ? "" : " basket__title--pending"}`}>{name}</p>
+      <p className={`basket__title${title ? "" : " basket__title--pending"}`}>{name}</p>
       <div className="basket__meta">
         <StatusPill source={source} />
-        {/* One or the other: the address is what a user recognizes, and it
-            gives way only once the age is the more useful of the two. */}
-        <span className="basket__host">{age ?? (address ? shortenUrl(address) : "")}</span>
+        {/* One line, and never the same thing twice: a 来源 with no title is
+            already named by its address, so repeating it here would spend the
+            row's only other line saying nothing. */}
+        <span className="basket__host">{age ?? (title && address ? shortenUrl(address) : "")}</span>
         <button
           className="basket__remove"
           type="button"
@@ -338,12 +355,34 @@ function SourceRow({
           ×
         </button>
       </div>
-      {source.failure ? <p className="basket__why">{source.failure.message}</p> : null}
+      {/* The server's failure message is written for whoever reads the logs.
+          工作台 already owns a sentence per code for the person looking at it,
+          and both clients saying the same thing about the same code is the
+          whole reason that table exists. */}
+      {source.failure ? (
+        <p className="basket__why">
+          {domainMessage(source.failure.message, source.failure.code)}
+        </p>
+      ) : null}
     </li>
   );
 }
 
+/**
+ * The short label for a warning, by what the warning actually is.
+ *
+ * Not one wording for all of them. A 23,302-character article came back
+ * `warning` because it had no `<title>`, and a pill that said 正文偏薄 was
+ * telling the user something plainly untrue about their 来源.
+ */
+const WARNING_LABEL: Record<string, string> = {
+  short_body: "正文偏薄",
+  missing_title: "缺少标题",
+  missing_provenance: "缺少出处",
+};
+
 function StatusPill({ source }: { source: SessionSourceResponse }) {
+  const { domainMessage } = useInterfaceLocale();
   if (source.status === "processing") {
     return <span className="basket__pill basket__pill--busy">处理中</span>;
   }
@@ -354,11 +393,16 @@ function StatusPill({ source }: { source: SessionSourceResponse }) {
     return <span className="basket__pill basket__pill--danger">抓取失败 · 未消耗额度</span>;
   }
   const length = source.body?.length ?? 0;
-  if (source.status === "warning") {
-    const warning = source.warnings[0]?.message ?? "内容可能不足以支撑知言分析。";
+  if (source.status === "warning" && source.warnings.length > 0) {
+    const [first] = source.warnings;
+    // The full sentence is 工作台's, so both clients say the same thing about
+    // the same code; the pill carries the short form and the title the whole.
     return (
-      <span className="basket__pill basket__pill--warn" title={warning}>
-        正文偏薄 · {length} 字
+      <span
+        className="basket__pill basket__pill--warn"
+        title={domainMessage(first.message, first.code)}
+      >
+        {WARNING_LABEL[first.code] ?? "需确认"} · {length} 字
       </span>
     );
   }

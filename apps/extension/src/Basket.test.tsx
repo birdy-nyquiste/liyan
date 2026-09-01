@@ -223,7 +223,7 @@ describe("a source that failed", () => {
           title: null,
           body: null,
           provenance: "https://paywalled.example.com/piece",
-          failure: { code: "fetch_failed", message: "无法读取正文，可能需要登录后才能访问。" },
+          failure: { code: "fetch_failed", message: "The article could not be fetched." },
         }),
       ]),
     );
@@ -231,7 +231,8 @@ describe("a source that failed", () => {
 
     expect(await screen.findByText(/移除抓取失败的来源/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /确认创建任务/ })).toBeDisabled();
-    expect(screen.getByText("无法读取正文，可能需要登录后才能访问。")).toBeInTheDocument();
+    // The row says it in 工作台's words for `fetch_failed`, not the server's.
+    expect(screen.getByText("文章抓取失败，请重试或替换来源。")).toBeInTheDocument();
     expect(screen.getByText(/未消耗额度/)).toBeInTheDocument();
   });
 
@@ -384,7 +385,10 @@ describe("a basket found in storage", () => {
 
   it("shows how old a source is once that is what matters", async () => {
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
-    browser.kept.set("liyan.creation-added-at", JSON.stringify({ a: twoHoursAgo }));
+    browser.kept.set(
+      "liyan.creation-added",
+      JSON.stringify({ a: { at: twoHoursAgo, url: "https://www.example-news.com/analysis" } }),
+    );
     getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
     renderBasket(true);
 
@@ -393,10 +397,112 @@ describe("a basket found in storage", () => {
 
   it("warns before the oldest source is collected", async () => {
     const nearlyADayAgo = Date.now() - 21 * 60 * 60 * 1000;
-    browser.kept.set("liyan.creation-added-at", JSON.stringify({ a: nearlyADayAgo }));
+    browser.kept.set(
+      "liyan.creation-added",
+      JSON.stringify({ a: { at: nearlyADayAgo, url: "https://www.example-news.com/analysis" } }),
+    );
     getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
     renderBasket(true);
 
     expect(await screen.findByText(/小时后被清理/)).toBeInTheDocument();
+  });
+});
+
+describe("a 来源 the server has no address for", () => {
+  /**
+   * `provenance` exists only once a fetch has succeeded. A failed row would
+   * otherwise be nameless — and which page failed is the only thing the person
+   * looking at it needs to know.
+   */
+  it("is named by the address the panel submitted", async () => {
+    browser.kept.set(
+      "liyan.creation-added",
+      JSON.stringify({ b: { at: Date.now(), url: "https://paywalled.example.com/the-piece" } }),
+    );
+    getTaskCreationSession.mockResolvedValue(
+      session([
+        source({
+          id: "b",
+          status: "failure",
+          title: null,
+          body: null,
+          provenance: null,
+          failure: {
+            code: "inaccessible_url",
+            message: "The article is not publicly accessible. Replace this source or try another URL.",
+          },
+        }),
+      ]),
+    );
+    renderBasket(true);
+
+    expect(await screen.findByText("paywalled.example.com/the-piece")).toBeInTheDocument();
+  });
+
+  /**
+   * The server's failure text is written for whoever reads the logs. 工作台
+   * already owns a sentence per code for the person looking at the screen.
+   */
+  it("says why in the workbench's own words, not the server's", async () => {
+    getTaskCreationSession.mockResolvedValue(
+      session([
+        source({
+          id: "b",
+          status: "failure",
+          title: null,
+          body: null,
+          provenance: null,
+          failure: {
+            code: "inaccessible_url",
+            message: "The article is not publicly accessible. Replace this source or try another URL.",
+          },
+        }),
+      ]),
+    );
+    renderBasket(true);
+
+    expect(
+      await screen.findByText("该文章无法公开访问，请替换来源或尝试其他网址。"),
+    ).toBeInTheDocument();
+  });
+
+  /** A warning is named by what it is, not by the commonest one. */
+  it("names a missing title as a missing title", async () => {
+    getTaskCreationSession.mockResolvedValue(
+      session([
+        source({
+          id: "a",
+          status: "warning",
+          title: "www.rfc-editor.org",
+          body: "x".repeat(23302),
+          warnings: [
+            { code: "missing_title", message: "No page title was found; review the suggested title." },
+          ],
+        }),
+      ]),
+    );
+    renderBasket(true);
+
+    expect(await screen.findByText("缺少标题 · 23302 字")).toBeInTheDocument();
+  });
+
+  /**
+   * While a fetch is running the server has no provenance to compare against,
+   * so without what the panel submitted the same page could go in twice.
+   */
+  it("still knows this page is in the basket while its fetch is running", async () => {
+    browser.kept.set(
+      "liyan.creation-added",
+      JSON.stringify({ a: { at: Date.now(), url: "https://www.example-news.com/analysis" } }),
+    );
+    getTaskCreationSession.mockResolvedValue(
+      session([source({ id: "a", status: "processing", title: null, body: null, provenance: null })]),
+    );
+    renderBasket(true);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "添加当前页面" })).toBeDisabled(),
+    );
+    expect(screen.getByText("这一页已经在来源里了。")).toBeInTheDocument();
   });
 });

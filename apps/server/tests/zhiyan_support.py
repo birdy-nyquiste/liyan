@@ -31,6 +31,7 @@ from liyan_server.provider_usage import ProviderUsage
 from liyan_server.publication.runs import PUBLISH_OPERATION
 from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
+from liyan_server.url_fetch_worker import UrlExtraction, UrlFetcher, process_url_fetch
 from liyan_server.zhiyan.provider import (
     SearchAction,
     ZhiyanProviderFailure,
@@ -186,6 +187,31 @@ class DeterministicLiyanProvider:
         return outcome
 
 
+#: The operation a 来源 fetch runs under. Spelled here because `url_api` writes
+#: it as a literal and does not export it.
+FETCH_URL_OPERATION = "fetch_url"
+
+
+class DeterministicUrlFetcher:
+    """A URL 来源 without a browser, or a network, or a page that might change.
+
+    The body is long enough not to trip the short-source warning, because a
+    warning is its own journey and not the one most tests are walking.
+    """
+
+    def __init__(self, title: str = "抓取到的文章标题") -> None:
+        self.title = title
+        self.fetched: list[str] = []
+
+    def fetch(self, url: str) -> UrlExtraction:
+        self.fetched.append(url)
+        return UrlExtraction(
+            title=self.title,
+            body="四天工作制试验的营收、留存与健康指标被反复引用。" * 40,
+            metadata={"source_url": url},
+        )
+
+
 class RecordingDispatcher:
     """Holds queued Executions so a test chooses when each one runs."""
 
@@ -195,6 +221,7 @@ class RecordingDispatcher:
         self.provider = DeterministicZhiyanProvider()
         self.liyan_provider = DeterministicLiyanProvider()
         self.blog = DeterministicBlogSubmitter()
+        self.url_fetcher: UrlFetcher = DeterministicUrlFetcher()
 
     def dispatch(self, execution_id: UUID, operation: str) -> None:
         self.execution_ids.append(execution_id)
@@ -214,6 +241,13 @@ class RecordingDispatcher:
             process_publication_run(
                 self.database_url, execution_id, self.blog, "ingest-secret"
             )
+        elif operation == FETCH_URL_OPERATION:
+            process_url_fetch(
+                self.database_url,
+                execution_id,
+                self.url_fetcher,
+                short_source_characters=500,
+            )
         elif operation == LIYAN_OPERATION:
             process_liyan_run(
                 self.database_url,
@@ -221,8 +255,14 @@ class RecordingDispatcher:
                 self.liyan_provider,
                 self,
             )
-        else:
+        elif operation == ZHIYAN_OPERATION:
             process_zhiyan_run(self.database_url, execution_id, self.provider, self)
+        else:
+            # Never a silent default. 知言 used to be the fallback, and a
+            # `fetch_url` Execution handed to it failed as invalid_run_snapshot
+            # — an error about the wrong thing entirely, with the 来源 left at
+            # 处理中 forever because nothing that could settle it ever ran.
+            raise AssertionError(f"No double runs the {operation!r} operation.")
 
     def run_all(self) -> None:
         while self.execution_ids:

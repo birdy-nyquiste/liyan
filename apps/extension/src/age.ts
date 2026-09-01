@@ -39,8 +39,11 @@ export function describeAge(addedAt: number | undefined, now = Date.now()): stri
 }
 
 /** The sentence to show when something in the basket is about to be collected. */
-export function expiryWarning(addedTimes: Record<string, number>, now = Date.now()): string | null {
-  const oldest = Math.min(...Object.values(addedTimes));
+export function expiryWarning(
+  added: Record<string, { at: number }>,
+  now = Date.now(),
+): string | null {
+  const oldest = Math.min(...Object.values(added).map((one) => one.at));
   if (!Number.isFinite(oldest)) return null;
   const remainingHours = ASSUMED_TTL_HOURS - (now - oldest) / HOUR;
   if (remainingHours > WARN_WITHIN_HOURS) return null;

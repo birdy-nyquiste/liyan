@@ -2,9 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "extension-popup",
+      "name": "workbench",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:web"],
+      "port": 5173
+    },
+    {
+      "name": "extension-harness",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5199"],
+      "runtimeArgs": ["vite", "--mode", "e2e", "--port", "5199", "--strictPort"],
       "cwd": "apps/extension",
       "port": 5199
     }

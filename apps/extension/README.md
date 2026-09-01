@@ -63,3 +63,24 @@ part reviewers ask about:
 
 The single sentence worth leading with: the extension sends 立言阁 the address
 of the page, and 立言阁 fetches it. Nothing is read from the page itself.
+
+## Running the panel without Chrome
+
+An extension cannot be loaded into a headless browser, so `harness.html`
+renders the real panel against a real server with the two things Chrome would
+otherwise provide stubbed: `chrome.*`, and a signed-in session.
+
+```
+.venv/bin/python scripts/e2e_server.py --port 8099     # any bearer token signs in
+npm run dev:extension -- --mode e2e --port 5199
+```
+
+Then open `http://localhost:5199/harness.html`. `?url=` and `?title=` set the
+page the "current tab" is showing, which is how the failure and duplicate
+journeys are reached. `LIYAN_E2E_REAL_URL_FETCH=1` on the server makes captures
+real rather than deterministic.
+
+The harness is never built: `vite.config.ts` names `popup.html` as the only
+input. It is worth keeping — three defects were visible here and in no unit
+test: a warning pill that called a 23,000-character article 正文偏薄, a failure
+that spoke English, and a failed row that could not say which page it was.

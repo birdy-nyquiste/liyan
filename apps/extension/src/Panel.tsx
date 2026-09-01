@@ -1,6 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
-import { ApiError, type AccessToken, getAccount } from "@workbench/api/client";
+import {
+  ApiError,
+  type AccessToken,
+  getAccount,
+  type TaskSummaryResponse,
+} from "@workbench/api/client";
 import { PAID_ONLY } from "@workbench/components/creditRefusal";
 import type { AuthProvider } from "@workbench/auth/provider";
 import type { SignedOutState } from "@workbench/auth/state";
@@ -25,8 +30,10 @@ type PanelState =
   | { screen: "locked" }
   /** Signed in and able to collect, with no basket open. */
   | { screen: "home" }
-  /** A basket is open. Filling it belongs to the next issue. */
-  | { screen: "basket"; basketId: string };
+  /** A basket is open, holding nothing or up to three 来源. */
+  | { screen: "basket"; basketId: string; recovered: boolean }
+  /** A 立言任务 exists. 知言 is already queued for every 来源 in it. */
+  | { screen: "created"; task: TaskSummaryResponse };
 
 const SESSION_EXPIRED = "登录已过期，请重新登录。";
 const ACCESS_DENIED = "此账号暂无访问权限。";
@@ -65,7 +72,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
       // installed 插件, would be the very first thing it ever did.
       const [account, basketId] = await Promise.all([getAccount(accessToken), readBasketId()]);
       if (!account.is_paying_user) setState({ screen: "locked" });
-      else if (basketId) setState({ screen: "basket", basketId });
+      else if (basketId) setState({ screen: "basket", basketId, recovered: true });
       else setState({ screen: "home" });
     } catch (error) {
       // 401 and 403 both mean this session cannot be used, so it is discarded
@@ -145,7 +152,11 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
       <Body
         state={state}
         accessToken={accessToken}
-        onOpenBasket={async () => setState({ screen: "basket", basketId: await openBasket() })}
+        onOpenBasket={async () =>
+          setState({ screen: "basket", basketId: await openBasket(), recovered: false })
+        }
+        onCreated={(task) => setState({ screen: "created", task })}
+        onCollected={() => setState({ screen: "home" })}
         onEmailChange={(email) =>
           setState((current) => (current.screen === "email" ? { ...current, email } : current))
         }
@@ -164,6 +175,8 @@ type BodyProps = {
   state: PanelState;
   accessToken: AccessToken;
   onOpenBasket(): Promise<void>;
+  onCreated(task: TaskSummaryResponse): void;
+  onCollected(): void;
   onEmailChange(email: string): void;
   onOtpChange(otp: string): void;
   onRequestOtp(email: string): Promise<void>;
@@ -171,7 +184,14 @@ type BodyProps = {
   onRestartEmail(): void;
 };
 
-function Body({ state, accessToken, onOpenBasket, ...handlers }: BodyProps): ReactNode {
+function Body({
+  state,
+  accessToken,
+  onOpenBasket,
+  onCreated,
+  onCollected,
+  ...handlers
+}: BodyProps): ReactNode {
   if (state.screen === "checking") {
     return (
       <div className="panel__body">
@@ -211,7 +231,44 @@ function Body({ state, accessToken, onOpenBasket, ...handlers }: BodyProps): Rea
   }
 
   if (state.screen === "basket") {
-    return <Basket accessToken={accessToken} basketId={state.basketId} />;
+    return (
+      <Basket
+        accessToken={accessToken}
+        basketId={state.basketId}
+        recovered={state.recovered}
+        onCreated={onCreated}
+        onCollected={onCollected}
+      />
+    );
+  }
+
+  if (state.screen === "created") {
+    const { task } = state;
+    return (
+      <div className="panel__body">
+        {/* 知言 starts on its own the moment the task exists, and it spends
+            额度. A user who is not told that has had their balance move for
+            reasons they did not see. */}
+        <p className="panel__done" role="status">
+          任务已创建，
+          {task.additional_source_count > 0
+            ? `${task.additional_source_count + 1} 条来源的知言`
+            : "知言"}
+          正在生成。
+        </p>
+        <button
+          className="button button--quiet panel__task"
+          type="button"
+          onClick={() => void openWorkbench(`/task/${task.id}`)}
+        >
+          <span className="panel__task-name">{task.display_name}</span>
+          <span className="panel__task-open">打开 ↗</span>
+        </button>
+        <button className="button" type="button" onClick={() => void onOpenBasket()}>
+          再建一个
+        </button>
+      </div>
+    );
   }
 
   return (

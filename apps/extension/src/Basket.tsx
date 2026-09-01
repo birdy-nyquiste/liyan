@@ -2,14 +2,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type AccessToken,
+  confirmTaskCreationSession,
   createUrlSource,
   deleteTaskCreationSource,
   getTaskCreationSession,
   refusalWithoutTiming,
   type SessionSourceResponse,
   type TaskCreationSessionResponse,
+  type TaskSummaryResponse,
 } from "@workbench/api/client";
 import { SOURCE_PREPARATION_POLL_MS } from "@workbench/components/pollIntervals";
+
+import { describeAge, expiryWarning } from "./age";
+import {
+  type AddedTimes,
+  closeBasket,
+  readAddedTimes,
+  readConfirmationKey,
+  recordAdded,
+} from "./basketId";
 
 import {
   type CurrentPage,
@@ -22,7 +33,37 @@ import {
 type BasketProps = {
   accessToken: AccessToken;
   basketId: string;
+  /**
+   * Whether this basket was found in storage rather than opened just now.
+   *
+   * It changes two things: the panel says so, and an empty one is treated as
+   * collected rather than as new. A basket the user opened a second ago is
+   * also empty, and telling them it expired would be nonsense.
+   */
+  recovered: boolean;
+  onCreated(task: TaskSummaryResponse): void;
+  /** A recovered basket the server no longer has anything for. */
+  onCollected(): void;
 };
+
+/**
+ * The warnings this confirmation accepts, keyed by 来源 and its input version.
+ *
+ * There is no separate "are you sure": the warning is on the row directly
+ * above the button, and pressing it is the acceptance. The guard being
+ * satisfied is that the user saw it — not that they clicked twice.
+ *
+ * The version matters. Accepting a warning accepts *that* reading of the 来源;
+ * if the 来源 changed after the panel drew it, the server refuses rather than
+ * taking an agreement about something else.
+ */
+function acceptedWarnings(sources: SessionSourceResponse[]): Record<string, number> {
+  const accepted: Record<string, number> = {};
+  for (const source of sources) {
+    if (source.warnings.length > 0) accepted[source.id] = source.input_version;
+  }
+  return accepted;
+}
 
 /** Whether anything in the basket is still being fetched. */
 function isWorking(session: TaskCreationSessionResponse | null): boolean {
@@ -74,9 +115,16 @@ function normalizedSourceUrl(source: SessionSourceResponse): string | null {
   return source.provenance ? normalizeUrl(source.provenance) : null;
 }
 
-export function Basket({ accessToken, basketId }: BasketProps) {
+export function Basket({
+  accessToken,
+  basketId,
+  recovered,
+  onCreated,
+  onCollected,
+}: BasketProps) {
   const [session, setSession] = useState<TaskCreationSessionResponse | null>(null);
   const [page, setPage] = useState<CurrentPage | null>(null);
+  const [addedTimes, setAddedTimes] = useState<AddedTimes>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Set while this panel is open, so a poll that returns late cannot write. */
@@ -96,15 +144,29 @@ export function Basket({ accessToken, basketId }: BasketProps) {
   }, [accessToken, basketId]);
 
   useEffect(() => {
+    void readAddedTimes().then((times) => {
+      if (open.current) setAddedTimes(times);
+    });
     void readCurrentPage()
       .catch(() => describePage(undefined, undefined))
       .then((current) => {
         if (open.current) setPage(current);
       });
-    void refresh().catch(() => {
-      if (open.current) setError("暂时无法读取来源，请重试。");
-    });
-  }, [refresh]);
+    void refresh()
+      .then(async (first) => {
+        // A recovered basket the server has nothing for was collected while
+        // the panel was closed. Saying so would be telling the user about
+        // something they cannot act on; letting go of the id quietly and
+        // returning to 主屏 leaves them somewhere that works.
+        if (recovered && first.source_count === 0) {
+          await closeBasket();
+          if (open.current) onCollected();
+        }
+      })
+      .catch(() => {
+        if (open.current) setError("暂时无法读取来源，请重试。");
+      });
+  }, [refresh, recovered, onCollected]);
 
   /**
    * Ask again while anything is still being fetched, and stop when nothing is.
@@ -126,12 +188,39 @@ export function Basket({ accessToken, basketId }: BasketProps) {
     setBusy(true);
     setError(null);
     try {
-      await createUrlSource(accessToken, basketId, crypto.randomUUID(), page.url);
+      const added = await createUrlSource(accessToken, basketId, crypto.randomUUID(), page.url);
+      await recordAdded(added.id);
+      setAddedTimes(await readAddedTimes());
       await refresh();
     } catch (thrown) {
       // 402 and the per-user ceiling are written for a user and are the only
       // thing that explains the button doing nothing. Anything else is ours.
       setError(refusalWithoutTiming(thrown) ?? "添加失败，请稍后重试。");
+    } finally {
+      if (open.current) setBusy(false);
+    }
+  }
+
+  async function confirm() {
+    const current = session;
+    if (!current?.can_confirm) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const task = await confirmTaskCreationSession(
+        accessToken,
+        await readConfirmationKey(),
+        basketId,
+        current.sources.map((one) => one.id),
+        acceptedWarnings(current.sources),
+      );
+      // The basket is let go only once the task exists. Dropping it first
+      // would, on a failed confirmation, lose the way back to 来源 that are
+      // still on the server and have already been paid for.
+      await closeBasket();
+      onCreated(task);
+    } catch (thrown) {
+      setError(refusalWithoutTiming(thrown) ?? "创建任务失败，请重试。");
     } finally {
       if (open.current) setBusy(false);
     }
@@ -154,10 +243,14 @@ export function Basket({ accessToken, basketId }: BasketProps) {
   const cannotAdd = additionBlocker(session, page);
   const blocker = confirmationBlocker(session);
   const canConfirm = Boolean(session?.can_confirm) && !busy;
+  const expiring = sources.length > 0 ? expiryWarning(addedTimes) : null;
 
   return (
     <>
       <div className="panel__body">
+        {recovered && sources.length > 0 ? (
+          <p className="form-hint">上次还有一个没建完的任务。</p>
+        ) : null}
         {sources.length === 0 ? (
           <p className="basket__empty">
             还没有来源。
@@ -167,10 +260,17 @@ export function Basket({ accessToken, basketId }: BasketProps) {
         ) : (
           <ul className="basket">
             {sources.map((source) => (
-              <SourceRow key={source.id} source={source} busy={busy} onRemove={remove} />
+              <SourceRow
+                key={source.id}
+                source={source}
+                age={describeAge(addedTimes[source.id])}
+                busy={busy}
+                onRemove={remove}
+              />
             ))}
           </ul>
         )}
+        {expiring ? <p className="basket__expiry">{expiring}</p> : null}
         {error ? (
           <p className="form-error" role="alert">
             {error}
@@ -191,9 +291,13 @@ export function Basket({ accessToken, basketId }: BasketProps) {
           添加当前页面
         </button>
         {blocker ? <p className="panel__foot-note">{blocker}</p> : null}
-        {/* 确认创建任务 belongs to the next issue; it is drawn here because the
-            two buttons are meant to hold their place from the first screen. */}
-        <button className="button" type="button" disabled={!canConfirm}>
+        <button
+          className="button"
+          type="button"
+          disabled={!canConfirm}
+          aria-busy={busy}
+          onClick={() => void confirm()}
+        >
           {session && session.source_count > 0
             ? `确认创建任务（${session.source_count} 条来源）`
             : "确认创建任务"}
@@ -205,10 +309,12 @@ export function Basket({ accessToken, basketId }: BasketProps) {
 
 function SourceRow({
   source,
+  age,
   busy,
   onRemove,
 }: {
   source: SessionSourceResponse;
+  age: string | null;
   busy: boolean;
   onRemove(sourceId: string): Promise<void>;
 }) {
@@ -219,7 +325,9 @@ function SourceRow({
       <p className={`basket__title${source.title ? "" : " basket__title--pending"}`}>{name}</p>
       <div className="basket__meta">
         <StatusPill source={source} />
-        <span className="basket__host">{address ? shortenUrl(address) : ""}</span>
+        {/* One or the other: the address is what a user recognizes, and it
+            gives way only once the age is the more useful of the two. */}
+        <span className="basket__host">{age ?? (address ? shortenUrl(address) : "")}</span>
         <button
           className="basket__remove"
           type="button"

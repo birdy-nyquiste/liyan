@@ -7,12 +7,14 @@ import { InterfaceLocaleProvider } from "@workbench/interfaceLocale";
 
 import { Basket } from "./Basket";
 
+const confirmTaskCreationSession = vi.hoisted(() => vi.fn());
 const createUrlSource = vi.hoisted(() => vi.fn());
 const deleteTaskCreationSource = vi.hoisted(() => vi.fn());
 const getTaskCreationSession = vi.hoisted(() => vi.fn());
 
 vi.mock("@workbench/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@workbench/api/client")>()),
+  confirmTaskCreationSession,
   createUrlSource,
   deleteTaskCreationSource,
   getTaskCreationSession,
@@ -62,22 +64,50 @@ function session(sources: ReturnType<typeof source>[], overrides: Record<string,
   };
 }
 
-/** `chrome.tabs`, answering with whatever page the test says the user is on. */
+/** `chrome`, answering with whatever page the test says the user is on. */
+let browser: { kept: Map<string, unknown> };
+
 function onPage(url: string, title = "那件事到底是怎么发生的") {
+  const kept = new Map<string, unknown>([["liyan.creation-session", "a-basket"]]);
+  browser = { kept };
   vi.stubGlobal("chrome", {
     tabs: { query: vi.fn(async () => [{ url, title }]) },
+    storage: {
+      local: {
+        get: async (key: string) =>
+          kept.has(key) ? { [key]: kept.get(key) } : ({} as Record<string, unknown>),
+        set: async (entries: Record<string, unknown>) => {
+          for (const [key, value] of Object.entries(entries)) kept.set(key, value);
+        },
+        remove: async (key: string) => {
+          kept.delete(key);
+        },
+      },
+    },
   });
 }
 
-function renderBasket() {
+const onCreated = vi.fn();
+const onCollected = vi.fn();
+
+function renderBasket(recovered = false) {
   return render(
     <InterfaceLocaleProvider locale="zh">
-      <Basket accessToken="a-token" basketId="a-basket" />
+      <Basket
+        accessToken="a-token"
+        basketId="a-basket"
+        recovered={recovered}
+        onCreated={onCreated}
+        onCollected={onCollected}
+      />
     </InterfaceLocaleProvider>,
   );
 }
 
 beforeEach(() => {
+  confirmTaskCreationSession.mockReset();
+  onCreated.mockReset();
+  onCollected.mockReset();
   createUrlSource.mockReset();
   deleteTaskCreationSource.mockReset();
   getTaskCreationSession.mockReset();
@@ -246,5 +276,127 @@ describe("a source still being fetched", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("确认创建任务", () => {
+  /**
+   * The whole basket goes at once, warnings accepted in the same request. A
+   * separate confirmation for the warning would be a second click for
+   * something the user has already been shown, directly above the button.
+   */
+  it("sends every source, and accepts the warnings on the way", async () => {
+    const user = userEvent.setup();
+    const thin = source({
+      id: "b",
+      status: "warning",
+      title: "简讯",
+      body: "x".repeat(214),
+      provenance: "https://wire.example.net/brief",
+      warnings: [{ code: "short_body", message: "正文较短。" }],
+    });
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" }), thin]));
+    confirmTaskCreationSession.mockResolvedValue({ id: "task-1", display_name: "那件事" });
+    renderBasket();
+
+    await user.click(await screen.findByRole("button", { name: /确认创建任务/ }));
+
+    await waitFor(() =>
+      expect(confirmTaskCreationSession).toHaveBeenCalledWith(
+        "a-token",
+        expect.any(String),
+        "a-basket",
+        ["a", "b"],
+        { b: 1 },
+      ),
+    );
+    expect(onCreated).toHaveBeenCalledWith({ id: "task-1", display_name: "那件事" });
+  });
+
+  /**
+   * The key is per basket, not per attempt: a confirmation whose answer the
+   * panel never saw is repeated, and the server hands back the task it already
+   * made rather than making a second one.
+   */
+  it("confirms twice under one key", async () => {
+    const user = userEvent.setup();
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    confirmTaskCreationSession.mockRejectedValueOnce(new ApiError(503));
+    confirmTaskCreationSession.mockResolvedValue({ id: "task-1", display_name: "那件事" });
+    renderBasket();
+
+    await user.click(await screen.findByRole("button", { name: /确认创建任务/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("创建任务失败，请重试。");
+
+    await user.click(screen.getByRole("button", { name: /确认创建任务/ }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+
+    const [first, second] = confirmTaskCreationSession.mock.calls;
+    expect(second[1]).toBe(first[1]);
+  });
+
+  /** The basket is let go only once the task exists. */
+  it("keeps the basket when confirmation fails", async () => {
+    const user = userEvent.setup();
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    confirmTaskCreationSession.mockRejectedValue(new ApiError(402, "额度不足，购买后可继续。"));
+    renderBasket();
+
+    await user.click(await screen.findByRole("button", { name: /确认创建任务/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("额度不足，购买后可继续。");
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(browser.kept.get("liyan.creation-session")).toBe("a-basket");
+  });
+});
+
+describe("a basket found in storage", () => {
+  it("says it is the one left unfinished", async () => {
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    renderBasket(true);
+
+    expect(await screen.findByText("上次还有一个没建完的任务。")).toBeInTheDocument();
+  });
+
+  /**
+   * Cleanup takes an unconfirmed 来源 on its own clock, and the panel is shut
+   * while it happens. Telling the user their basket expired would name
+   * something they cannot act on; 主屏 is somewhere that works.
+   */
+  it("goes quietly back to 主屏 when the server has nothing left of it", async () => {
+    getTaskCreationSession.mockResolvedValue(session([]));
+    renderBasket(true);
+
+    await waitFor(() => expect(onCollected).toHaveBeenCalled());
+    expect(browser.kept.has("liyan.creation-session")).toBe(false);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /** A basket opened a second ago is also empty, and has not expired. */
+  it("leaves a basket just opened alone", async () => {
+    getTaskCreationSession.mockResolvedValue(session([]));
+    renderBasket(false);
+
+    expect(await screen.findByText(/还没有来源/)).toBeInTheDocument();
+    expect(onCollected).not.toHaveBeenCalled();
+    expect(browser.kept.get("liyan.creation-session")).toBe("a-basket");
+  });
+
+  it("shows how old a source is once that is what matters", async () => {
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    browser.kept.set("liyan.creation-added-at", JSON.stringify({ a: twoHoursAgo }));
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    renderBasket(true);
+
+    expect(await screen.findByText("2 小时前")).toBeInTheDocument();
+  });
+
+  it("warns before the oldest source is collected", async () => {
+    const nearlyADayAgo = Date.now() - 21 * 60 * 60 * 1000;
+    browser.kept.set("liyan.creation-added-at", JSON.stringify({ a: nearlyADayAgo }));
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    renderBasket(true);
+
+    expect(await screen.findByText(/小时后被清理/)).toBeInTheDocument();
   });
 });

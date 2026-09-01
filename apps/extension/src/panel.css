@@ -238,3 +238,51 @@ body {
   color: var(--ink-muted);
   box-shadow: inset 0 0 0 1px var(--rule);
 }
+
+.panel__done {
+  margin: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The created task, as a row that opens it rather than a sentence about it. */
+.panel__task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-width: 0;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.panel__task-name {
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel__task-open {
+  flex: none;
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
+/*
+ * Not an error: nothing has gone wrong and nothing is being refused. It is a
+ * warning about time passing, which is why it reads as a note rather than as
+ * a refusal.
+ */
+.basket__expiry {
+  margin: 0;
+  color: var(--warn);
+  font-size: 11.5px;
+  line-height: 1.5;
+}

@@ -1,11 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, type AccessToken, getAccount } from "@workbench/api/client";
+import { PAID_ONLY } from "@workbench/components/creditRefusal";
 import type { AuthProvider } from "@workbench/auth/provider";
 import type { SignedOutState } from "@workbench/auth/state";
 import { AuthPanel } from "@workbench/components/AuthPanel";
 
 import { extensionAuthProvider } from "./authProvider";
+import { openBasket, readBasketId } from "./basket";
+import { openWorkbench } from "./workbench";
 
 /**
  * What the panel is showing.
@@ -17,7 +20,12 @@ import { extensionAuthProvider } from "./authProvider";
 type PanelState =
   | { screen: "checking" }
   | SignedOutState
-  | { screen: "ready"; isPayingUser: boolean };
+  /** Signed in, but URL 来源 are what a 付费用户 buys and this user has not. */
+  | { screen: "locked" }
+  /** Signed in and able to collect, with no basket open. */
+  | { screen: "home" }
+  /** A basket is open. Filling it belongs to the next issue. */
+  | { screen: "basket"; basketId: string };
 
 const SESSION_EXPIRED = "登录已过期，请重新登录。";
 const ACCESS_DENIED = "此账号暂无访问权限。";
@@ -50,8 +58,14 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
         : { screen: "checking" },
     );
     try {
-      const account = await getAccount(accessToken);
-      setState({ screen: "ready", isPayingUser: account.is_paying_user });
+      // Asked before anything is drawn, and both answers are drawn from it.
+      // A user who cannot capture is shown why, rather than a 新建任务 button
+      // whose only possible outcome is a refusal — which, for a newly
+      // installed 插件, would be the very first thing it ever did.
+      const [account, basketId] = await Promise.all([getAccount(accessToken), readBasketId()]);
+      if (!account.is_paying_user) setState({ screen: "locked" });
+      else if (basketId) setState({ screen: "basket", basketId });
+      else setState({ screen: "home" });
     } catch (error) {
       // 401 and 403 both mean this session cannot be used, so it is discarded
       // rather than left to fail the same way on the next opening. They are
@@ -129,6 +143,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
       </header>
       <Body
         state={state}
+        onOpenBasket={async () => setState({ screen: "basket", basketId: await openBasket() })}
         onEmailChange={(email) =>
           setState((current) => (current.screen === "email" ? { ...current, email } : current))
         }
@@ -145,6 +160,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
 
 type BodyProps = {
   state: PanelState;
+  onOpenBasket(): Promise<void>;
   onEmailChange(email: string): void;
   onOtpChange(otp: string): void;
   onRequestOtp(email: string): Promise<void>;
@@ -152,7 +168,7 @@ type BodyProps = {
   onRestartEmail(): void;
 };
 
-function Body({ state, ...handlers }: BodyProps): ReactNode {
+function Body({ state, onOpenBasket, ...handlers }: BodyProps): ReactNode {
   if (state.screen === "checking") {
     return (
       <div className="panel__body">
@@ -163,12 +179,40 @@ function Body({ state, ...handlers }: BodyProps): ReactNode {
     );
   }
 
-  if (state.screen === "ready") {
-    // 主屏 and the 付费用户 gate arrive with the basket; until then this says
-    // plainly that sign-in worked and nothing else is built yet.
+  if (state.screen === "locked") {
+    // The server's own sentence, not a paraphrase of it: `creditRefusal.ts`
+    // owns this string because the same refusal appears in 工作台, and two
+    // wordings for one rule is how they drift apart.
     return (
       <div className="panel__body">
-        <p className="form-hint">已登录。收集来源的功能还在开发中。</p>
+        <p className="form-error" role="alert">
+          {PAID_ONLY}
+        </p>
+        <button className="button" type="button" onClick={() => void openWorkbench("/account")}>
+          前往工作台购买额度
+        </button>
+        <p className="form-hint">购买后回到这里，就能开始新建任务。</p>
+      </div>
+    );
+  }
+
+  if (state.screen === "home") {
+    return (
+      <div className="panel__body">
+        <p className="form-hint">把浏览中读到的页面收集成来源，最多三条，一起建成一个立言任务。</p>
+        <button className="button" type="button" onClick={() => void onOpenBasket()}>
+          新建任务
+        </button>
+      </div>
+    );
+  }
+
+  if (state.screen === "basket") {
+    // Filling the basket is the next issue. Until then this says what is true:
+    // a basket is open and holds nothing.
+    return (
+      <div className="panel__body">
+        <p className="form-hint">已开始新建任务，还没有来源。添加来源的功能正在开发中。</p>
       </div>
     );
   }

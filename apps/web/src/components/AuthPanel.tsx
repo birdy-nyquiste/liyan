@@ -56,7 +56,7 @@ export function AuthPanel({
     <section className="workspace auth-card" aria-labelledby="auth-heading">
       <div>
         <p className="section-kicker">{t("仅限受邀用户")}</p>
-        <h2 id="auth-heading">{t("登录工作台")}</h2>
+        <h2 id="auth-heading">{t("登录立言阁")}</h2>
         <p className="auth-card__lede">{t("使用邮箱接收一次性验证码，无需密码。")}</p>
       </div>
 

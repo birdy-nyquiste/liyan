@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@workbench/api/client";
+import { PAID_ONLY } from "@workbench/components/creditRefusal";
 import type { AuthProvider } from "@workbench/auth/provider";
 import { InterfaceLocaleProvider } from "@workbench/interfaceLocale";
 
@@ -26,6 +27,28 @@ function fakeAuthProvider(overrides: Partial<AuthProvider> = {}): AuthProvider {
   };
 }
 
+/** `chrome`, enough of it for storage and for opening a workbench tab. */
+function stubChrome() {
+  const kept = new Map<string, unknown>();
+  const create = vi.fn(async () => undefined);
+  vi.stubGlobal("chrome", {
+    storage: {
+      local: {
+        get: async (key: string) =>
+          kept.has(key) ? { [key]: kept.get(key) } : ({} as Record<string, unknown>),
+        set: async (entries: Record<string, unknown>) => {
+          for (const [key, value] of Object.entries(entries)) kept.set(key, value);
+        },
+        remove: async (key: string) => {
+          kept.delete(key);
+        },
+      },
+    },
+    tabs: { create },
+  });
+  return { kept, create };
+}
+
 function renderPanel(authProvider: AuthProvider) {
   return render(
     <InterfaceLocaleProvider locale="zh">
@@ -34,8 +57,11 @@ function renderPanel(authProvider: AuthProvider) {
   );
 }
 
+let browser: ReturnType<typeof stubChrome>;
+
 beforeEach(() => {
   getAccount.mockReset();
+  browser = stubChrome();
 });
 
 describe("opening the panel", () => {
@@ -50,10 +76,10 @@ describe("opening the panel", () => {
    * form at somebody already signed in would happen on every single opening.
    */
   it("goes straight past sign-in when the stored session still works", async () => {
-    getAccount.mockResolvedValue({ is_paying_user: true });
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
     renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }));
 
-    expect(await screen.findByText(/已登录/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "新建任务" })).toBeInTheDocument();
     expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument();
   });
 
@@ -85,7 +111,7 @@ describe("signing in", () => {
   it("takes an address, then a code, and lands inside", async () => {
     const user = userEvent.setup();
     const authProvider = fakeAuthProvider();
-    getAccount.mockResolvedValue({ is_paying_user: false });
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
     renderPanel(authProvider);
 
     await user.type(await screen.findByLabelText("邮箱"), "reader@example.com");
@@ -94,7 +120,7 @@ describe("signing in", () => {
     await user.type(await screen.findByLabelText("验证码"), "418392");
     await user.click(screen.getByRole("button", { name: "登录" }));
 
-    expect(await screen.findByText(/已登录/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "新建任务" })).toBeInTheDocument();
     expect(authProvider.sendEmailOtp).toHaveBeenCalledWith("reader@example.com");
     expect(authProvider.verifyEmailOtp).toHaveBeenCalledWith("reader@example.com", "418392");
   });
@@ -115,5 +141,56 @@ describe("signing in", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("验证码无效或已过期。");
     expect(screen.getByLabelText("验证码")).toBeInTheDocument();
+  });
+});
+
+describe("the 付费用户 gate", () => {
+  /**
+   * URL capture is the only thing the panel does, and it is what a 付费用户
+   * buys. For a freshly installed 插件 this is therefore the ordinary first
+   * screen after signing in, not an edge case — so it has to say why and where
+   * to go, rather than offer a button whose only outcome is a refusal.
+   */
+  it("sends a user who has bought nothing to the workbench instead", async () => {
+    const user = userEvent.setup();
+    getAccount.mockResolvedValue({ is_paying_user: false, remaining_credits: 0 });
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(PAID_ONLY);
+    expect(screen.queryByRole("button", { name: "新建任务" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "前往工作台购买额度" }));
+    expect(browser.create).toHaveBeenCalledWith({
+      url: expect.stringContaining("/account") as string,
+    });
+  });
+});
+
+describe("opening a basket", () => {
+  /**
+   * 新建任务 sends nothing. The 任务创建会话 exists on the server only once a
+   * 来源 is submitted to it, so a user who opens a basket and changes their
+   * mind leaves nothing behind to be cleaned up.
+   */
+  it("stores an id and asks the server for nothing", async () => {
+    const user = userEvent.setup();
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }));
+
+    await user.click(await screen.findByRole("button", { name: "新建任务" }));
+
+    expect(await screen.findByText(/还没有来源/)).toBeInTheDocument();
+    expect(browser.kept.get("liyan.creation-session")).toEqual(expect.any(String));
+    expect(getAccount).toHaveBeenCalledTimes(1);
+  });
+
+  /** A basket outlives the panel being destroyed, which happens constantly. */
+  it("returns to a basket left open on a previous opening", async () => {
+    browser.kept.set("liyan.creation-session", "a-basket");
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }));
+
+    expect(await screen.findByText(/还没有来源/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新建任务" })).not.toBeInTheDocument();
   });
 });

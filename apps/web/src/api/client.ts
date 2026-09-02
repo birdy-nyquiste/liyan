@@ -11,6 +11,11 @@ export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
 export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
 export type ZhiyanStateResponse = components["schemas"]["ZhiyanStateResponse"];
+export type ThemeStateResponse = components["schemas"]["ThemeStateResponse"];
+export type ThemeReportResponse = components["schemas"]["ThemeReportResponse"];
+export type ThemeReportDocument = components["schemas"]["ThemeReportDocument"];
+export type ThemeProposalResponse = components["schemas"]["ThemeProposalResponse"];
+export type ThemeCandidate = components["schemas"]["ThemeCandidate"];
 export type TaskVersionZhiyanResponse = components["schemas"]["TaskVersionZhiyanResponse"];
 export type TaskVersionHistory = components["schemas"]["TaskVersionHistory"];
 export type TaskVersionSnapshot = components["schemas"]["TaskVersionSnapshot"];
@@ -248,6 +253,8 @@ export async function confirmTaskCreationSession(
   clientSessionId: string,
   sourceIds: string[],
   acceptedWarningVersions: Record<string, number>,
+  /** Whatever is in the 主题 box, including nothing: empty is a real answer. */
+  theme: string | null = null,
 ): Promise<TaskSummaryResponse> {
   const result = await authenticatedApi(accessToken).POST("/task-creation/confirm", {
     body: {
@@ -255,10 +262,42 @@ export async function confirmTaskCreationSession(
       client_session_id: clientSessionId,
       source_ids: sourceIds,
       accepted_warning_versions: acceptedWarningVersions,
+      theme,
     },
   });
   if (!result.data) throw refusalOf(result);
   return result.data.task;
+}
+
+export async function proposeSessionThemes(
+  accessToken: AccessToken,
+  clientSessionId: string,
+  /**
+   * The 来源 as the writer has them, sent only from a 来源编辑会话.
+   *
+   * A 任务创建会话's 来源 are rows the server captured and can read for itself.
+   * An editing session's include text that is still only in this browser, so a
+   * press there has to carry what it is asking about.
+   */
+  sources: SourceInput[] | null = null,
+): Promise<ThemeProposalResponse> {
+  const result = await authenticatedApi(accessToken).POST("/task-creation/theme-proposals", {
+    body: { client_session_id: clientSessionId, sources },
+  });
+  if (!result.data) throw refusalOf(result);
+  return result.data;
+}
+
+export async function getThemeProposal(
+  accessToken: AccessToken,
+  proposalId: string,
+): Promise<ThemeProposalResponse> {
+  const result = await authenticatedApi(accessToken).GET(
+    "/task-creation/theme-proposals/{proposal_id}",
+    { params: { path: { proposal_id: proposalId } } },
+  );
+  if (!result.data) throw refusalOf(result);
+  return result.data;
 }
 
 export async function getTaskCreationSession(
@@ -575,6 +614,18 @@ export async function startZhiyanRun(
   const result = await authenticatedApi(accessToken).POST(
     "/source-revisions/{source_revision_id}/zhiyan-runs",
     { params: { path: { source_revision_id: sourceRevisionId } } },
+  );
+  if (!result.data) throw refusalOf(result);
+  return result.data;
+}
+
+export async function startThemeZhiyanRun(
+  accessToken: AccessToken,
+  themeRevisionId: string,
+): Promise<ThemeStateResponse> {
+  const result = await authenticatedApi(accessToken).POST(
+    "/theme-revisions/{theme_revision_id}/zhiyan-runs",
+    { params: { path: { theme_revision_id: themeRevisionId } } },
   );
   if (!result.data) throw refusalOf(result);
   return result.data;

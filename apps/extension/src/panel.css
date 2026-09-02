@@ -271,6 +271,39 @@ body {
  * warning about time passing, which is why it reads as a note rather than as
  * a refusal.
  */
+/* The 主题 box sits under the collected 来源 and above the expiry note: it is
+   the last thing the writer decides before confirming, and the only field this
+   panel has. */
+.basket__theme {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.basket__theme input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.basket__theme input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.basket__theme .form-hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .basket__expiry {
   margin: 0;
   color: var(--warn);

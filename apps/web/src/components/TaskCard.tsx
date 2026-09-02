@@ -183,7 +183,7 @@ export function TaskCard({
                 aria-selected={focus === "sources"}
                 onClick={() => chooseFocus("sources")}
               >
-                {t("来源")}
+                {t("来源 · 主题")}
               </button>
               <button
                 type="button"
@@ -215,7 +215,7 @@ export function TaskCard({
       {opened ? (
         <div className="task-detail">
           {focus === "sources" ? (
-            <section className="task-source-view" aria-label={t("来源")}>
+            <section className="task-source-view" aria-label={t("来源 · 主题")}>
               {/* No pane heading: the tab above already says 来源 and the task
                   header already says 共 N 个来源 · V2. What this view needs is
                   the version it shows and what can be done to it, which is the

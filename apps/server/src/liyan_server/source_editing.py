@@ -23,6 +23,7 @@ from liyan_server.database import (
     Task,
     TaskVersion,
     TaskVersionSource,
+    ThemeRevision,
     User,
     aware_utc,
 )
@@ -35,6 +36,9 @@ from liyan_server.source_preparation import normalize_source_content
 from liyan_server.task_activity import record_task_activity
 from liyan_server.task_api import version_source_revisions
 from liyan_server.task_creation.confirmation import SourceInput
+from liyan_server.theme.orchestration import queue_initial_run as queue_initial_theme_run
+from liyan_server.theme.revisions import normalized_theme, theme_revision_for
+from liyan_server.theme.runs import THEME_OPERATION
 from liyan_server.zhiyan.orchestration import queue_initial_runs
 from liyan_server.zhiyan.runs import ZHIYAN_OPERATION
 
@@ -62,6 +66,8 @@ class TaskVersionSnapshot(BaseModel):
     created_at: datetime
     is_current: bool
     sources: list[VersionSource]
+    #: What this version's 主题 says, or null when it has none.
+    theme: str | None
     capabilities: VersionCapabilities
 
 
@@ -86,6 +92,11 @@ class SaveSourceEditRequest(BaseModel):
     idempotency_key: str
     sources: list[SaveSourceItem] = Field(min_length=1, max_length=3)
     accepted_warning_versions: dict[UUID, int] = Field(default_factory=dict)
+    #: The 主题 as edited. Sent every time, including unchanged and including
+    #: empty: a save states the whole version, and clearing the 主题 is a save
+    #: like any other. No Agent runs here — 提炼主题 belongs to the one moment a
+    #: user has not yet decided what their material is about.
+    theme: str | None = None
 
 
 class RestoreVersionRequest(BaseModel):
@@ -114,6 +125,10 @@ def _has_active_runs(session: Session, version_id: UUID) -> bool:
         TaskVersionSource.task_version_id == version_id
     )
     article_ids = select(LiyanArticle.id).where(LiyanArticle.task_version_id == version_id)
+    theme_ids = select(TaskVersion.theme_revision_id).where(
+        TaskVersion.id == version_id,
+        TaskVersion.theme_revision_id.is_not(None),
+    )
     return (
         session.scalar(
             select(func.count())
@@ -127,6 +142,13 @@ def _has_active_runs(session: Session, version_id: UUID) -> bool:
                     and_(
                         Execution.operation == LIYAN_OPERATION,
                         Execution.target_id.in_(article_ids),
+                    ),
+                    # 主题 is a special 来源, so its run blocks an edit the same
+                    # way: saving underneath a running analysis would leave the
+                    # report bound to a snapshot no version points at.
+                    and_(
+                        Execution.operation == THEME_OPERATION,
+                        Execution.target_id.in_(theme_ids),
                     ),
                 ),
                 Execution.status.in_(ACTIVE_EXECUTION_STATUSES),
@@ -152,11 +174,17 @@ def _snapshot(
     reason = ACTIVE_RUN_BLOCK if blocked else (None if current else HISTORICAL_READ_ONLY)
     revisions = version_source_revisions(session, version.id)
     source_ids = {revision.id: revision.source_id for revision in revisions}
+    theme = (
+        session.get(ThemeRevision, version.theme_revision_id)
+        if version.theme_revision_id is not None
+        else None
+    )
     return TaskVersionSnapshot(
         id=str(version.id),
         number=version.number,
         created_at=aware_utc(version.created_at),
         is_current=current,
+        theme=theme.content if theme is not None else None,
         sources=[
             VersionSource(
                 source_id=str(source_ids[revision.id]),
@@ -315,11 +343,19 @@ def source_editing_router(
             changed_ids = _changed_revision_ids(
                 session, edit.base_version_id, version.id
             )
+            saved_theme_id = version.theme_revision_id
             session.commit()
             queue_initial_runs(
                 database,
                 dispatcher,
                 source_revision_ids=changed_ids,
+                owner_id=user.id,
+                model=settings.zhiyan_model,
+            )
+            queue_initial_theme_run(
+                database,
+                dispatcher,
+                theme_revision_id=saved_theme_id,
                 owner_id=user.id,
                 model=settings.zhiyan_model,
             )
@@ -343,6 +379,8 @@ def source_editing_router(
             )
         if _has_active_runs(session, edit.base_version_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ACTIVE_RUN_BLOCK)
+        base_version = session.get(TaskVersion, edit.base_version_id)
+        assert base_version is not None
         base_revisions = version_source_revisions(session, edit.base_version_id)
         by_source = {revision.source_id: revision for revision in base_revisions}
         seen_sources: set[UUID] = set()
@@ -409,6 +447,7 @@ def source_editing_router(
         session.add(version)
         session.flush()
         changed: list[UUID] = []
+        version_revisions: list[SourceRevision] = []
         for position, (source, base, content, prepared) in enumerate(resolved):
             revision = base
             if prepared is not None:
@@ -457,6 +496,7 @@ def source_editing_router(
                     session.flush()
                     changed.append(revision.id)
             assert revision is not None
+            version_revisions.append(revision)
             session.add(
                 TaskVersionSource(
                     task_version_id=version.id,
@@ -467,11 +507,35 @@ def source_editing_router(
         structural_change = [item.source_id for item in request.sources] != [
             revision.source_id for revision in base_revisions
         ]
-        if not changed and not structural_change:
+        base_theme = (
+            session.get(ThemeRevision, base_version.theme_revision_id)
+            if base_version.theme_revision_id is not None
+            else None
+        )
+        theme = normalized_theme(request.theme)
+        theme_change = theme != (base_theme.content if base_theme is not None else "")
+        # A 主题 edit is a change like any other. Without this, clearing or
+        # rewriting only the 主题 was refused as "nothing staged" — and the 主题
+        # is the one part of a version a user can edit without touching a 来源.
+        if not changed and not structural_change and not theme_change:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="No source changes were staged.",
+                detail="No source or theme changes were staged.",
             )
+        theme_revision = theme_revision_for(
+            session,
+            task_id=task.id,
+            content=theme,
+            source_revisions=version_revisions,
+            now=now,
+        )
+        version.theme_revision_id = theme_revision.id if theme_revision is not None else None
+        if theme:
+            task.display_name = theme
+        elif theme_change and version_revisions:
+            # The 主题 was cleared, so the task falls back to what it was called
+            # before there was one: its first 来源's title.
+            task.display_name = version_revisions[0].title
         task.current_version_id = version.id
         record_task_activity(task, at=now)
         edit.status = "saved"
@@ -492,12 +556,21 @@ def source_editing_router(
                 if revision is not None
             ],
             model=settings.zhiyan_model,
+            theme=theme_revision,
+            theme_sources=version_revisions,
         )
         session.commit()
         queue_initial_runs(
             database,
             dispatcher,
             source_revision_ids=changed,
+            owner_id=user.id,
+            model=settings.zhiyan_model,
+        )
+        queue_initial_theme_run(
+            database,
+            dispatcher,
+            theme_revision_id=version.theme_revision_id,
             owner_id=user.id,
             model=settings.zhiyan_model,
         )

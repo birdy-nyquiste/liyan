@@ -229,6 +229,26 @@ ZHIYAN_OUTPUT_TOKENS = 17_000
 #: back is the whole of it. Assumed to reason as much as 知言 does.
 LIYAN_OUTPUT_TOKENS = 15_000
 
+#: Assumed. The 主题知言 instructions and six-section schema are a little shorter
+#: than 知言's seven, and the difference is well inside what "assumed" means.
+THEME_PREAMBLE_TOKENS = 2_000
+
+#: Assumed, from 知言's measured range. A 主题知言 run searches for the same reason
+#: and under the same provider cap, so it is priced the same way — the same
+#: injection, mostly cached — until 主题 runs of its own have been measured.
+THEME_SEARCH_TOKENS = ZHIYAN_SEARCH_TOKENS
+THEME_SEARCH_CACHE_HIT_RATE = ZHIYAN_SEARCH_CACHE_HIT_RATE
+
+#: Assumed. Six sections against 知言's seven, and no per-fact verdict prose, so
+#: a little less than 知言 writes.
+THEME_OUTPUT_TOKENS = 15_000
+
+#: Assumed. 提炼主题 cannot search, and what it returns is three lines and three
+#: sentences — so its whole cost is the 来源 it reads plus a very short answer.
+#: The reasoning is what dominates it, not the output.
+THEME_PROPOSAL_PREAMBLE_TOKENS = 1_000
+THEME_PROPOSAL_OUTPUT_TOKENS = 2_000
+
 
 def _input_tokens(characters: int) -> int:
     return int(max(0, characters) * TOKENS_PER_CHARACTER)
@@ -289,6 +309,49 @@ def estimate_zhiyan_credits(*, source_characters: int, model: str) -> int:
     )
     cost = provider_cost_micros(usage, model)
     return credits_for(cost) if cost is not None else 1
+
+
+def estimate_theme_credits(*, theme_characters: int, source_characters: int, model: str) -> int:
+    """What analysing one 主题 is expected to cost.
+
+    Priced like a 知言 run and for the same reason: it is one searching call with
+    one structured report at the end of it. What it reads is larger — the 主题 is
+    a line, but the 来源 of the whole 任务版本 travel with it as the baseline
+    `blind_spots` is measured against — so every 来源 is counted here, where 知言
+    counts one.
+    """
+    pricing = MODEL_RATES.get(model)
+    if pricing is None:
+        return 1
+    cached = int(THEME_SEARCH_TOKENS * THEME_SEARCH_CACHE_HIT_RATE)
+    usage = ProviderUsage(
+        input_tokens=(
+            _input_tokens(theme_characters + source_characters)
+            + THEME_PREAMBLE_TOKENS
+            + THEME_SEARCH_TOKENS
+        ),
+        cached_input_tokens=cached,
+        output_tokens=THEME_OUTPUT_TOKENS,
+        reasoning_tokens=0,
+        total_tokens=0,
+    )
+    cost = provider_cost_micros(usage, model)
+    return credits_for(cost) if cost is not None else 1
+
+
+def estimate_theme_proposal_credits(*, source_characters: int, model: str) -> int:
+    """What one press of 提炼主题 is expected to cost.
+
+    No search, so no injection term: the 来源 in hand and a short answer are the
+    whole of it. That makes this the cheapest metered operation in the system,
+    which is as it should be — it is a step a user takes before they have decided
+    anything.
+    """
+    return _estimate(
+        _input_tokens(source_characters) + THEME_PROPOSAL_PREAMBLE_TOKENS,
+        THEME_PROPOSAL_OUTPUT_TOKENS,
+        model,
+    )
 
 
 def estimate_liyan_credits(*, input_characters: int, model: str) -> int:

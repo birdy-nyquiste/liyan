@@ -82,12 +82,24 @@ subsidised by a fraction of a cent instead of by a second term in the equation.
 An ordinary 来源 pays more than it costs, and that is the price of the whole
 thing being one number nobody has to think about.
 
-### ② 知言 and 立言 — measured tokens
+### ② 知言, 主题知言, 提炼主题 and 立言 — measured tokens
 
     cost_usd = (miss_tok × 0.44 + cached_tok × 0.014 + out_tok × 1.32) / 1e6
     credits  = ceil(cost_usd × K)
 
-One equation for both operations; only the token counts differ.
+One equation for all four operations; only the token counts differ.
+
+主题 adds two of them. `analyze_theme` is priced like a 知言 run — one searching
+call with one structured report at the end — except in what it reads: the 主题 is
+a line, but every 来源 of its 任务版本 travels with it as the baseline its 盲点
+section is measured against. `propose_themes` cannot search at all, so it has no
+injection term: the 来源 in hand and three short lines back are the whole of it,
+which makes it the cheapest metered operation in the system. That is as it should
+be — it is a step a user takes before they have decided anything.
+
+Both are estimated from 知言's measured numbers rather than their own, because no
+主题 run has been measured yet. When they have been, these are the assumptions to
+replace first.
 
 ## Supplier rates
 
@@ -136,8 +148,11 @@ rate. It is therefore not a line item, but it is the least predictable part of a
 | Capture one 来源 | $0.00004–0.002 | 3 | $0.008 |
 | 知言, short 来源 (2k chars) | $0.0138 | 28 | $0.070 |
 | 知言, long 来源 (500k chars) | $0.1482 | 297 | $0.743 |
+| 提炼主题 (3 short 来源) | $0.0048 | 10 | $0.025 |
+| 主题知言 (3 short 来源) | $0.0247 | 50 | $0.125 |
 | 立言 article | $0.0122 | 25 | $0.063 |
 | **Typical task** (3 short 来源 + article) | $0.054 | **118** | **$0.30** |
+| **Typical task with a 主题** (one press, 主题报告) | $0.083 | **178** | **$0.45** |
 | Long-document task | $0.458 | 925 | $2.31 |
 
 Charged per act rather than over the total, because that is how it happens: each

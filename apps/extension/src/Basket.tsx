@@ -12,6 +12,7 @@ import {
   type TaskSummaryResponse,
 } from "@workbench/api/client";
 import { SOURCE_PREPARATION_POLL_MS } from "@workbench/components/pollIntervals";
+import { MAX_THEME_CHARACTERS } from "@workbench/components/themeLimits";
 import { useInterfaceLocale } from "@workbench/interfaceLocale";
 
 import { describeAge, expiryWarning } from "./age";
@@ -134,6 +135,10 @@ export function Basket({
   const [added, setAdded] = useState<AddedSources>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The 主题, typed here or left empty. Only in memory: a basket outlives the
+  // popup, and a half-typed 主题 restored days later beside 来源 the user has
+  // forgotten would be worse than an empty box.
+  const [theme, setTheme] = useState("");
   /** Set while this panel is open, so a poll that returns late cannot write. */
   const open = useRef(true);
 
@@ -210,7 +215,7 @@ export function Basket({
 
   async function confirm() {
     const current = session;
-    if (!current?.can_confirm) return;
+    if (!current?.can_confirm || theme.length > MAX_THEME_CHARACTERS) return;
     setBusy(true);
     setError(null);
     try {
@@ -220,6 +225,7 @@ export function Basket({
         basketId,
         current.sources.map((one) => one.id),
         acceptedWarnings(current.sources),
+        theme.trim() || null,
       );
       // The basket is let go only once the task exists. Dropping it first
       // would, on a failed confirmation, lose the way back to 来源 that are
@@ -248,8 +254,9 @@ export function Basket({
 
   const sources = session?.sources ?? [];
   const cannotAdd = additionBlocker(session, page, added);
+  const themeTooLong = theme.length > MAX_THEME_CHARACTERS;
   const blocker = confirmationBlocker(session);
-  const canConfirm = Boolean(session?.can_confirm) && !busy;
+  const canConfirm = Boolean(session?.can_confirm) && !busy && !themeTooLong;
   const expiring = sources.length > 0 ? expiryWarning(added) : null;
 
   return (
@@ -278,6 +285,22 @@ export function Basket({
             ))}
           </ul>
         )}
+        {sources.length > 0 ? (
+          <label className="basket__theme" htmlFor="basket-theme">
+            主题（可留空）
+            <input
+              id="basket-theme"
+              value={theme}
+              maxLength={MAX_THEME_CHARACTERS}
+              placeholder="这批来源共同在谈什么"
+              onChange={(event) => setTheme(event.target.value)}
+            />
+            <span className="form-hint">
+              一句话，最多 {MAX_THEME_CHARACTERS} 字。留空即不生成主题知言报告；
+              想让 Agent 提炼候选，请到工作台创建。
+            </span>
+          </label>
+        ) : null}
         {expiring ? <p className="basket__expiry">{expiring}</p> : null}
         {error ? (
           <p className="form-error" role="alert">

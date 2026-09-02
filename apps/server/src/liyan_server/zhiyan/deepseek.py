@@ -27,7 +27,6 @@ from liyan_server.zhiyan.provider import (
 )
 
 WEB_SEARCH_TOOL_TYPE = "web_search"
-REPORT_FORMAT_NAME = "zhiyan_report"
 UNAVAILABLE_MESSAGE = "知言服务暂时不可用，请稍后重试。"
 UNUSABLE_MESSAGE = "知言服务返回了无法使用的结果，请重试。"
 
@@ -56,24 +55,6 @@ RESUMABLE_ITEM_TYPES: frozenset[str] = frozenset(
         "custom_tool_call_output",
     }
 )
-
-CONTINUE_INSTRUCTION = """\
-以上是你在本次运行中已经完成的检索与推理。检索轮次即将用尽，现在收尾。
-
-- 不要重复已经做过的检索。
-- 直接基于上面已经真实打开过的页面输出完整的知言报告 JSON。
-- evidence 只能收录上面真实打开过的页面；没有可靠依据的事实一律写「暂无法核实」，
-  并且不要为它列出 evidence_ids。
-- 只输出符合 JSON Schema 的 JSON，不要附加任何解释。
-"""
-
-FINAL_INSTRUCTION = """\
-以上是你在本次运行中已经完成的检索与推理。检索轮次已经用尽，不能再调用任何工具。
-
-现在必须基于上面已经真实打开过的页面输出完整的知言报告 JSON。仍然缺少可靠依据的事实
-写「暂无法核实」，并且不要为它列出 evidence_ids。只输出符合 JSON Schema 的 JSON。
-"""
-
 
 @dataclass(frozen=True)
 class ProviderHttpResponse:
@@ -329,7 +310,9 @@ def continuation_body(
         input_items=[
             _user_message(request.input_text),
             *(item for item in prior_items if item.get("type") in RESUMABLE_ITEM_TYPES),
-            _user_message(FINAL_INSTRUCTION if final else CONTINUE_INSTRUCTION),
+            _user_message(
+                request.wrap_up.final_text if final else request.wrap_up.continue_text
+            ),
         ],
         tools_enabled=not final and request.tool_policy.web_search_enabled,
     )
@@ -357,7 +340,7 @@ def _body(
         "text": {
             "format": {
                 "type": "json_schema",
-                "name": REPORT_FORMAT_NAME,
+                "name": request.format_name,
                 "strict": True,
                 "schema": request.report_schema,
             }

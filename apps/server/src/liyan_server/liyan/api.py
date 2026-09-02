@@ -21,6 +21,7 @@ from liyan_server.database import (
     LiyanRunResult,
     Task,
     TaskVersion,
+    ThemeReport,
     User,
     ZhiyanReport,
     aware_utc,
@@ -30,6 +31,7 @@ from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.execution_states import ACTIVE_EXECUTION_STATUSES
 from liyan_server.liyan.acceptance import unsupported_article_markdown
 from liyan_server.liyan.instruction import (
+    InstructionCapsule,
     InstructionDocument,
     InstructionText,
 )
@@ -226,9 +228,27 @@ def liyan_router(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
         return task, version
 
+    def theme_report_of(session: Session, version: TaskVersion) -> ThemeReport | None:
+        if version.theme_revision_id is None:
+            return None
+        return session.scalar(
+            select(ThemeReport).where(
+                ThemeReport.theme_revision_id == version.theme_revision_id
+            )
+        )
+
     def complete_context(
         session: Session, version: TaskVersion
     ) -> list[dict[str, object]]:
+        # 主题 is a special 来源, so it gates 立言 the same way: a version that has
+        # one may not generate until its report exists. What the report does not
+        # do is join the context below — it is reference reading, and it reaches
+        # an article only through a 胶囊 the user placed themselves.
+        if version.theme_revision_id is not None and theme_report_of(session, version) is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=INCOMPLETE_MESSAGE,
+            )
         revisions = version_source_revisions(session, version.id)
         context: list[dict[str, object]] = []
         for revision in revisions:
@@ -279,17 +299,18 @@ def liyan_router(
                     detail=DUPLICATE_CAPSULE,
                 )
             seen.add(part.identity)
-            report = session.get(ZhiyanReport, part.report_id)
-            if (
-                part.task_version_id != version.id
-                or report is None
-                or report.source_revision_id not in current_revision_ids
-            ):
+            document = _cited_document(
+                session,
+                part,
+                version=version,
+                current_revision_ids=current_revision_ids,
+            )
+            if document is None:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=INVALID_CAPSULE,
                 )
-            item = _report_item(report.document, part.item_id)
+            item = _report_item(document, part.item_id, part.report_kind)
             if item is None:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -300,6 +321,35 @@ def liyan_router(
             resolved.append({"capsule": number, "kind": kind, "content": content})
             model_parts.append({"type": "capsule", "capsule": number})
         return resolved, {"content": model_parts}
+
+    def _cited_document(
+        session: Session,
+        part: "InstructionCapsule",
+        *,
+        version: TaskVersion,
+        current_revision_ids: set[UUID],
+    ) -> dict[str, object] | None:
+        """The report a 胶囊 points at, if it is one this version may cite.
+
+        Both kinds are checked the same way and for the same reason: a 胶囊 must
+        name something the current 任务版本 actually holds, or an instruction
+        would quote a report the article is not being written from.
+        """
+        if part.task_version_id != version.id:
+            return None
+        if part.report_kind == "theme":
+            theme_report = session.get(ThemeReport, part.report_id)
+            if (
+                theme_report is None
+                or version.theme_revision_id is None
+                or theme_report.theme_revision_id != version.theme_revision_id
+            ):
+                return None
+            return theme_report.document
+        report = session.get(ZhiyanReport, part.report_id)
+        if report is None or report.source_revision_id not in current_revision_ids:
+            return None
+        return report.document
 
     def article_for(
         session: Session, version: TaskVersion, owner_id: UUID
@@ -827,15 +877,30 @@ def _retry_after(retry: RetryState, now: datetime) -> dict[str, str]:
     return {"Retry-After": str(max(1, int((retry.allowed_at - now).total_seconds())))}
 
 
+#: Which sections of each kind of 知言报告 carry citable items, and what one
+#: cited item is called when 立言 is told about it.
+_SOURCE_SECTION_KINDS: tuple[tuple[str, str], ...] = (
+    ("facts", "fact"),
+    ("viewpoints", "viewpoint"),
+    ("logic", "logic"),
+    ("intent", "intent"),
+)
+
+_THEME_SECTION_KINDS: tuple[tuple[str, str], ...] = (
+    ("facts", "theme_fact"),
+    ("viewpoints", "theme_viewpoint"),
+    ("disagreements", "theme_disagreement"),
+    ("blind_spots", "theme_blind_spot"),
+)
+
+
 def _report_item(
-    document: dict[str, object], item_id: str
+    document: dict[str, object],
+    item_id: str,
+    report_kind: str = "source",
 ) -> tuple[str, dict[str, object]] | None:
-    for section_name, kind in (
-        ("facts", "fact"),
-        ("viewpoints", "viewpoint"),
-        ("logic", "logic"),
-        ("intent", "intent"),
-    ):
+    sections = _THEME_SECTION_KINDS if report_kind == "theme" else _SOURCE_SECTION_KINDS
+    for section_name, kind in sections:
         section = document.get(section_name)
         if not isinstance(section, dict):
             continue

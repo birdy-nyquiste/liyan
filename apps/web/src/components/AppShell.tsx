@@ -61,7 +61,7 @@ const copy = {
     creditsRemaining: "剩余额度",
     language: "语言",
     languageValue: "中文",
-    theme: "主题",
+    theme: "外观",
     themes: { light: "浅色", dark: "深色", system: "跟随系统" },
     preferences: "账户与偏好",
     signOutTitle: "退出登录？",

@@ -4,6 +4,11 @@ A 任务版本 holds one to three source Revisions, each with its own independen
 so this boundary answers two different questions. Per Revision: what happened to
 its run, and what may the user do next. Per 任务版本: are all of its reports in,
 because that — and only that — is what opens 立言.
+
+A 任务版本 may also hold one 主题, which is a special 来源 and is answered for here
+beside the others: it has its own report, its own run, its own retry, and it
+counts in the same 立言 gate. A version with no 主题 — every version created
+before 主题 existed, and any whose 主题 was cleared — is gated on its 来源 alone.
 """
 
 from datetime import UTC, datetime
@@ -17,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from liyan_server.authentication import CurrentUserDependency
-from liyan_server.credit_limits import hold_zhiyan_attempt
+from liyan_server.credit_limits import hold_theme_attempt, hold_zhiyan_attempt
 from liyan_server.database import (
     Database,
     Execution,
@@ -26,6 +31,8 @@ from liyan_server.database import (
     Task,
     TaskVersion,
     TaskVersionSource,
+    ThemeReport,
+    ThemeRevision,
     User,
     ZhiyanReport,
     aware_utc,
@@ -40,6 +47,11 @@ from liyan_server.task_creation.contracts import (
     ExecutionResponse,
     execution_response,
 )
+from liyan_server.theme.orchestration import accepted_theme_report
+from liyan_server.theme.orchestration import dispatch_or_fail as dispatch_theme_or_fail
+from liyan_server.theme.orchestration import load_runs as load_theme_runs
+from liyan_server.theme.orchestration import queue_run as queue_theme_run
+from liyan_server.theme.report import ThemeReportDocument
 from liyan_server.zhiyan.orchestration import (
     accepted_report,
     dispatch_or_fail,
@@ -58,6 +70,14 @@ RATE_LIMITED_MESSAGE = "重试次数已用完，请稍后再试。"
 BUSY_MESSAGE = "服务繁忙，请重试。"
 WAITING_MESSAGE = "知言分析尚未全部完成，全部报告成功后才能生成立言。"
 INCOMPLETE_MESSAGE = "仍有来源没有成功的知言报告，全部成功后才能生成立言。"
+THEME_IMMUTABLE_MESSAGE = "该主题的知言报告已生成，不能修改或重新生成。"
+THEME_ACTIVE_MESSAGE = "该主题的知言分析正在进行中。"
+#: The way out when a 主题 report will not succeed. Named in the gate rather than
+#: left for the user to work out: 立言 is closed until this report exists, and
+#: clearing the 主题 is the only thing that reopens it.
+THEME_INCOMPLETE_MESSAGE = (
+    "主题还没有成功的知言报告，可重试；若始终失败，可在编辑来源时清空主题后保存。"
+)
 HISTORICAL_MESSAGE = "历史任务版本只读，恢复为当前版本后才能继续操作。"
 
 
@@ -101,6 +121,26 @@ class ZhiyanStateResponse(BaseModel):
     capabilities: ZhiyanCapabilities
 
 
+class ThemeReportResponse(BaseModel):
+    id: str
+    theme_revision_id: str
+    prompt_version: str
+    model: str
+    created_at: datetime
+    document: ThemeReportDocument
+
+
+class ThemeStateResponse(BaseModel):
+    """The 主题 of one 任务版本, and what became of its 知言 run."""
+
+    theme_revision_id: str
+    theme: str
+    status: ZhiyanStatus
+    report: ThemeReportResponse | None
+    execution: ExecutionResponse | None
+    capabilities: ZhiyanCapabilities
+
+
 class LiyanCapabilities(BaseModel):
     can_generate: bool
     unavailable_reason: str | None
@@ -111,6 +151,8 @@ class TaskVersionZhiyanResponse(BaseModel):
     task_version_id: str
     task_version_number: int
     sources: list[ZhiyanStateResponse]
+    #: Absent when this 任务版本 has no 主题.
+    theme: ThemeStateResponse | None
     liyan: LiyanCapabilities
 
 
@@ -122,6 +164,17 @@ def report_response(report: ZhiyanReport) -> ZhiyanReportResponse:
         model=report.model,
         created_at=aware_utc(report.created_at),
         document=ZhiyanReportDocument.model_validate(report.document),
+    )
+
+
+def theme_report_response(report: ThemeReport) -> ThemeReportResponse:
+    return ThemeReportResponse(
+        id=str(report.id),
+        theme_revision_id=str(report.theme_revision_id),
+        prompt_version=report.prompt_version,
+        model=report.model,
+        created_at=aware_utc(report.created_at),
+        document=ThemeReportDocument.model_validate(report.document),
     )
 
 
@@ -162,19 +215,59 @@ def zhiyan_state_response(
     )
 
 
-def liyan_capabilities(sources: list[ZhiyanStateResponse]) -> LiyanCapabilities:
-    """立言 opens only once every source Revision of this version has its report."""
-    if sources and all(source.status == "succeeded" for source in sources):
-        return LiyanCapabilities(can_generate=True, unavailable_reason=None)
-    waiting = any(source.status == "running" for source in sources)
-    return LiyanCapabilities(
-        can_generate=False,
-        unavailable_reason=WAITING_MESSAGE if waiting else INCOMPLETE_MESSAGE,
+def theme_state_response(
+    revision: ThemeRevision,
+    report: ThemeReport | None,
+    execution: Execution | None,
+    retry: RetryState,
+    *,
+    allow_actions: bool = True,
+) -> ThemeStateResponse:
+    active = execution is not None and execution.status in ACTIVE_EXECUTION_STATUSES
+    return ThemeStateResponse(
+        theme_revision_id=str(revision.id),
+        theme=revision.content,
+        status=_status(report, execution, active=active),
+        report=theme_report_response(report) if report else None,
+        execution=zhiyan_execution_response(execution) if execution else None,
+        capabilities=ZhiyanCapabilities(
+            can_start=allow_actions
+            and (report is None and not active and (execution is None or retry.allowed)),
+            can_cancel=allow_actions and active,
+            retry=ZhiyanRetryState.of(retry),
+        ),
     )
 
 
+def liyan_capabilities(
+    sources: list[ZhiyanStateResponse],
+    theme: ThemeStateResponse | None = None,
+) -> LiyanCapabilities:
+    """立言 opens once every 来源 of this version has its report — and its 主题 too.
+
+    主题 is a special 来源, so it is counted the same way. What differs is the
+    message: a 来源 whose report keeps failing can be edited or replaced, and a
+    主题 whose report keeps failing can be cleared, so the two dead ends need
+    different sentences to get out of.
+    """
+    statuses: list[ZhiyanStatus] = [
+        *(source.status for source in sources),
+        *([theme.status] if theme is not None else []),
+    ]
+    if sources and all(status == "succeeded" for status in statuses):
+        return LiyanCapabilities(can_generate=True, unavailable_reason=None)
+    if any(status == "running" for status in statuses):
+        return LiyanCapabilities(can_generate=False, unavailable_reason=WAITING_MESSAGE)
+    if all(source.status == "succeeded" for source in sources) and sources:
+        # Only the 主题 is missing, so say what to do about the 主题.
+        return LiyanCapabilities(can_generate=False, unavailable_reason=THEME_INCOMPLETE_MESSAGE)
+    return LiyanCapabilities(can_generate=False, unavailable_reason=INCOMPLETE_MESSAGE)
+
+
 def _status(
-    report: ZhiyanReport | None,
+    # Either kind of report: what a status says is only whether one exists, and
+    # 来源 and 主题 answer that identically.
+    report: ZhiyanReport | ThemeReport | None,
     execution: Execution | None,
     *,
     active: bool,
@@ -223,6 +316,45 @@ def zhiyan_router(
             )
         return revision
 
+    def owned_theme(
+        session: Session,
+        *,
+        theme_revision_id: UUID,
+        owner_id: UUID,
+        for_update: bool = False,
+    ) -> tuple[ThemeRevision, TaskVersion]:
+        """This user's 主题 snapshot, and the current 任务版本 that points at it.
+
+        The version is returned with it because everything a 主题 run needs — the
+        来源 it reads, what its 预扣 has to cover — belongs to the version, and
+        because a snapshot no current version points at is a historical one:
+        read-only, exactly as a historical 来源 Revision is.
+        """
+        statement = (
+            select(ThemeRevision, TaskVersion)
+            .join(Task, Task.id == ThemeRevision.task_id)
+            .join(
+                TaskVersion,
+                (TaskVersion.id == Task.current_version_id)
+                & (TaskVersion.theme_revision_id == ThemeRevision.id),
+            )
+            .where(
+                ThemeRevision.id == theme_revision_id,
+                Task.owner_id == owner_id,
+                Task.deleted_at.is_(None),
+            )
+        )
+        if for_update:
+            statement = statement.with_for_update(of=Task)
+        found = session.execute(statement).first()
+        if found is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Theme revision not found.",
+            )
+        revision, version = found
+        return revision, version
+
     def state_of(
         session: Session,
         revision: SourceRevision,
@@ -259,6 +391,27 @@ def zhiyan_router(
                 detail=HISTORICAL_MESSAGE,
             )
 
+    def theme_state_of(
+        session: Session,
+        version: TaskVersion,
+        now: datetime,
+        *,
+        allow_actions: bool = True,
+    ) -> ThemeStateResponse | None:
+        if version.theme_revision_id is None:
+            return None
+        revision = session.get(ThemeRevision, version.theme_revision_id)
+        if revision is None:
+            return None
+        runs = load_theme_runs(session, revision.id)
+        return theme_state_response(
+            revision,
+            accepted_theme_report(session, revision.id),
+            runs.latest,
+            runs.retry_state(now),
+            allow_actions=allow_actions,
+        )
+
     def version_response(
         session: Session,
         task: Task,
@@ -270,13 +423,15 @@ def zhiyan_router(
             state_of(session, revision, now, allow_actions=current)
             for revision in version_source_revisions(session, version.id)
         ]
+        theme = theme_state_of(session, version, now, allow_actions=current)
         return TaskVersionZhiyanResponse(
             task_id=str(task.id),
             task_version_id=str(version.id),
             task_version_number=version.number,
             sources=sources,
+            theme=theme,
             liyan=(
-                liyan_capabilities(sources)
+                liyan_capabilities(sources, theme)
                 if current
                 else LiyanCapabilities(
                     can_generate=False,
@@ -348,6 +503,78 @@ def zhiyan_router(
         dispatch_or_fail(database, dispatcher, execution.id)
         session.expire_all()
         return state_of(session, revision, now)
+
+    @router.post(
+        "/theme-revisions/{theme_revision_id}/zhiyan-runs",
+        operation_id="start_theme_zhiyan_run",
+        response_model=ThemeStateResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+        tags=["zhiyan"],
+    )
+    def start_theme_zhiyan_run(
+        theme_revision_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+        session: Annotated[Session, Depends(database.session)],
+    ) -> ThemeStateResponse:
+        """Ask for this 主题's report again. The mirror of a 来源's retry."""
+        revision, version = owned_theme(
+            session,
+            theme_revision_id=theme_revision_id,
+            owner_id=user.id,
+            for_update=True,
+        )
+        if accepted_theme_report(session, revision.id) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=THEME_IMMUTABLE_MESSAGE,
+            )
+        runs = load_theme_runs(session, revision.id)
+        previous = runs.latest
+        if previous is not None and previous.status in ACTIVE_EXECUTION_STATUSES:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=THEME_ACTIVE_MESSAGE)
+        now = datetime.now(UTC)
+        retry = runs.retry_state(now)
+        if previous is not None and not retry.allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=RATE_LIMITED_MESSAGE,
+                headers=_retry_after(retry, now),
+            )
+        refuse_when_at_capacity(session, settings, owner_id=user.id)
+        attempt = previous.attempt + 1 if previous else 1
+        hold_theme_attempt(
+            session,
+            user.id,
+            revision,
+            source_characters=sum(
+                len(source.body) for source in version_source_revisions(session, version.id)
+            ),
+            attempt=attempt,
+            model=settings.zhiyan_model,
+        )
+        execution = queue_theme_run(
+            session,
+            revision,
+            owner_id=user.id,
+            model=settings.zhiyan_model,
+            origin="manual" if previous is not None else "initial",
+            attempt=attempt,
+            now=now,
+        )
+        try:
+            session.commit()
+        except IntegrityError as error:
+            # One active 主题知言 run per snapshot is a database rule, not a check.
+            session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=THEME_ACTIVE_MESSAGE,
+            ) from error
+        dispatch_theme_or_fail(database, dispatcher, execution.id)
+        session.expire_all()
+        state = theme_state_of(session, version, now)
+        assert state is not None
+        return state
 
     @router.get(
         "/source-revisions/{source_revision_id}/zhiyan",

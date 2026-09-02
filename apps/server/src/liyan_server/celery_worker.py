@@ -25,6 +25,8 @@ from liyan_server.publication.worker import process_publication_run
 from liyan_server.settings import Settings
 from liyan_server.stalled import policy_from as stalled_policy_from
 from liyan_server.stalled import recover_stalled_executions
+from liyan_server.theme.proposal_worker import process_theme_proposal_run
+from liyan_server.theme.worker import process_theme_run
 from liyan_server.url_fetch_worker import process_url_fetch
 from liyan_server.worker_health import BEAT_WORKER, forget_retired_workers, record_heartbeat
 from liyan_server.zhiyan.deepseek import DeepSeekZhiyanProvider
@@ -194,6 +196,10 @@ def process_execution(execution_id: str) -> None:
         )
     elif operation == "analyze_source":
         analyze_source_execution(execution_id)
+    elif operation == "analyze_theme":
+        analyze_theme_execution(execution_id)
+    elif operation == "propose_themes":
+        propose_themes_execution(execution_id)
     elif operation == "generate_article":
         generate_article_execution(execution_id)
     elif operation == "publish_preview":
@@ -211,6 +217,36 @@ def analyze_source_execution(execution_id: str) -> None:
             timeout_seconds=settings.zhiyan_timeout_seconds,
         ),
         CeleryExecutionDispatcher(settings.broker_url),
+    )
+
+
+@celery_app.task(name="liyan.analyze_theme")  # type: ignore[untyped-decorator]
+def analyze_theme_execution(execution_id: str) -> None:
+    process_theme_run(
+        settings.database_url,
+        UUID(execution_id),
+        DeepSeekZhiyanProvider(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            timeout_seconds=settings.zhiyan_timeout_seconds,
+        ),
+        CeleryExecutionDispatcher(settings.broker_url),
+    )
+
+
+@celery_app.task(name="liyan.propose_themes")  # type: ignore[untyped-decorator]
+def propose_themes_execution(execution_id: str) -> None:
+    process_theme_proposal_run(
+        settings.database_url,
+        UUID(execution_id),
+        DeepSeekZhiyanProvider(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            # 提炼主题 cannot search, so it is one short call rather than several
+            # long ones. It still gets the 知言 timeout: the difference between
+            # them is what a slow provider does, not what this run deserves.
+            timeout_seconds=settings.zhiyan_timeout_seconds,
+        ),
     )
 
 

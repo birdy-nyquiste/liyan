@@ -21,6 +21,7 @@ import {
   type AccessToken,
 } from "../api/client";
 import { BuyCreditsLink } from "./BuyCreditsLink";
+import { ThemeChoice } from "./ThemeChoice";
 import { isCreditRefusal } from "./creditRefusal";
 import { EXECUTION_POLL_MS } from "./pollIntervals";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -81,6 +82,10 @@ export function TaskSourceVersions({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<DraftSource[]>([]);
+  // The 主题 as edited. Null means "not editing"; the empty string is a 主题 the
+  // user cleared, which is a save like any other and is how 立言 is reopened when
+  // a 主题 report will not succeed.
+  const [themeDraft, setThemeDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -178,7 +183,10 @@ export function TaskSourceVersions({
   );
 
   useEffect(() => {
-    if (!editSessionId) setOpenSourceKey(selected?.sources[0]?.source_id ?? null);
+    // Collapsed, so the list reads as an index of what this version holds. It
+    // opened the first 来源 by default, which put a few thousand characters of
+    // body between the reader and everything below it — including the 主题.
+    if (!editSessionId) setOpenSourceKey(null);
   }, [editSessionId, selected]);
 
   async function beginEditing() {
@@ -189,7 +197,11 @@ export function TaskSourceVersions({
       setSaveIdempotencyKey(crypto.randomUUID());
       const nextDrafts = edit.base_version.sources.map(draftOf);
       setDrafts(nextDrafts);
-      setOpenSourceKey(nextDrafts[0]?.key ?? null);
+      setThemeDraft(edit.base_version.theme ?? "");
+      // Collapsed, as the read-only list is. Editing opens with the version's
+      // shape in view — its 来源 and its 主题 — rather than with a few thousand
+      // characters of the first 来源 pushing everything else off the screen.
+      setOpenSourceKey(null);
       setError(null);
     } catch {
       setError(EDIT_FAILED);
@@ -289,6 +301,7 @@ export function TaskSourceVersions({
             .filter((source) => source.prepared?.warnings.length)
             .map((source) => [source.prepared!.id, source.prepared!.input_version]),
         ),
+        theme: (themeDraft ?? "").trim() || null,
       });
       const history = await listTaskVersions(accessToken, taskId);
       setVersions(history.items);
@@ -296,6 +309,7 @@ export function TaskSourceVersions({
       setEditSessionId(null);
       setSaveIdempotencyKey(null);
       setDrafts([]);
+      setThemeDraft(null);
       announceSelection(saved.id);
       currentChangeRef.current(saved);
       setError(null);
@@ -311,8 +325,13 @@ export function TaskSourceVersions({
   const stagedReady = drafts.every((source) =>
     !source.prepared || ["ready", "warning"].includes(source.prepared.status),
   );
+  // A 主题 edit is a change like any other — and the only kind a user can make
+  // without touching a 来源, so without this the save button stayed dead.
+  const themeChanged =
+    themeDraft !== null && (themeDraft ?? "").trim() !== (selected?.theme ?? "");
   const hasChanges = selected !== null && (
-    drafts.length !== selected.sources.length
+    themeChanged
+    || drafts.length !== selected.sources.length
     || drafts.some((draft, index) => {
       const original = selected.sources[index];
       return draft.prepared !== undefined
@@ -332,6 +351,7 @@ export function TaskSourceVersions({
       setEditSessionId(null);
       setSaveIdempotencyKey(null);
       setDrafts([]);
+      setThemeDraft(null);
       setError(null);
     } catch {
       setError("放弃来源修改失败，请重试。");
@@ -346,7 +366,7 @@ export function TaskSourceVersions({
     }
     setDrafts((current) => {
       const remaining = current.filter((item) => item.key !== source.key);
-      if (openSourceKey === source.key) setOpenSourceKey(remaining[0]?.key ?? null);
+      if (openSourceKey === source.key) setOpenSourceKey(null);
       return remaining;
     });
   }
@@ -444,7 +464,7 @@ export function TaskSourceVersions({
         <div className="source-toolbar__actions">
           {!editSessionId && selected.capabilities.can_edit ? (
             <button className="button button--quiet" type="button" disabled={busy} onClick={() => void beginEditing()}>
-              {t("编辑来源")}
+              {t("编辑")}
             </button>
           ) : null}
           {!editSessionId && selected.capabilities.can_restore ? (
@@ -611,9 +631,31 @@ export function TaskSourceVersions({
             ) : null
           ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
 
+          {editSessionId ? (
+            <ThemeChoice
+              accessToken={accessToken}
+              clientSessionId={editSessionId}
+              theme={themeDraft ?? ""}
+              onThemeChange={setThemeDraft}
+              // Every draft as it stands, including text typed and not yet
+              // saved: that is what the writer is looking at, and a candidate
+              // drawn from the 来源 they have replaced would be about material
+              // that is on its way out.
+              sources={drafts.map((source) => ({
+                title: source.title,
+                body: source.body,
+                provenance: source.provenance || null,
+              }))}
+              canPropose={stagedReady && !busy && drafts.length > 0}
+              disabledReason={stagedReady ? null : "请等待所有来源处理完成。"}
+              footnote={t("最多 80 字。清空即移除主题及其知言报告；改写主题会重新生成报告。")}
+              inputId="edit-theme"
+            />
+          ) : null}
+
           <div className="workspace__actions">
             <button className="button" type="button" disabled={busy || !stagedReady || !hasChanges} onClick={() => void save()}>
-              {t("保存来源修改")}
+              {t("保存修改")}
             </button>
             <button className="button button--quiet" type="button" disabled={busy} onClick={() => setConfirming("discard")}>
               {t("放弃编辑")}
@@ -622,29 +664,70 @@ export function TaskSourceVersions({
         </>
       ) : (
         <>
-          <div className="source-version-list">
-            {selected.sources.map((source) => (
-              <article className="source-accordion" key={source.id}>
-                <button
-                  className="source-accordion__trigger"
-                  type="button"
-                  aria-expanded={openSourceKey === source.source_id}
-                  aria-controls={`source-body-${source.id}`}
-                  onClick={() => setOpenSourceKey((current) =>
-                    current === source.source_id ? null : source.source_id)}
-                >
-                  <span>{source.title}</span>
-                  <span>{openSourceKey === source.source_id ? t("收起") : t("展开")}</span>
-                </button>
-                {openSourceKey === source.source_id ? (
-                  <div id={`source-body-${source.id}`}>
-                    <p>{source.provenance ?? t("未提供来源信息")}</p>
-                    <pre>{source.body}</pre>
-                  </div>
-                ) : null}
-              </article>
+          <ol className="source-list">
+            {selected.sources.map((source, position) => (
+              <li key={source.id}>
+                <article className="source-operation">
+                  <button
+                    className="source-operation__summary"
+                    type="button"
+                    aria-expanded={openSourceKey === source.source_id}
+                    aria-controls={`source-body-${source.id}`}
+                    onClick={() => setOpenSourceKey((current) =>
+                      current === source.source_id ? null : source.source_id)}
+                  >
+                    {/* The same summary row a 来源 has while it is being added:
+                        the number, the disclosure chevron, the title, and one
+                        muted word on the right. */}
+                    <span className="source-operation__status">
+                      <strong>
+                        <span className="source-operation__index">{position + 1}</span>
+                        {openSourceKey === source.source_id
+                          ? <ChevronDown size={15} aria-hidden="true" />
+                          : <ChevronRight size={15} aria-hidden="true" />}
+                        {source.title}
+                      </strong>
+                      <span className="source-operation__pending">
+                        {openSourceKey === source.source_id ? t("收起") : t("展开")}
+                      </span>
+                    </span>
+                  </button>
+                  {openSourceKey === source.source_id ? (
+                    <div className="source-version-body" id={`source-body-${source.id}`}>
+                      <p>{source.provenance ?? t("未提供来源信息")}</p>
+                      <pre>{source.body}</pre>
+                    </div>
+                  ) : null}
+                </article>
+              </li>
             ))}
-          </div>
+          </ol>
+          {/*
+            The 主题 under the 来源 it was drawn from, which is the order they
+            were decided in and the order they are read in. It was a chip in the
+            toolbar beside the version picker, where a sentence of up to eighty
+            characters had to be truncated to fit and sat among controls rather
+            than among material.
+          */}
+          {/*
+            The 主题 as the same card the 来源 above it are, and after them: it
+            is what they turned out to be about, and it is read last.
+          */}
+          <article className="source-operation source-operation--theme">
+            <p className="source-operation__status source-operation__summary--theme">
+              <strong>{t("主题")}</strong>
+              {selected.theme ? null : (
+                <span className="source-operation__pending">{t("未设置")}</span>
+              )}
+            </p>
+            {selected.theme ? (
+              <p className="version-theme__text">{selected.theme}</p>
+            ) : (
+              <p className="version-theme__absent">
+                {t("这一版没有主题；编辑时可以添加，知言将围绕它检索来源之外的信息。")}
+              </p>
+            )}
+          </article>
           {selected.capabilities.unavailable_reason ? (
             <p className="form-hint">{domainMessage(selected.capabilities.unavailable_reason)}</p>
           ) : null}

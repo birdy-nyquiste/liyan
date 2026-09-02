@@ -41,11 +41,12 @@ def save_edit_session(
     *,
     key: str,
     sources: list[dict[str, object]],
+    theme: str | None = None,
 ) -> JsonObject:
     response = client.post(
         f"/source-edit-sessions/{edit_session_id}/save",
         headers=headers,
-        json={"idempotency_key": key, "sources": sources},
+        json={"idempotency_key": key, "sources": sources, "theme": theme},
     )
     assert response.status_code == 200, response.text
     return cast(JsonObject, response.json())

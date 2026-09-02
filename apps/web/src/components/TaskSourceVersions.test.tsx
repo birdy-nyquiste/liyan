@@ -68,7 +68,10 @@ describe("来源 editing and 任务版本 history", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "编辑来源" }));
+    await user.click(await screen.findByRole("button", { name: "编辑" }));
+    // Editing opens with every 来源 collapsed, so working on one starts by
+    // opening it.
+    await user.click(screen.getByRole("button", { name: /Alpha/ }));
     const alpha = screen.getByRole("group", { name: "来源 Alpha" });
     await user.clear(within(alpha).getByLabelText("来源标题"));
     await user.type(within(alpha).getByLabelText("来源标题"), "Alpha edited");
@@ -81,7 +84,7 @@ describe("来源 editing and 任务版本 history", () => {
     expect(screen.getByText("当前版本仍是 V1；保存前的改动不会进入历史。"))
       .toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "保存来源修改" }));
+    await user.click(screen.getByRole("button", { name: "保存修改" }));
     expect(await screen.findByText("当前版本 V2")).toBeInTheDocument();
     const saveRequest = fetch.mock.calls
       .map(([request]) => request as Request)
@@ -147,7 +150,7 @@ describe("来源 editing and 任务版本 history", () => {
 
     await user.selectOptions(await screen.findByLabelText("版本"), "version-1");
     expect(screen.getByText("只读历史 V1")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "编辑来源" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "恢复为当前版本" }));
     // The confirmation is a dialog in the page, not a native confirm() the
     // browser is free to suppress.
@@ -202,13 +205,16 @@ describe("来源 editing and 任务版本 history", () => {
         onCurrentVersionChanged={vi.fn()}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "编辑来源" }));
+    await user.click(await screen.findByRole("button", { name: "编辑" }));
+    // Editing opens with every 来源 collapsed, so working on one starts by
+    // opening it.
+    await user.click(screen.getByRole("button", { name: /Alpha/ }));
     const alpha = screen.getByRole("group", { name: "来源 Alpha" });
     await user.clear(within(alpha).getByLabelText("来源标题"));
     await user.type(within(alpha).getByLabelText("来源标题"), "Retried");
-    await user.click(screen.getByRole("button", { name: "保存来源修改" }));
+    await user.click(screen.getByRole("button", { name: "保存修改" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("来源修改保存失败");
-    await user.click(screen.getByRole("button", { name: "保存来源修改" }));
+    await user.click(screen.getByRole("button", { name: "保存修改" }));
     expect(await screen.findByText("当前版本 V2")).toBeInTheDocument();
     const saves = fetch.mock.calls
       .map(([request]) => request as Request)

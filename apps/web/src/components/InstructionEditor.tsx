@@ -26,6 +26,9 @@ const InstructionCapsuleNode = Node.create({
       taskVersionId: { default: "" },
       reportId: { default: "" },
       itemId: { default: "" },
+      // Which kind of 知言报告 this item came from. Defaults to 来源, so a
+      // capsule stored before 主题 existed reads back unchanged.
+      reportKind: { default: "source" },
       label: { default: "" },
     };
   },
@@ -147,6 +150,7 @@ export function InstructionEditor({
         && node.attrs.taskVersionId === selection.reference.task_version_id
         && node.attrs.reportId === selection.reference.report_id
         && node.attrs.itemId === selection.reference.item_id
+        && node.attrs.reportKind === selection.reference.report_kind
       ) {
         existingPosition = position;
         return false;
@@ -164,6 +168,7 @@ export function InstructionEditor({
         taskVersionId: selection.reference.task_version_id,
         reportId: selection.reference.report_id,
         itemId: selection.reference.item_id,
+        reportKind: selection.reference.report_kind,
         label: selection.label,
       },
     }).setTextSelection(insertionPosition + 1).run();
@@ -191,6 +196,7 @@ function toTiptap(value: InstructionDocument): JSONContent {
           taskVersionId: part.task_version_id,
           reportId: part.report_id,
           itemId: part.item_id,
+          reportKind: part.report_kind,
           label: part.item_id,
         },
       });
@@ -223,6 +229,7 @@ function fromTiptap(document: JSONContent): Required<InstructionDocument> {
           task_version_id: String(node.attrs?.taskVersionId ?? ""),
           report_id: String(node.attrs?.reportId ?? ""),
           item_id: String(node.attrs?.itemId ?? ""),
+          report_kind: node.attrs?.reportKind === "theme" ? "theme" : "source",
         });
       }
     }

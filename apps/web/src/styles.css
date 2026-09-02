@@ -2293,21 +2293,6 @@ a.source-meta:focus-visible .source-meta__value {
   font-size: 0.88rem;
 }
 
-.source-version-list,
-.source-add-form,
-.source-versions fieldset {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.source-version-list article,
-.source-versions fieldset,
-.source-add-form {
-  padding: 1rem;
-  border: 1px solid var(--rule);
-  border-radius: 0.75rem;
-}
-
 /*
  * These forms wrap their controls in the label (`<label>来源标题<input/></label>`)
  * and carried no styling at all, so every field fell back to an inline browser
@@ -2370,45 +2355,6 @@ a.source-meta:focus-visible .source-meta__value {
   font-weight: var(--weight-normal);
 }
 
-.source-accordion {
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: 0.75rem;
-}
-
-.source-version-list article.source-accordion {
-  padding: 0;
-}
-
-.source-accordion__trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.source-accordion__trigger span:last-child {
-  color: var(--ink-muted);
-  font-size: 0.82rem;
-  font-weight: 500;
-}
-
-.source-accordion > fieldset,
-.source-accordion > div {
-  border: 0;
-  border-top: 1px solid var(--rule-soft);
-  border-radius: 0;
-}
-
 .rail-tooltip {
   z-index: 80;
   padding: 0.4rem 0.6rem;
@@ -2433,14 +2379,39 @@ a.source-meta:focus-visible .source-meta__value {
   overflow-wrap: anywhere;
 }
 
-.source-accordion > div {
+/* The 来源 forms keep the shape they had; only the read-only list moved. */
+.source-add-form,
+.source-versions fieldset {
   display: grid;
   gap: 0.75rem;
-  padding: 1rem;
 }
 
-.source-version-list pre {
+.source-versions fieldset,
+.source-add-form {
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.75rem;
+}
+
+/* One 来源's own text, inside the card that names it. */
+.source-version-body {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-top: var(--space-2xs);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.source-version-body p {
   margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.source-version-body pre {
+  margin: 0;
+  max-height: 22rem;
+  overflow: auto;
   white-space: pre-wrap;
   font: inherit;
 }
@@ -3332,6 +3303,24 @@ a.source-meta:focus-visible .source-meta__value {
   color: var(--ink-muted);
 }
 
+/*
+ * Where in the ledger you are, and the two ways out of it. Present whenever
+ * there is a ledger: a control that appears only once the list is long enough
+ * cannot tell a user that this list has pages at all.
+ */
+.account-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.account-pager__position {
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .account-usage__amount {
   font-variant-numeric: tabular-nums;
 }
@@ -3387,4 +3376,135 @@ a.account-usage__what:focus-visible {
 .credit-refusal__buy {
   margin-inline-start: var(--space-xs);
   vertical-align: baseline;
+}
+
+/* ---------------------------------------------------------------------------
+   主题
+
+   The 主题 area of a 任务创建会话, and the 主题 tab beside the 来源 reports. It
+   borrows the vocabulary already here — the source list's spacing, the report
+   tabs' shape — because 主题 is a special 来源 rather than a second product.
+   --------------------------------------------------------------------------- */
+
+/* `.button` is a block, so an icon inside one stacks above its label. The two
+   buttons in the workbench that carry an icon each say so themselves; this is
+   the third. */
+.source-operation--theme .button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+}
+
+/* The three candidates are a choice, not a list to read: each is one line of
+   subject with its reason under it, and pressing one only fills the box. */
+.theme-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.theme-candidate {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.theme-candidate:hover {
+  border-color: var(--accent);
+}
+
+.theme-candidate:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.theme-candidate span {
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+
+/* The 主题 tab carries a word where a 来源 tab carries a number, so its label
+   needs room the numbers do not. */
+.zhiyan-tab--theme .zhiyan-tab__index {
+  color: var(--ink-muted);
+  font-weight: var(--weight-strong);
+}
+
+/*
+ * 主题 is a special 来源, so its card is a 来源's card. What marks it out is the
+ * accent down its left edge rather than a different shape: on a pane that lists
+ * one to three 来源 and one 主题, a second card design would read as a second
+ * kind of product.
+ *
+ * The same card serves all three surfaces — creating a task, editing one, and
+ * reading a version — because they are the same decision seen at three moments.
+ */
+.source-operation--theme {
+  margin-top: var(--space-xs);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, var(--rule));
+  background: var(--surface);
+}
+
+.source-operation__summary--theme {
+  margin: 0;
+}
+
+.source-operation--theme input {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.source-operation--theme input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.source-operation--theme .button-row {
+  align-items: center;
+  margin: 0;
+}
+
+.version-theme__text {
+  margin: 0;
+  color: var(--ink);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  font-size: 1.15rem;
+  line-height: 1.5;
+}
+
+.version-theme__absent {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+}
+
+/* What the 来源 of this version do with the angle, inside a 盲点 item. It is the
+   one line in either report that talks about the reader's own material, so it
+   is set apart rather than reading as more prose. */
+.zhiyan-source-gap {
+  margin: var(--space-3xs) 0;
+  padding-left: var(--space-2xs);
+  border-left: 2px solid var(--rule);
+  color: var(--ink-muted);
+}
+
+.zhiyan-crux {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }

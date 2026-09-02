@@ -1393,6 +1393,101 @@
         }
       }
     },
+    "/task-creation/theme-proposals": {
+      "post": {
+        "tags": [
+          "theme"
+        ],
+        "summary": "Propose Session Themes",
+        "description": "One press of 提炼主题, charged once, against the 来源 as they stand now.\n\n\"As they stand now\" means two different reads. From a 任务创建会话 the\nserver reads the session's own 来源 and requires every one of them to\nhave been captured. From a 来源编辑会话 the request carries them, because\nan inline edit is not a row yet.\n\nPressing again replaces nothing on the server: each press is its own row,\nand the client reads the one it just created. What the *interface* does\nwith the previous three candidates is its own business — they are gone\nfrom the screen, and the 主题 the user has typed is never touched.",
+        "operationId": "propose_session_themes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeThemesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeProposalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/task-creation/theme-proposals/{proposal_id}": {
+      "get": {
+        "tags": [
+          "theme"
+        ],
+        "summary": "Get Theme Proposal",
+        "operationId": "get_theme_proposal",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeProposalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/source-revisions/{source_revision_id}/zhiyan-runs": {
       "post": {
         "tags": [
@@ -1424,6 +1519,55 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ZhiyanStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/theme-revisions/{theme_revision_id}/zhiyan-runs": {
+      "post": {
+        "tags": [
+          "zhiyan"
+        ],
+        "summary": "Start Theme Zhiyan Run",
+        "description": "Ask for this 主题's report again. The mirror of a 来源's retry.",
+        "operationId": "start_theme_zhiyan_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "theme_revision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Theme Revision Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeStateResponse"
                 }
               }
             }
@@ -2504,6 +2648,10 @@
         ],
         "title": "Body_replace_file_source"
       },
+      "CandidateText": {
+        "type": "string",
+        "minLength": 1
+      },
       "CheckoutRequest": {
         "properties": {
           "price_id": {
@@ -2629,6 +2777,17 @@
             },
             "type": "object",
             "title": "Accepted Warning Versions"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
           }
         },
         "type": "object",
@@ -2651,13 +2810,37 @@
             },
             "type": "array",
             "title": "Source Revisions"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "theme_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Revision Id"
           }
         },
         "type": "object",
         "required": [
           "task",
           "source_revision",
-          "source_revisions"
+          "source_revisions",
+          "theme",
+          "theme_revision_id"
         ],
         "title": "ConfirmTaskResponse"
       },
@@ -3039,6 +3222,8 @@
               "fetch_url",
               "parse_file",
               "analyze_source",
+              "analyze_theme",
+              "propose_themes",
               "generate_article",
               "publish_preview"
             ],
@@ -3404,6 +3589,15 @@
           "item_id": {
             "type": "string",
             "title": "Item Id"
+          },
+          "report_kind": {
+            "type": "string",
+            "enum": [
+              "source",
+              "theme"
+            ],
+            "title": "Report Kind",
+            "default": "source"
           }
         },
         "type": "object",
@@ -4111,6 +4305,42 @@
         ],
         "title": "PreparedSource"
       },
+      "ProposalStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "failed",
+          "succeeded",
+          "cancelled"
+        ]
+      },
+      "ProposeThemesRequest": {
+        "properties": {
+          "client_session_id": {
+            "type": "string",
+            "title": "Client Session Id"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourceInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_session_id"
+        ],
+        "title": "ProposeThemesRequest"
+      },
       "PublicationTargetListResponse": {
         "properties": {
           "items": {
@@ -4553,6 +4783,17 @@
             },
             "type": "object",
             "title": "Accepted Warning Versions"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
           }
         },
         "type": "object",
@@ -5192,6 +5433,17 @@
             "type": "array",
             "title": "Sources"
           },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/VersionCapabilities"
           }
@@ -5203,6 +5455,7 @@
           "created_at",
           "is_current",
           "sources",
+          "theme",
           "capabilities"
         ],
         "title": "TaskVersionSnapshot"
@@ -5228,6 +5481,16 @@
             "type": "array",
             "title": "Sources"
           },
+          "theme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeStateResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "liyan": {
             "$ref": "#/components/schemas/LiyanCapabilities"
           }
@@ -5238,9 +5501,520 @@
           "task_version_id",
           "task_version_number",
           "sources",
+          "theme",
           "liyan"
         ],
         "title": "TaskVersionZhiyanResponse"
+      },
+      "ThemeBlindSpotItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "angle": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "source_gap": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "why_it_matters": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "angle",
+          "source_gap",
+          "why_it_matters",
+          "evidence_ids"
+        ],
+        "title": "ThemeBlindSpotItem"
+      },
+      "ThemeBlindSpotSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeBlindSpotItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "empty_state"
+        ],
+        "title": "ThemeBlindSpotSection"
+      },
+      "ThemeCandidate": {
+        "properties": {
+          "theme": {
+            "$ref": "#/components/schemas/CandidateText"
+          },
+          "why": {
+            "$ref": "#/components/schemas/CandidateText"
+          }
+        },
+        "type": "object",
+        "required": [
+          "theme",
+          "why"
+        ],
+        "title": "ThemeCandidate"
+      },
+      "ThemeDisagreementItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "axis": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "sides": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "crux": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "axis",
+          "sides",
+          "crux",
+          "evidence_ids"
+        ],
+        "title": "ThemeDisagreementItem"
+      },
+      "ThemeDisagreementSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeDisagreementItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "empty_state"
+        ],
+        "title": "ThemeDisagreementSection"
+      },
+      "ThemeEvidenceItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "url": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url",
+          "explanation"
+        ],
+        "title": "ThemeEvidenceItem"
+      },
+      "ThemeEvidenceSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeEvidenceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "empty_state"
+        ],
+        "title": "ThemeEvidenceSection"
+      },
+      "ThemeFactItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "claim": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "relevance": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "claim",
+          "relevance",
+          "evidence_ids"
+        ],
+        "title": "ThemeFactItem"
+      },
+      "ThemeFactSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeFactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "empty_state"
+        ],
+        "title": "ThemeFactSection"
+      },
+      "ThemeKeyFinding": {
+        "properties": {
+          "ref_id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "text": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref_id",
+          "text"
+        ],
+        "title": "ThemeKeyFinding"
+      },
+      "ThemeOverviewSection": {
+        "properties": {
+          "landscape": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "consensus_and_dispute": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "key_findings": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeKeyFinding"
+            },
+            "type": "array",
+            "title": "Key Findings"
+          },
+          "reading_note": {
+            "$ref": "#/components/schemas/Narrative"
+          }
+        },
+        "type": "object",
+        "required": [
+          "landscape",
+          "consensus_and_dispute",
+          "key_findings",
+          "reading_note"
+        ],
+        "title": "ThemeOverviewSection"
+      },
+      "ThemeProposalResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "client_session_id": {
+            "type": "string",
+            "title": "Client Session Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProposalStatus"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "client_session_id",
+          "status",
+          "candidates",
+          "execution"
+        ],
+        "title": "ThemeProposalResponse",
+        "description": "One press of 提炼主题, and the three candidates it produced."
+      },
+      "ThemeReportDocument": {
+        "properties": {
+          "overview": {
+            "$ref": "#/components/schemas/ThemeOverviewSection"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ThemeFactSection"
+          },
+          "viewpoints": {
+            "$ref": "#/components/schemas/ThemeViewpointSection"
+          },
+          "disagreements": {
+            "$ref": "#/components/schemas/ThemeDisagreementSection"
+          },
+          "blind_spots": {
+            "$ref": "#/components/schemas/ThemeBlindSpotSection"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/ThemeEvidenceSection"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overview",
+          "facts",
+          "viewpoints",
+          "disagreements",
+          "blind_spots",
+          "evidence"
+        ],
+        "title": "ThemeReportDocument",
+        "description": "The six fixed sections of one 主题知言报告."
+      },
+      "ThemeReportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "theme_revision_id": {
+            "type": "string",
+            "title": "Theme Revision Id"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "document": {
+            "$ref": "#/components/schemas/ThemeReportDocument"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "theme_revision_id",
+          "prompt_version",
+          "model",
+          "created_at",
+          "document"
+        ],
+        "title": "ThemeReportResponse"
+      },
+      "ThemeStateResponse": {
+        "properties": {
+          "theme_revision_id": {
+            "type": "string",
+            "title": "Theme Revision Id"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ZhiyanStatus"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeReportResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ZhiyanCapabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "theme_revision_id",
+          "theme",
+          "status",
+          "report",
+          "execution",
+          "capabilities"
+        ],
+        "title": "ThemeStateResponse",
+        "description": "The 主题 of one 任务版本, and what became of its 知言 run."
+      },
+      "ThemeViewpointItem": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "position": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "holders": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "grounds": {
+            "$ref": "#/components/schemas/Narrative"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "position",
+          "holders",
+          "grounds",
+          "evidence_ids"
+        ],
+        "title": "ThemeViewpointItem"
+      },
+      "ThemeViewpointSection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeViewpointItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "empty_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "empty_state"
+        ],
+        "title": "ThemeViewpointSection"
       },
       "UrlSourceCapabilities": {
         "properties": {
@@ -5439,12 +6213,22 @@
           "has_more": {
             "type": "boolean",
             "title": "Has More"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "default": 5
           }
         },
         "type": "object",
         "required": [
           "entries",
-          "has_more"
+          "has_more",
+          "total"
         ],
         "title": "UsageResponse"
       },

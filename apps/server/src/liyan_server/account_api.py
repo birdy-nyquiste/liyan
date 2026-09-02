@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from liyan_server import credits
@@ -29,13 +29,23 @@ from liyan_server.database import (
     SourcePreparation,
     SourceRevision,
     TaskVersion,
+    ThemeRevision,
     User,
 )
 from liyan_server.execution_states import TERMINAL_EXECUTION_STATUSES
 
-#: How many 使用记录 rows one page carries. Enough that a user sees the run they
-#: just started without asking for more.
-PAGE = 50
+#: How many 使用记录 rows one page carries.
+#:
+#: Five. It was fifty, chosen so a user would see the run they had just started
+#: without asking for more, and it achieved that by making the page a wall: a
+#: single 立言任务 leaves five or six rows, so an ordinary account reached a list
+#: nobody scrolls to the end of long before the first page was full — and until
+#: it *was* full, no control appeared at all, so the page had no way to say that
+#: this was a list with pages.
+#:
+#: Five is small enough that the page is read rather than scrolled, and it is
+#: about what one 立言任务 costs — so a page tends to be one piece of work.
+PAGE = 5
 
 type ActivityStatus = Literal["running", "done", "failed", "none"]
 
@@ -68,6 +78,14 @@ class UsageEntry(BaseModel):
 class UsageResponse(BaseModel):
     entries: list[UsageEntry]
     has_more: bool
+    #: Every row this user has, so the page can say where in the ledger they
+    #: are. Counted rather than derived from `has_more`: a pager that can only
+    #: say "there is more" cannot offer the last page, and a ledger is read
+    #: backwards as often as forwards.
+    total: int
+    #: What one page holds, so the client does not keep its own copy of a number
+    #: the server decides.
+    page_size: int = PAGE
 
 
 #: What each act is called, in the same words the rest of the product uses for
@@ -82,6 +100,8 @@ _LABELS = {
 _TARGET_LABELS = {
     credits.SOURCE_PREPARATION: "来源抓取",
     "source_revision": "知言报告",
+    "theme_revision": "主题知言报告",
+    "theme_proposal": "主题提炼",
     "liyan_article": "立言文章",
 }
 
@@ -116,6 +136,15 @@ def _task_id(session: Session, entry: CreditEntry) -> str | None:
         revision = session.get(SourceRevision, entry.target_id)
         source = session.get(Source, revision.source_id) if revision else None
         return str(source.task_id) if source else None
+    if entry.target_type == "theme_revision":
+        theme = session.get(ThemeRevision, entry.target_id)
+        return str(theme.task_id) if theme else None
+    if entry.target_type == "theme_proposal":
+        # A press happens in a 任务创建会话 or a 来源编辑会话, and the first of
+        # those has no 立言任务 yet. Rather than link one act to a task and the
+        # other to nothing, neither leads anywhere: what a press produced is
+        # three candidates, and they are gone by the time this is read.
+        return None
     if entry.target_type == "liyan_article":
         article = session.get(LiyanArticle, entry.target_id)
         version = session.get(TaskVersion, article.task_version_id) if article else None
@@ -177,6 +206,14 @@ def account_router(database: Database, current_user: CurrentUserDependency) -> A
         that moved and moved back — which is the whole reason this page shows
         the two together.
         """
+        total = int(
+            session.scalar(
+                select(func.count())
+                .select_from(CreditEntry)
+                .where(CreditEntry.owner_id == user.id, CreditEntry.kind != "settle")
+            )
+            or 0
+        )
         rows = list(
             session.scalars(
                 select(CreditEntry)
@@ -213,6 +250,6 @@ def account_router(database: Database, current_user: CurrentUserDependency) -> A
                     happened_at=entry.created_at,
                 )
             )
-        return UsageResponse(entries=entries, has_more=has_more)
+        return UsageResponse(entries=entries, has_more=has_more, total=total)
 
     return router

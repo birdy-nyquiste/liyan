@@ -33,7 +33,10 @@ const copy = {
     cancelled: "本次购买已取消，未产生扣款。",
     history: "使用记录",
     empty: "还没有使用记录",
-    loadMore: "加载更多",
+    previousPage: "上一页",
+    nextPage: "下一页",
+    pageOf: (page: number, pages: number, total: number) =>
+      `第 ${page} / ${pages} 页 · 共 ${total} 条`,
     failed: "账户信息加载失败，请稍后重试。",
     locked: "购买额度后可使用公共文章链接与上传文件作为来源。",
     spends: "来源抓取，知言报告生成，立言文章生成会消耗额度，按量计算。",
@@ -56,7 +59,10 @@ const copy = {
     cancelled: "This purchase was cancelled. You have not been charged.",
     history: "Usage history",
     empty: "Nothing used yet",
-    loadMore: "Load more",
+    previousPage: "Previous",
+    nextPage: "Next",
+    pageOf: (page: number, pages: number, total: number) =>
+      `Page ${page} of ${pages} · ${total} entries`,
     failed: "The account could not be loaded. Try again shortly.",
     locked: "Buying credits unlocks article links and uploaded files as sources.",
     spends: "Capturing a 来源, generating a 知言报告, and generating a 立言文章 spend credits, metered by usage.",
@@ -126,7 +132,18 @@ export function AccountPage({ accessToken }: { accessToken: AccessToken }): Reac
   const [account, setAccount] = useState<AccountResponse | null>(null);
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [entries, setEntries] = useState<UsageEntry[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  /*
+    The page on screen, and the two numbers a pager needs from the server: how
+    many rows there are, and how many one page holds. Both come from the server
+    so this page cannot disagree with it about where the boundaries are.
+
+    Paged rather than appended. 使用记录 is a ledger — the row a user is looking
+    for is as often the oldest as the newest — and an append-only list can only
+    reach the beginning by loading everything in between.
+  */
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
@@ -143,15 +160,25 @@ export function AccountPage({ accessToken }: { accessToken: AccessToken }): Reac
   const rewriteUrl = useRef(setSearchParams);
   rewriteUrl.current = setSearchParams;
 
+  /*
+    `pageRef` rather than a dependency: `load` is what the checkout poll calls
+    every few seconds, and rebuilding it whenever the page changes would tear
+    that poll down mid-payment. What the poll wants is "read again what is on
+    screen", which is exactly what this reads.
+  */
+  const pageRef = useRef(0);
+  pageRef.current = page;
+
   const load = useCallback(async () => {
     try {
       const [next, usage] = await Promise.all([
         getAccount(accessToken),
-        listAccountUsage(accessToken),
+        listAccountUsage(accessToken, pageRef.current * (pageSizeRef.current || 0)),
       ]);
       setAccount(next);
       setEntries(usage.entries);
-      setHasMore(usage.has_more);
+      setTotal(usage.total);
+      setPageSize(usage.page_size);
       setFailed(false);
       return next;
     } catch {
@@ -160,6 +187,17 @@ export function AccountPage({ accessToken }: { accessToken: AccessToken }): Reac
     }
   }, [accessToken]);
 
+  // The size is the server's, and the first read is what tells us it. Held in a
+  // ref for the same reason as the page: `load` must not be rebuilt for it.
+  const pageSizeRef = useRef(0);
+  pageSizeRef.current = pageSize;
+
+  /*
+    The first read, and only it. Turning a page reads through `turnTo`, so `page`
+    is deliberately not a dependency here: with it, every turn fetched twice —
+    once for the turn and once for the change it caused — and the second answer
+    overwrote the first for no reason a user could see.
+  */
   useEffect(() => {
     void load();
   }, [load]);
@@ -246,12 +284,19 @@ export function AccountPage({ accessToken }: { accessToken: AccessToken }): Reac
     }
   };
 
-  const loadMore = async () => {
+  const pages = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+
+  const turnTo = async (next: number) => {
     setBusy(true);
     try {
-      const usage = await listAccountUsage(accessToken, entries.length);
-      setEntries((current) => [...current, ...usage.entries]);
-      setHasMore(usage.has_more);
+      const usage = await listAccountUsage(accessToken, next * pageSize);
+      setEntries(usage.entries);
+      setTotal(usage.total);
+      setPageSize(usage.page_size);
+      // Only once the rows are in hand: a page number that changed before its
+      // rows arrived would label this page with the next one's number.
+      setPage(next);
+      setFailed(false);
     } catch {
       setFailed(true);
     } finally {
@@ -373,10 +418,34 @@ export function AccountPage({ accessToken }: { accessToken: AccessToken }): Reac
           ))}
         </ul>
       )}
-      {hasMore ? (
-        <button className="button button--quiet" type="button" disabled={busy} onClick={() => void loadMore()}>
-          {text.loadMore}
-        </button>
+      {/*
+        Shown whenever there is a ledger at all, not only once it spills past
+        one page. Where you are is part of reading a ledger, and a list that
+        says nothing until it is long enough gives no way to tell "this is
+        everything" from "this is the beginning of something".
+      */}
+      {entries.length > 0 ? (
+        <nav className="account-pager" aria-label={text.history}>
+          <button
+            className="button button--quiet"
+            type="button"
+            disabled={busy || page === 0}
+            onClick={() => void turnTo(page - 1)}
+          >
+            {text.previousPage}
+          </button>
+          <span className="account-pager__position" aria-live="polite">
+            {text.pageOf(page + 1, pages, total)}
+          </span>
+          <button
+            className="button button--quiet"
+            type="button"
+            disabled={busy || page + 1 >= pages}
+            onClick={() => void turnTo(page + 1)}
+          >
+            {text.nextPage}
+          </button>
+        </nav>
       ) : null}
     </section>
   );

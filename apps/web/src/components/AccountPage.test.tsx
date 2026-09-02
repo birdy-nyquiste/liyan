@@ -25,7 +25,9 @@ function respondWith({
     requests.push(request.clone());
     const path = new URL(request.url).pathname;
     if (path.endsWith("/account/credit-packs")) return Response.json({ packs: PACKS });
-    if (path.endsWith("/account/usage")) return Response.json({ entries: [], has_more: false });
+    if (path.endsWith("/account/usage")) {
+      return Response.json({ entries: [], has_more: false, total: 0, page_size: 20 });
+    }
     if (path.endsWith("/account/checkout-session")) {
       if (checkoutStatus !== 200) {
         return Response.json({ detail: "支付服务暂时无法访问。" }, { status: checkoutStatus });
@@ -159,5 +161,129 @@ describe("AccountPage", () => {
 
     expect(await screen.findByText("购买功能尚未开放。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "购买" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 使用记录 is a ledger, and a ledger is read backwards as often as forwards.
+ *
+ * These are written against a server that has more rows than one page holds,
+ * which is what the rest of this file's fixture never had — and is why a page
+ * that showed no pager at all went unnoticed.
+ */
+describe("AccountPage 使用记录 pagination", () => {
+  const PAGE_SIZE = 20;
+
+  function ledger(total: number) {
+    type FetchCall = (request: Request) => Promise<Response>;
+    const asked: number[] = [];
+    const fetchMock = vi.fn<FetchCall>(async (request) => {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith("/account/credit-packs")) return Response.json({ packs: [] });
+      if (url.pathname.endsWith("/account/usage")) {
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        asked.push(offset);
+        const rows = Array.from(
+          { length: Math.max(0, Math.min(PAGE_SIZE, total - offset)) },
+          (_unused, index) => ({
+            id: `entry-${offset + index}`,
+            kind: "capture",
+            description: `第 ${offset + index + 1} 条`,
+            task_id: null,
+            status: "none",
+            amount: -3,
+            happened_at: "2026-09-02T10:00:00Z",
+          }),
+        );
+        return Response.json({
+          entries: rows,
+          has_more: offset + rows.length < total,
+          total,
+          page_size: PAGE_SIZE,
+        });
+      }
+      return Response.json({ remaining_credits: 100, is_paying_user: true });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return asked;
+  }
+
+  it("shows one page at a time and says where in the ledger it is", async () => {
+    ledger(45);
+    renderAt("/account");
+
+    expect(await screen.findByText("第 1 条")).toBeInTheDocument();
+    expect(screen.getByText("第 1 / 3 页 · 共 45 条")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(PAGE_SIZE);
+    expect(screen.queryByText("第 21 条")).not.toBeInTheDocument();
+  });
+
+  it("turns forward and back, replacing the rows rather than piling them up", async () => {
+    const user = userEvent.setup();
+    ledger(45);
+    renderAt("/account");
+    await screen.findByText("第 1 条");
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+
+    expect(await screen.findByText("第 21 条")).toBeInTheDocument();
+    expect(screen.queryByText("第 1 条")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(PAGE_SIZE);
+    expect(screen.getByText("第 2 / 3 页 · 共 45 条")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "上一页" }));
+
+    expect(await screen.findByText("第 1 条")).toBeInTheDocument();
+    expect(screen.queryByText("第 21 条")).not.toBeInTheDocument();
+  });
+
+  it("cannot be turned past either end", async () => {
+    const user = userEvent.setup();
+    ledger(25);
+    renderAt("/account");
+    await screen.findByText("第 1 条");
+
+    // The first page has nothing before it.
+    expect(screen.getByRole("button", { name: "上一页" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+    await screen.findByText("第 21 条");
+
+    // The last page holds the remainder and offers nothing after it.
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "上一页" })).toBeEnabled();
+  });
+
+  it("says a ledger that fits on one page is one page", async () => {
+    ledger(6);
+    renderAt("/account");
+
+    expect(await screen.findByText("第 1 条")).toBeInTheDocument();
+    // Present, not hidden: "this is everything" and "this is the beginning of
+    // something" are different answers, and a control that only appears when
+    // the list spills gives neither.
+    expect(screen.getByText("第 1 / 1 页 · 共 6 条")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
+  });
+
+  it("offers no pager at all when nothing has been used", async () => {
+    ledger(0);
+    renderAt("/account");
+
+    expect(await screen.findByText("还没有使用记录")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下一页" })).not.toBeInTheDocument();
+  });
+
+  it("asks the server for the page it is on, and only for that page", async () => {
+    const user = userEvent.setup();
+    const asked = ledger(45);
+    renderAt("/account");
+    await screen.findByText("第 1 条");
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+    await screen.findByText("第 21 条");
+
+    expect(asked.filter((offset) => offset === 20)).toHaveLength(1);
+    expect(asked.every((offset) => offset % PAGE_SIZE === 0)).toBe(true);
   });
 });

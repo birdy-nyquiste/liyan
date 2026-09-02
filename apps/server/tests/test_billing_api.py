@@ -209,6 +209,119 @@ def test_the_amount_comes_from_the_price_and_not_from_the_event(tmp_path: Path) 
     assert balance(client) == 2_000
 
 
+def test_a_promotion_code_changes_the_money_and_not_the_额度(tmp_path: Path) -> None:
+    """What a coupon is. The buyer paid less for the same 额度包, so they get the
+    额度 that pack promises — and the whole invariant is that nothing in the
+    credit path reads an amount to argue with that."""
+    discounted = StripeSaying(
+        line_items=[
+            {
+                # The Price is untouched by a coupon; what moves is the money
+                # beside it, which is exactly what nothing here reads.
+                "price": {"id": SMALL_PRICE},
+                "quantity": 1,
+                "amount_subtotal": 500,
+                "amount_discount": 250,
+                "amount_total": 250,
+            }
+        ]
+    )
+    client, _ = a_client(tmp_path, discounted)
+    owner = owner_of(client)
+    event = checkout_completed_event(owner)
+    event["data"]["object"]["amount_subtotal"] = 500
+    event["data"]["object"]["amount_total"] = 250
+    event["data"]["object"]["total_details"] = {"amount_discount": 250}
+    event["data"]["object"]["discounts"] = [{"promotion_code": "promo_half"}]
+
+    assert deliver(client, event) == 204
+
+    assert balance(client) == 2_000
+
+
+def test_a_hundred_percent_code_still_credits_the_whole_pack(tmp_path: Path) -> None:
+    """Stripe takes no payment at all for a free Session, so it completes as
+    `no_payment_required` and names no PaymentIntent. Both are answered for:
+    fulfillment accepts that status and keys the entry on the Session instead.
+    """
+    free = StripeSaying(
+        line_items=[
+            {
+                "price": {"id": SMALL_PRICE},
+                "quantity": 1,
+                "amount_subtotal": 500,
+                "amount_discount": 500,
+                "amount_total": 0,
+            }
+        ],
+        payment_status="no_payment_required",
+    )
+    client, _ = a_client(tmp_path, free)
+    owner = owner_of(client)
+    event = checkout_completed_event(owner, payment_status="no_payment_required")
+    event["data"]["object"]["payment_intent"] = None
+    event["data"]["object"]["amount_total"] = 0
+
+    assert deliver(client, event) == 204
+
+    assert balance(client) == 2_000
+    assert client.get("/account", headers=HEADERS).json()["is_paying_user"] is True
+
+
+def test_a_larger_pack_bought_with_a_code_credits_that_larger_pack(
+    tmp_path: Path,
+) -> None:
+    """Which pack was bought is the Price's answer, whatever was paid for it."""
+    discounted_medium = StripeSaying(
+        line_items=[
+            {
+                "price": {"id": "price_medium"},
+                "quantity": 1,
+                "amount_subtotal": 2_000,
+                "amount_discount": 1_500,
+                "amount_total": 500,
+            }
+        ]
+    )
+    client, _ = a_client(tmp_path, discounted_medium)
+    owner = owner_of(client)
+    event = checkout_completed_event(owner)
+    # The money paid matches the *small* pack exactly, which is the trap.
+    event["data"]["object"]["amount_total"] = 500
+
+    deliver(client, event)
+
+    assert balance(client) == 8_000
+
+
+def test_refunding_a_discounted_purchase_reclaims_by_what_was_paid(
+    tmp_path: Path,
+) -> None:
+    """A clawback is proportional, and both of its terms are the discounted
+    charge — so half the money back takes half the 额度, whatever the code was.
+    """
+    discounted = StripeSaying(
+        line_items=[
+            {
+                "price": {"id": SMALL_PRICE},
+                "quantity": 1,
+                "amount_subtotal": 500,
+                "amount_discount": 250,
+                "amount_total": 250,
+            }
+        ]
+    )
+    client, _ = a_client(tmp_path, discounted)
+    owner = owner_of(client)
+    deliver(client, checkout_completed_event(owner))
+    assert balance(client) == 2_000
+
+    # Half of the 250 actually charged, not of the 500 the pack lists.
+    assert deliver(client, charge_refunded_event(amount=250, amount_refunded=125)) == 204
+
+    assert balance(client) == 1_000
+
+
 def test_a_redelivered_webhook_credits_once(tmp_path: Path) -> None:
     """Stripe retries. The second delivery finds the row already there."""
     client, _ = a_client(tmp_path)

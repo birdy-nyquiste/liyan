@@ -1,9 +1,8 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
-
 import type { components } from "../api/schema";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useInterfaceLocale } from "../interfaceLocale";
+import { CapsuleButton, EmptyState, Quote, Refs, Section } from "./reportParts";
+import { webAddress } from "./webAddress";
 
 export type ZhiyanReportDocument = components["schemas"]["ZhiyanReportDocument"];
 type FactItem = components["schemas"]["FactItem"];
@@ -17,133 +16,6 @@ const VERDICT_TONES: Record<FactVerdict, string> = {
   有证据反驳: "verdict--contradicted",
   暂无法核实: "verdict--unverifiable",
 };
-
-/** Only a plain web address may become a link; anything else stays inert text. */
-function webAddress(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Which sections a reader keeps open is a lasting preference, but a per-report
- * one: each report is a different piece of reading, so the fold is stored
- * against the report's own section id and survives a remount and a reload
- * without reaching into the report beside it.
- */
-const FOLD_PREFIX = "liyan.zhiyanSection.";
-
-function foldOpen(key: string): boolean {
-  return window.localStorage.getItem(`${FOLD_PREFIX}${key}`) === "open";
-}
-
-function setFoldOpen(key: string, open: boolean) {
-  window.localStorage.setItem(`${FOLD_PREFIX}${key}`, open ? "open" : "closed");
-}
-
-/**
- * A report is six sections deep and each one is prose; reading the 逻辑 section
- * of the second report should not mean scrolling through the 证据 list of the
- * first. Every section folds, and starts closed so a report opens as an index
- * the reader expands rather than a wall of text.
- */
-function Section({
-  id,
-  heading,
-  children,
-}: {
-  /** Doubles as the fold's storage key: unique per report and per section. */
-  id: string;
-  heading: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(() => foldOpen(id));
-  return (
-    <section className="zhiyan-section" aria-labelledby={id}>
-      <h4>
-        <button
-          className="zhiyan-section__toggle"
-          id={id}
-          type="button"
-          aria-expanded={open}
-          aria-controls={`${id}-body`}
-          onClick={() => {
-            setFoldOpen(id, !open);
-            setOpen(!open);
-          }}
-        >
-          {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
-          {heading}
-        </button>
-      </h4>
-      <div id={`${id}-body`} hidden={!open}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
-/** §4.1: a section with no content states why, rather than disappearing. */
-function EmptyState({ items, reason }: { items: number; reason: string | null }) {
-  const { t } = useInterfaceLocale();
-  return items === 0 ? <p className="zhiyan-empty">{reason ?? t("本部分没有内容。")}</p> : null;
-}
-
-function Quote({ text }: { text: string }) {
-  return <blockquote className="zhiyan-quote">{text}</blockquote>;
-}
-
-function Refs({ label, refs }: { label: string; refs: string[] }) {
-  if (refs.length === 0) return null;
-  return (
-    <p className="zhiyan-item__refs">
-      {label}
-      {refs.map((ref) => (
-        <span key={ref} className="zhiyan-ref">
-          {ref}
-        </span>
-      ))}
-    </p>
-  );
-}
-
-function CapsuleButton({
-  itemId,
-  sourceTitle,
-  taskVersionId,
-  reportId,
-  onSelect,
-}: {
-  itemId: string;
-  sourceTitle: string;
-  taskVersionId?: string;
-  reportId?: string;
-  onSelect?: (choice: CapsuleChoice) => void;
-}) {
-  const { locale, t } = useInterfaceLocale();
-  if (!taskVersionId || !reportId || !onSelect) return null;
-  return (
-    <button
-      className="zhiyan-capsule-button"
-      type="button"
-      aria-label={locale === "en" ? `Insert ${itemId} into the Liyan instruction` : `插入 ${itemId} 到立言指令`}
-      onClick={() => onSelect({
-        label: `${sourceTitle} · ${itemId}`,
-        reference: {
-          type: "capsule",
-          task_version_id: taskVersionId,
-          report_id: reportId,
-          item_id: itemId,
-        },
-      })}
-    >
-      {t("加入指令")}
-    </button>
-  );
-}
 
 export function ZhiyanReportView({
   document: report,
@@ -210,7 +82,7 @@ export function ZhiyanReportView({
                 </span>
                 <CapsuleButton
                   itemId={fact.id}
-                  sourceTitle={sourceTitle}
+                  reportTitle={sourceTitle}
                   taskVersionId={taskVersionId}
                   reportId={reportId}
                   onSelect={onCapsuleSelect}
@@ -238,7 +110,7 @@ export function ZhiyanReportView({
                 <span className="zhiyan-holder">{viewpoint.owner}</span>
                 <CapsuleButton
                   itemId={viewpoint.id}
-                  sourceTitle={sourceTitle}
+                  reportTitle={sourceTitle}
                   taskVersionId={taskVersionId}
                   reportId={reportId}
                   onSelect={onCapsuleSelect}
@@ -262,7 +134,7 @@ export function ZhiyanReportView({
                 <span className="zhiyan-ref">{item.id}</span>
                 <CapsuleButton
                   itemId={item.id}
-                  sourceTitle={sourceTitle}
+                  reportTitle={sourceTitle}
                   taskVersionId={taskVersionId}
                   reportId={reportId}
                   onSelect={onCapsuleSelect}
@@ -299,7 +171,7 @@ export function ZhiyanReportView({
                 <span className="zhiyan-ref">{item.id}</span>
                 <CapsuleButton
                   itemId={item.id}
-                  sourceTitle={sourceTitle}
+                  reportTitle={sourceTitle}
                   taskVersionId={taskVersionId}
                   reportId={reportId}
                   onSelect={onCapsuleSelect}

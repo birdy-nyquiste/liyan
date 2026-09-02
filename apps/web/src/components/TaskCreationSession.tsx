@@ -25,6 +25,8 @@ import {
   type AccessToken,
 } from "../api/client";
 import { BuyCreditsLink } from "./BuyCreditsLink";
+import { ThemeChoice } from "./ThemeChoice";
+import { MAX_THEME_CHARACTERS } from "./themeLimits";
 import { isCreditRefusal } from "./creditRefusal";
 import type { TaskSummary } from "../auth/state";
 import { SOURCE_PREPARATION_POLL_MS } from "./pollIntervals";
@@ -255,8 +257,12 @@ export function TaskCreationSession({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  // Never cleared by anything but the user. Not by a 来源 changing, and not by
+  // pressing 提炼主题 again.
+  const [theme, setTheme] = useState("");
   const sourceCount = session?.source_count ?? 0;
-  const dirty = sourceCount > 0 || Boolean(url || file || Object.values(draft).some(Boolean));
+  const dirty =
+    sourceCount > 0 || Boolean(theme || url || file || Object.values(draft).some(Boolean));
 
   const refresh = useCallback(async () => {
     setSession(await getTaskCreationSession(accessToken, clientSessionId));
@@ -327,7 +333,12 @@ export function TaskCreationSession({
     }
   }
 
-  const canConfirm = Boolean(session?.can_confirm && editingSourceIds.size === 0 && !busy);
+  const canConfirm = Boolean(
+    session?.can_confirm
+      && editingSourceIds.size === 0
+      && !busy
+      && theme.length <= MAX_THEME_CHARACTERS,
+  );
 
   const updateEditingSource = useCallback((sourceId: string, editing: boolean) => {
     setEditingSourceIds((current) => {
@@ -356,6 +367,7 @@ export function TaskCreationSession({
             .filter((source) => source.warnings.length > 0)
             .map((source) => [source.id, source.input_version]),
         ),
+        theme.trim() || null,
       );
       window.localStorage.removeItem(CREATION_SESSION_KEY);
       onCreated(task);
@@ -481,6 +493,21 @@ export function TaskCreationSession({
           </button>
         ) : null
       ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
+
+      <ThemeChoice
+        accessToken={accessToken}
+        clientSessionId={clientSessionId}
+        theme={theme}
+        onThemeChange={setTheme}
+        canPropose={Boolean(session?.can_confirm) && !busy}
+        disabledReason={
+          sourceCount === 0
+            ? "请先添加来源，全部抓取成功后才能提炼主题。"
+            : session?.can_confirm
+              ? null
+              : "请等待所有来源处理完成。"
+        }
+      />
 
       {error ? (
         <p role="alert" className="form-error">

@@ -24,9 +24,21 @@ _Avoid_: 文章版本, Revision
 A temporary set of proposed source additions, replacements, edits, and deletions within an existing 立言任务. Only saving it creates a durable task version; leaving it unfinished discards its changes.
 _Avoid_: 任务版本, 可恢复草稿
 
+**主题**:
+The single subject a 任务版本 is about: one line of plain text, at most 80 characters, confirmed before the 立言任务 exists and changed only by producing a new 任务版本. It may be absent, and absent is a confirmation rather than an omission.
+_Avoid_: 标题, 选题, 立意
+
+**主题候选**:
+One of exactly three 主题 an Agent offers from the 来源 in hand — those of a 任务创建会话, or those of a 来源编辑会话 as the writer currently has them — each with one sentence saying why it fits them. Pressing one fills the 主题 box; it is not a 主题 until the user saves or confirms with it.
+_Avoid_: 推荐主题, 主题建议
+
 **知言报告**:
 The trustworthy, immutable analysis produced for one source revision, covering source context, facts, viewpoints, logic, intent, and evidence.
 _Avoid_: 分析结果, 事实核查报告
+
+**主题知言报告**:
+The immutable analysis produced for one 主题, covering the subject's landscape, externally established facts, the spread of viewpoints, where they disagree, and the angles the 来源 of its 任务版本 leave out. It is reference material: it gates 立言 but enters an article only where the user cites it.
+_Avoid_: 主题分析, 背景报告
 
 **事实结论**:
 The verdict a 知言报告 assigns to one externally verifiable claim. It is exactly one of 有证据支持, 有证据反驳, 部分准确, 存在争议, or 暂无法核实. The four deterministic verdicts must each cite evidence the run actually opened; 暂无法核实 is what a run states when no reliable material was found.

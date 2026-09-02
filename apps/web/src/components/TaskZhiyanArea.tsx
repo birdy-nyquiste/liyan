@@ -7,6 +7,7 @@ import {
   getTaskZhiyan,
   getTaskVersionZhiyan,
   refusalWithoutTiming,
+  startThemeZhiyanRun,
   startZhiyanRun,
   type TaskVersionZhiyanResponse,
   type AccessToken,
@@ -15,6 +16,7 @@ import type { CapsuleChoice } from "./InstructionEditor";
 import { useFocusWhen } from "./useFocusWhen";
 import { BuyCreditsLink } from "./BuyCreditsLink";
 import { isCreditRefusal } from "./creditRefusal";
+import { ThemePanel } from "./ThemePanel";
 import { ZhiyanPanel } from "./ZhiyanPanel";
 import { STATUS_LABELS } from "./zhiyanStatus";
 import { useInterfaceLocale } from "../interfaceLocale";
@@ -22,6 +24,9 @@ import { EXECUTION_POLL_MS } from "./pollIntervals";
 
 const LOAD_FAILED = "知言状态加载失败，请稍后重试。";
 const START_FAILED = "知言分析未能启动，请稍后重试。";
+//: The 主题 tab's own value. A fixed string rather than the snapshot id: the tab
+//: a reader had open should survive the 主题 being rewritten into a new snapshot.
+const THEME_TAB = "theme";
 const CANCEL_FAILED = "终止知言分析失败，请稍后重试。";
 const TOO_MANY_REQUESTS = 429;
 
@@ -83,7 +88,10 @@ export function TaskZhiyanArea({
     void load();
   }, [load]);
 
-  const active = overview?.sources.some((source) => source.status === "running") ?? false;
+  const theme = overview?.theme ?? null;
+  const active =
+    (overview?.sources.some((source) => source.status === "running") ?? false)
+    || theme?.status === "running";
   const liyanAvailable = overview?.liyan.can_generate ?? false;
   const zhiyanHeading = useFocusWhen<HTMLHeadingElement>(
     overview !== null && !liyanAvailable,
@@ -92,9 +100,16 @@ export function TaskZhiyanArea({
   // Report which 任务版本 the verdict belongs to. A bare boolean cannot survive
   // reads settling in any order: whoever answered last would decide.
   const loadedVersionId = overview?.task_version_id ?? null;
-  const total = overview?.sources.length ?? 0;
-  const done = overview?.sources.filter((source) => source.status === "succeeded").length ?? 0;
-  const failed = overview?.sources.filter((source) => source.status === "failed").length ?? 0;
+  // 主题 counts in the progress line, because it counts in the 立言 gate: a task
+  // reading "2 / 2 份报告完成" while 立言 stayed shut was the panel disagreeing
+  // with the server about what it was waiting for.
+  const statuses = [
+    ...(overview?.sources.map((source) => source.status) ?? []),
+    ...(theme ? [theme.status] : []),
+  ];
+  const total = statuses.length;
+  const done = statuses.filter((status) => status === "succeeded").length;
+  const failed = statuses.filter((status) => status === "failed").length;
   const liyanReason = overview?.liyan.unavailable_reason;
   useEffect(() => {
     if (loadedVersionId) {
@@ -118,9 +133,8 @@ export function TaskZhiyanArea({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const sources = overview?.sources ?? [];
-  const selected =
-    sources.find((source) => source.source_revision_id === selectedId)?.source_revision_id
-    ?? sources[0]?.source_revision_id;
+  const tabValues = [...(theme ? [THEME_TAB] : []), ...sources.map((s) => s.source_revision_id)];
+  const selected = tabValues.find((value) => value === selectedId) ?? tabValues[0];
 
   const act = useCallback(
     async (action: () => Promise<unknown>, failure: string) => {
@@ -149,6 +163,12 @@ export function TaskZhiyanArea({
   const start = useCallback(
     (sourceRevisionId: string) =>
       void act(() => startZhiyanRun(accessToken, sourceRevisionId), START_FAILED),
+    [act, accessToken],
+  );
+
+  const startTheme = useCallback(
+    (themeRevisionId: string) =>
+      void act(() => startThemeZhiyanRun(accessToken, themeRevisionId), START_FAILED),
     [act, accessToken],
   );
 
@@ -204,6 +224,20 @@ export function TaskZhiyanArea({
           onValueChange={setSelectedId}
         >
           <Tabs.List className="zhiyan-tabs__list" aria-label={t("知言报告")}>
+            {/* 主题 first: it is the frame the 来源 sit inside, and its report is
+                the one that says what they leave out. */}
+            {theme ? (
+              <Tabs.Trigger
+                className="zhiyan-tab zhiyan-tab--theme"
+                value={THEME_TAB}
+                title={theme.theme}
+              >
+                <span className="zhiyan-tab__index">{t("主题")}</span>
+                <span className="zhiyan-tab__title">{theme.theme}</span>
+                <span className={`zhiyan-tab__dot zhiyan-tab__dot--${theme.status}`} aria-hidden="true" />
+                <span className="sr-only">{t(STATUS_LABELS[theme.status])}</span>
+              </Tabs.Trigger>
+            ) : null}
             {overview.sources.map((source, position) => (
               <Tabs.Trigger
                 className="zhiyan-tab"
@@ -219,6 +253,20 @@ export function TaskZhiyanArea({
               </Tabs.Trigger>
             ))}
           </Tabs.List>
+          {theme ? (
+            <Tabs.Content value={THEME_TAB}>
+              <ThemePanel
+                state={theme}
+                busy={busy}
+                onStart={startTheme}
+                onCancel={cancel}
+                cancelRequested={cancelRequestedFor === theme.execution?.id}
+                onRetryAllowed={() => void load()}
+                taskVersionId={overview.task_version_id}
+                onCapsuleSelect={onCapsuleSelect}
+              />
+            </Tabs.Content>
+          ) : null}
           {overview.sources.map((source) => (
             <Tabs.Content key={source.source_revision_id} value={source.source_revision_id}>
               <ZhiyanPanel

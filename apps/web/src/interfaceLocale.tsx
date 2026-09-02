@@ -163,7 +163,7 @@ const ENGLISH: Record<string, string> = {
   "新来源文件": "New source file",
   "确认替换": "Confirm replacement",
   "取消替换": "Cancel replacement",
-  "保存来源修改": "Save source changes",
+  "保存修改": "Save changes",
   "放弃编辑": "Discard edits",
   "放弃这次来源编辑？": "Discard these source edits?",
   "未保存的来源修改会被丢弃，且无法恢复。": "Unsaved source changes will be discarded and cannot be recovered.",
@@ -197,6 +197,42 @@ const ENGLISH: Record<string, string> = {
   "“知”逻辑": "Know · Logic",
   "“知”意图": "Know · Intent",
   "“知”依据": "Know · Evidence",
+  // 主题. The subject a 任务版本 is about, its Agent-offered candidates, and the
+  // report it carries. 主题 is the domain's word — the light/dark switcher is
+  // 外观 — so "Theme" here always means the subject.
+  "主题": "Theme",
+  "来源 · 主题": "Sources · Theme",
+  "添加来源共同的主题，知言 Agent 将深度检索该主题的相关内容，打破信息茧房，取其精华，去其糟粕。":
+    "Add the subject your sources share. The Zhiyan Agent will search it in depth — past the bubble the sources sit in — and keep what holds up.",
+  "提炼主题": "Suggest themes",
+  "正在提炼…": "Suggesting…",
+  "主题候选": "Theme candidates",
+  "最多 80 字": "80 characters max",
+  "主题不能超过 80 个字。": "A theme cannot be longer than 80 characters.",
+  "主题提炼失败，请重试，或自己写一个主题。":
+    "The themes could not be suggested. Try again, or write your own.",
+  "请先添加来源，全部抓取成功后才能提炼主题。":
+    "Add your sources first. Themes can be suggested once every source has been captured.",
+  "这一版没有主题；编辑时可以添加，知言将围绕它检索来源之外的信息。":
+    "This version has no theme. Add one while editing, and Zhiyan will search beyond your sources for it.",
+  "未设置": "Not set",
+  "可留空": "Optional",
+  "这些来源共同在谈什么": "What these sources are all about",
+  "最多 80 字。清空即移除主题及其知言报告；改写主题会重新生成报告。":
+    "80 characters max. Clearing it removes the theme and its Zhiyan report; rewriting it generates a new one.",
+  // The 主题 report: six sections, and 来源之外的角度 is the one it exists for.
+  "主题知言报告": "Theme Zhiyan report",
+  "正在生成主题知言报告…": "Generating the theme Zhiyan report…",
+  "开始主题知言分析": "Start theme analysis",
+  "若主题报告始终失败，可在编辑来源时清空主题后保存，立言即可继续。":
+    "If the theme report keeps failing, clear the theme while editing sources and save; Liyan can then continue.",
+  "主题全景": "The landscape",
+  "共识与争议": "Consensus and dispute",
+  "来源之外的角度": "Angles your sources miss",
+  "主题事实": "Facts about the theme",
+  "观点谱系": "The spread of viewpoints",
+  "分歧焦点": "Where they disagree",
+  "外部依据": "External evidence",
   "明确目的": "Explicit purpose",
   "目标受众": "Target audience",
   "依据：": "Evidence:",

@@ -10,6 +10,8 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
+from liyan_server.structured_output import provider_json_schema
+
 type FactVerdict = Literal[
     "有证据支持",
     "有证据反驳",
@@ -134,51 +136,6 @@ class ZhiyanReportDocument(ReportModel):
     evidence: EvidenceSection
 
 
-GENERATION_ONLY_KEYWORDS = frozenset({"minLength", "maxLength", "pattern", "format"})
-
-
 def report_json_schema() -> dict[str, object]:
-    """The provider-facing JSON Schema for structured 知言报告 output.
-
-    Strict structured output accepts only a subset of JSON Schema, so keywords
-    that merely tighten strings are dropped here. Application acceptance, not the
-    provider schema, is what actually enforces them. Strict mode also requires
-    every object to close itself and list all of its keys as required, which is
-    stated explicitly rather than inferred from the model's `extra` policy.
-    """
-    generated = ZhiyanReportDocument.model_json_schema()
-    return _closed_objects(_without_generation_only_keywords(generated))
-
-
-def _closed_objects(schema: dict[str, object]) -> dict[str, object]:
-    properties = schema.get("properties")
-    if isinstance(properties, dict):
-        schema["additionalProperties"] = False
-        schema["required"] = list(properties)
-    for value in schema.values():
-        if isinstance(value, dict):
-            _closed_objects(value)
-        elif isinstance(value, list):
-            for entry in value:
-                if isinstance(entry, dict):
-                    _closed_objects(entry)
-    return schema
-
-
-def _without_generation_only_keywords(schema: object) -> dict[str, object]:
-    if not isinstance(schema, dict):
-        raise TypeError("A JSON Schema fragment must be an object.")
-    cleaned: dict[str, object] = {}
-    for key, value in schema.items():
-        if key in GENERATION_ONLY_KEYWORDS:
-            continue
-        if isinstance(value, dict):
-            cleaned[key] = _without_generation_only_keywords(value)
-        elif isinstance(value, list):
-            cleaned[key] = [
-                _without_generation_only_keywords(entry) if isinstance(entry, dict) else entry
-                for entry in value
-            ]
-        else:
-            cleaned[key] = value
-    return cleaned
+    """The provider-facing JSON Schema for structured 知言报告 output."""
+    return provider_json_schema(ZhiyanReportDocument)

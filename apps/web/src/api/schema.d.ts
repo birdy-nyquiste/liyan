@@ -473,6 +473,53 @@ export interface paths {
         patch: operations["edit_file_source_content"];
         trace?: never;
     };
+    "/task-creation/theme-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Session Themes
+         * @description One press of 提炼主题, charged once, against the 来源 as they stand now.
+         *
+         *     "As they stand now" means two different reads. From a 任务创建会话 the
+         *     server reads the session's own 来源 and requires every one of them to
+         *     have been captured. From a 来源编辑会话 the request carries them, because
+         *     an inline edit is not a row yet.
+         *
+         *     Pressing again replaces nothing on the server: each press is its own row,
+         *     and the client reads the one it just created. What the *interface* does
+         *     with the previous three candidates is its own business — they are gone
+         *     from the screen, and the 主题 the user has typed is never touched.
+         */
+        post: operations["propose_session_themes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task-creation/theme-proposals/{proposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Theme Proposal */
+        get: operations["get_theme_proposal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/source-revisions/{source_revision_id}/zhiyan-runs": {
         parameters: {
             query?: never;
@@ -484,6 +531,26 @@ export interface paths {
         put?: never;
         /** Start Zhiyan Run */
         post: operations["start_zhiyan_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/theme-revisions/{theme_revision_id}/zhiyan-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Theme Zhiyan Run
+         * @description Ask for this 主题's report again. The mirror of a 来源's retry.
+         */
+        post: operations["start_theme_zhiyan_run"];
         delete?: never;
         options?: never;
         head?: never;
@@ -820,6 +887,7 @@ export interface components {
             /** File */
             file: string;
         };
+        CandidateText: string;
         /** CheckoutRequest */
         CheckoutRequest: {
             /** Price Id */
@@ -869,6 +937,8 @@ export interface components {
             accepted_warning_versions?: {
                 [key: string]: number;
             };
+            /** Theme */
+            theme?: string | null;
         };
         /** ConfirmTaskResponse */
         ConfirmTaskResponse: {
@@ -876,6 +946,10 @@ export interface components {
             source_revision: components["schemas"]["SourceRevisionResponse"];
             /** Source Revisions */
             source_revisions: components["schemas"]["SourceRevisionResponse"][];
+            /** Theme */
+            theme: string | null;
+            /** Theme Revision Id */
+            theme_revision_id: string | null;
         };
         /** CreatePastedSourceRequest */
         CreatePastedSourceRequest: {
@@ -1010,7 +1084,7 @@ export interface components {
              * Operation
              * @enum {string}
              */
-            operation: "fetch_url" | "parse_file" | "analyze_source" | "generate_article" | "publish_preview";
+            operation: "fetch_url" | "parse_file" | "analyze_source" | "analyze_theme" | "propose_themes" | "generate_article" | "publish_preview";
             status: components["schemas"]["ExecutionStatus"];
             /** Attempt */
             attempt: number;
@@ -1118,6 +1192,12 @@ export interface components {
             report_id: string;
             /** Item Id */
             item_id: string;
+            /**
+             * Report Kind
+             * @default source
+             * @enum {string}
+             */
+            report_kind: "source" | "theme";
         };
         /** InstructionDocument */
         InstructionDocument: {
@@ -1335,6 +1415,15 @@ export interface components {
             /** Provenance */
             provenance: string | null;
         };
+        /** @enum {string} */
+        ProposalStatus: "running" | "failed" | "succeeded" | "cancelled";
+        /** ProposeThemesRequest */
+        ProposeThemesRequest: {
+            /** Client Session Id */
+            client_session_id: string;
+            /** Sources */
+            sources?: components["schemas"]["SourceInput"][] | null;
+        };
         /** PublicationTargetListResponse */
         PublicationTargetListResponse: {
             /** Items */
@@ -1492,6 +1581,8 @@ export interface components {
             accepted_warning_versions?: {
                 [key: string]: number;
             };
+            /** Theme */
+            theme?: string | null;
         };
         /** SaveSourceItem */
         SaveSourceItem: {
@@ -1705,6 +1796,8 @@ export interface components {
             is_current: boolean;
             /** Sources */
             sources: components["schemas"]["VersionSource"][];
+            /** Theme */
+            theme: string | null;
             capabilities: components["schemas"]["VersionCapabilities"];
         };
         /** TaskVersionZhiyanResponse */
@@ -1717,7 +1810,160 @@ export interface components {
             task_version_number: number;
             /** Sources */
             sources: components["schemas"]["ZhiyanStateResponse"][];
+            theme: components["schemas"]["ThemeStateResponse"] | null;
             liyan: components["schemas"]["LiyanCapabilities"];
+        };
+        /** ThemeBlindSpotItem */
+        ThemeBlindSpotItem: {
+            id: components["schemas"]["Narrative"];
+            angle: components["schemas"]["Narrative"];
+            source_gap: components["schemas"]["Narrative"];
+            why_it_matters: components["schemas"]["Narrative"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+        };
+        /** ThemeBlindSpotSection */
+        ThemeBlindSpotSection: {
+            /** Items */
+            items: components["schemas"]["ThemeBlindSpotItem"][];
+            /** Empty State */
+            empty_state: string | null;
+        };
+        /** ThemeCandidate */
+        ThemeCandidate: {
+            theme: components["schemas"]["CandidateText"];
+            why: components["schemas"]["CandidateText"];
+        };
+        /** ThemeDisagreementItem */
+        ThemeDisagreementItem: {
+            id: components["schemas"]["Narrative"];
+            axis: components["schemas"]["Narrative"];
+            sides: components["schemas"]["Narrative"];
+            crux: components["schemas"]["Narrative"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+        };
+        /** ThemeDisagreementSection */
+        ThemeDisagreementSection: {
+            /** Items */
+            items: components["schemas"]["ThemeDisagreementItem"][];
+            /** Empty State */
+            empty_state: string | null;
+        };
+        /** ThemeEvidenceItem */
+        ThemeEvidenceItem: {
+            id: components["schemas"]["Narrative"];
+            title: components["schemas"]["Narrative"];
+            url: components["schemas"]["Narrative"];
+            explanation: components["schemas"]["Narrative"];
+        };
+        /** ThemeEvidenceSection */
+        ThemeEvidenceSection: {
+            /** Items */
+            items: components["schemas"]["ThemeEvidenceItem"][];
+            /** Empty State */
+            empty_state: string | null;
+        };
+        /** ThemeFactItem */
+        ThemeFactItem: {
+            id: components["schemas"]["Narrative"];
+            claim: components["schemas"]["Narrative"];
+            relevance: components["schemas"]["Narrative"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+        };
+        /** ThemeFactSection */
+        ThemeFactSection: {
+            /** Items */
+            items: components["schemas"]["ThemeFactItem"][];
+            /** Empty State */
+            empty_state: string | null;
+        };
+        /** ThemeKeyFinding */
+        ThemeKeyFinding: {
+            ref_id: components["schemas"]["Narrative"];
+            text: components["schemas"]["Narrative"];
+        };
+        /** ThemeOverviewSection */
+        ThemeOverviewSection: {
+            landscape: components["schemas"]["Narrative"];
+            consensus_and_dispute: components["schemas"]["Narrative"];
+            /** Key Findings */
+            key_findings: components["schemas"]["ThemeKeyFinding"][];
+            reading_note: components["schemas"]["Narrative"];
+        };
+        /**
+         * ThemeProposalResponse
+         * @description One press of 提炼主题, and the three candidates it produced.
+         */
+        ThemeProposalResponse: {
+            /** Id */
+            id: string;
+            /** Client Session Id */
+            client_session_id: string;
+            status: components["schemas"]["ProposalStatus"];
+            /** Candidates */
+            candidates: components["schemas"]["ThemeCandidate"][];
+            execution: components["schemas"]["ExecutionResponse"] | null;
+        };
+        /**
+         * ThemeReportDocument
+         * @description The six fixed sections of one 主题知言报告.
+         */
+        ThemeReportDocument: {
+            overview: components["schemas"]["ThemeOverviewSection"];
+            facts: components["schemas"]["ThemeFactSection"];
+            viewpoints: components["schemas"]["ThemeViewpointSection"];
+            disagreements: components["schemas"]["ThemeDisagreementSection"];
+            blind_spots: components["schemas"]["ThemeBlindSpotSection"];
+            evidence: components["schemas"]["ThemeEvidenceSection"];
+        };
+        /** ThemeReportResponse */
+        ThemeReportResponse: {
+            /** Id */
+            id: string;
+            /** Theme Revision Id */
+            theme_revision_id: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /** Model */
+            model: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["ThemeReportDocument"];
+        };
+        /**
+         * ThemeStateResponse
+         * @description The 主题 of one 任务版本, and what became of its 知言 run.
+         */
+        ThemeStateResponse: {
+            /** Theme Revision Id */
+            theme_revision_id: string;
+            /** Theme */
+            theme: string;
+            status: components["schemas"]["ZhiyanStatus"];
+            report: components["schemas"]["ThemeReportResponse"] | null;
+            execution: components["schemas"]["ExecutionResponse"] | null;
+            capabilities: components["schemas"]["ZhiyanCapabilities"];
+        };
+        /** ThemeViewpointItem */
+        ThemeViewpointItem: {
+            id: components["schemas"]["Narrative"];
+            position: components["schemas"]["Narrative"];
+            holders: components["schemas"]["Narrative"];
+            grounds: components["schemas"]["Narrative"];
+            /** Evidence Ids */
+            evidence_ids: string[];
+        };
+        /** ThemeViewpointSection */
+        ThemeViewpointSection: {
+            /** Items */
+            items: components["schemas"]["ThemeViewpointItem"][];
+            /** Empty State */
+            empty_state: string | null;
         };
         /** UrlSourceCapabilities */
         UrlSourceCapabilities: {
@@ -1780,6 +2026,13 @@ export interface components {
             entries: components["schemas"]["UsageEntry"][];
             /** Has More */
             has_more: boolean;
+            /** Total */
+            total: number;
+            /**
+             * Page Size
+             * @default 5
+             */
+            page_size: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -2833,6 +3086,70 @@ export interface operations {
             };
         };
     };
+    propose_session_themes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeThemesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_theme_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_zhiyan_run: {
         parameters: {
             query?: never;
@@ -2851,6 +3168,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ZhiyanStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_theme_zhiyan_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeStateResponse"];
                 };
             };
             /** @description Validation Error */

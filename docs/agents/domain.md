@@ -14,6 +14,9 @@ Use Notion for externally maintained product documentation. Use the local domain
 
 - **`CONTEXT.md`** at the repository root.
 - **`docs/adr/`** — read ADRs that affect the area being changed.
+- **`docs/architecture/`** — how a mechanism works across modules, when the
+  change touches one. Each module explains itself; these pages exist for what no
+  single module can say.
 
 If these files do not exist, proceed silently. Do not suggest creating them preemptively. The `/domain-modeling` skill, including when reached through `/grill-with-docs` or `/improve-codebase-architecture`, creates them when terms or decisions are resolved.
 
@@ -25,6 +28,7 @@ This is a single-context repository:
     ├── CONTEXT.md
     ├── docs/
     │   ├── agents/
+    │   ├── architecture/
     │   └── adr/
     │       ├── 0001-example-decision.md
     │       └── 0002-another-decision.md

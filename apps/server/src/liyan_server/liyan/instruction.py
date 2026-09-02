@@ -14,6 +14,9 @@ class InstructionCapsule(BaseModel):
     task_version_id: UUID
     report_id: UUID
     item_id: str
+    #: Which kind of 知言报告 the cited item belongs to. Defaults to 来源 so an
+    #: instruction recorded before 主题 existed keeps resolving unchanged.
+    report_kind: Literal["source", "theme"] = "source"
 
     @property
     def identity(self) -> tuple[UUID, str]:

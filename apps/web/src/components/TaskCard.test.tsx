@@ -313,13 +313,13 @@ describe("TaskCard", () => {
     await waitFor(() => expect(heading).toHaveFocus());
   });
 
-  it("opens 来源 first and remembers the task's selected view", async () => {
+  it("opens 来源 · 主题 first and remembers the task's selected view", async () => {
     respondWithVersionListLast();
     const user = userEvent.setup();
     localStorage.removeItem("liyan.taskStage.task-1");
 
     render(<TaskCard task={task} userId="user-1" accessToken="token" opened />);
-    const sources = screen.getByRole("tab", { name: "来源" });
+    const sources = screen.getByRole("tab", { name: "来源 · 主题" });
     expect(sources).toHaveAttribute("aria-selected", "true");
     // The count and version live in the task header now; the 来源 view shows the
     // version it is displaying, once, in the control that changes it.

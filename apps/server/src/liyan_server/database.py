@@ -90,6 +90,16 @@ class TaskVersion(Base):
         index=True,
     )
     number: Mapped[int] = mapped_column(Integer)
+    #: The 主题 of this snapshot, or null for a version that has none — which is
+    #: every version created before 主题 existed, and any whose 主题 was cleared.
+    theme_revision_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey(
+            "theme_revisions.id",
+            name="fk_task_versions_theme_revision_id",
+            use_alter=True,
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -321,6 +331,94 @@ class FileParseResult(Base):
     document_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSON)
     content_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ThemeRevision(Base):
+    """An immutable snapshot of one 主题, and of the 来源 it was confirmed against.
+
+    Shaped like a `SourceRevision` on purpose: 主题 is a special 来源, so what a
+    version holds is a snapshot rather than an editable field. The extra column
+    is `source_context_hash` — the ordered digest of every 来源 revision the 主题
+    was confirmed beside — because a 主题知言 run reads those 来源, so the identity
+    of what was analysed is the pair. Two 任务版本 that agree on both reach the
+    same row and therefore the same report; editing a 来源 reaches a new one.
+    """
+
+    __tablename__ = "theme_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "content_hash",
+            "source_context_hash",
+            name="uq_theme_revisions_identity",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    task_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(String(255))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    source_context_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ThemeReport(Base):
+    """One immutable 主题知言报告 accepted for exactly one 主题 snapshot."""
+
+    __tablename__ = "theme_reports"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    execution_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    theme_revision_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("theme_revisions.id", ondelete="CASCADE"),
+        unique=True,
+    )
+    prompt_version: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    provider_response_id: Mapped[str | None] = mapped_column(String(128))
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    search_actions: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ThemeProposal(Base):
+    """One press of 提炼主题 inside a 任务创建会话.
+
+    It exists because `executions.target_id` is a non-null UUID carrying a
+    unique index over active runs, and a 任务创建会话 is identified by a client
+    string rather than a row. Each press gets its own row, so the run has a
+    target and the client has something to poll; the candidates land here when
+    the run succeeds and are read straight from it.
+    """
+
+    __tablename__ = "theme_proposals"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    client_session_id: Mapped[str] = mapped_column(String(255), index=True)
+    #: The 来源 the press was made against, so a stored proposal says what it read.
+    source_context_hash: Mapped[str] = mapped_column(String(64))
+    candidates: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ZhiyanReport(Base):

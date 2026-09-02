@@ -42,6 +42,14 @@ RECOVERABLE_FAILURE_CODES: frozenset[str] = frozenset(
         "unsupported_evidence_url",
         "unopened_evidence",
         "unused_evidence",
+        # 主题知言 refuses a fact or a blind spot that cites nothing, and 提炼主题
+        # refuses candidates that are not three usable lines. Both are a model
+        # writing the wrong shape, which is the kind of failure another run
+        # survives most often.
+        "unsupported_theme_claim",
+        "invalid_candidates_schema",
+        "invalid_candidate_count",
+        "invalid_candidate_theme",
     }
 )
 
@@ -59,6 +67,10 @@ _REJECTED_REPORT_CODES: frozenset[str] = frozenset(
         "unsupported_evidence_url",
         "unopened_evidence",
         "unused_evidence",
+        "unsupported_theme_claim",
+        "invalid_candidates_schema",
+        "invalid_candidate_count",
+        "invalid_candidate_theme",
     }
 )
 

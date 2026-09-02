@@ -132,6 +132,8 @@ def test_every_operation_is_routed_and_none_is_routed_by_accident() -> None:
         "fetch_url": SOURCE_QUEUE,
         "parse_file": SOURCE_QUEUE,
         "analyze_source": PROVIDER_QUEUE,
+        "analyze_theme": PROVIDER_QUEUE,
+        "propose_themes": PROVIDER_QUEUE,
         "generate_article": PROVIDER_QUEUE,
         "publish_preview": PROVIDER_QUEUE,
     }

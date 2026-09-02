@@ -40,6 +40,8 @@ _CANCELLED_MESSAGES: dict[str, str] = {
     "fetch_url": "Fetching was cancelled. Retry it or replace this source.",
     "parse_file": "Parsing was cancelled. Retry it or replace this source.",
     "analyze_source": "知言分析已取消，可重新发起。",
+    "analyze_theme": "主题知言分析已取消，可重新发起。",
+    "propose_themes": "主题提炼已取消，可重新发起。",
     "generate_article": "立言生成已取消，可重新发起。",
     "publish_preview": "发布已取消。",
 }

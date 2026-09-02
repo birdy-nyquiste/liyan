@@ -34,6 +34,8 @@ class ExecutionResponse(BaseModel):
         "fetch_url",
         "parse_file",
         "analyze_source",
+        "analyze_theme",
+        "propose_themes",
         "generate_article",
         "publish_preview",
     ]

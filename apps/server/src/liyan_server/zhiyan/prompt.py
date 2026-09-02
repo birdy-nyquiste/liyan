@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 
-from liyan_server.zhiyan.provider import ToolPolicy, ZhiyanRequest
+from liyan_server.zhiyan.provider import ToolPolicy, WrapUp, ZhiyanRequest
 from liyan_server.zhiyan.report import report_json_schema
 
 ZHIYAN_PROMPT_VERSION = "zhiyan-prompt-v0.2"
@@ -82,6 +82,27 @@ overview 没有新增判断，输出没有截断。
 """
 
 
+#: What this run is told when its search rounds run out, in both of the
+#: provider's wrap-up calls. Prompt text, so it lives beside the Prompt
+#: rather than in the HTTP adapter that happens to send it.
+ZHIYAN_CONTINUE_INSTRUCTION = """\
+以上是你在本次运行中已经完成的检索与推理。检索轮次即将用尽，现在收尾。
+
+- 不要重复已经做过的检索。
+- 直接基于上面已经真实打开过的页面输出完整的知言报告 JSON。
+- evidence 只能收录上面真实打开过的页面；没有可靠依据的事实一律写「暂无法核实」，
+  并且不要为它列出 evidence_ids。
+- 只输出符合 JSON Schema 的 JSON，不要附加任何解释。
+"""
+
+ZHIYAN_FINAL_INSTRUCTION = """\
+以上是你在本次运行中已经完成的检索与推理。检索轮次已经用尽，不能再调用任何工具。
+
+现在必须基于上面已经真实打开过的页面输出完整的知言报告 JSON。仍然缺少可靠依据的事实
+写「暂无法核实」，并且不要为它列出 evidence_ids。只输出符合 JSON Schema 的 JSON。
+"""
+
+
 @dataclass(frozen=True)
 class AcceptedSourceRevision:
     """The one immutable source Revision a 知言 run analyzes."""
@@ -144,6 +165,10 @@ def zhiyan_request(
         model=model,
         prompt_version=prompt_version,
         instructions=ZHIYAN_INSTRUCTIONS,
+        wrap_up=WrapUp(
+            continue_text=ZHIYAN_CONTINUE_INSTRUCTION,
+            final_text=ZHIYAN_FINAL_INSTRUCTION,
+        ),
         input_text=zhiyan_input_text(
             revision,
             now=now,

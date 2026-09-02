@@ -19,6 +19,7 @@ from liyan_server.database import (
     Task,
     TaskVersion,
     TaskVersionSource,
+    ThemeRevision,
     User,
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
@@ -26,6 +27,8 @@ from liyan_server.execution_limits import refuse_when_at_capacity
 from liyan_server.settings import Settings
 from liyan_server.source_preparation import normalize_source_content, source_warnings
 from liyan_server.task_api import TaskSummary, task_summary
+from liyan_server.theme.orchestration import queue_initial_run as queue_initial_theme_run
+from liyan_server.theme.revisions import normalized_theme, theme_revision_for
 from liyan_server.zhiyan.orchestration import queue_initial_runs
 
 
@@ -58,6 +61,10 @@ class ConfirmTaskRequest(BaseModel):
     client_session_id: str | None = None
     source_ids: list[UUID] = Field(default_factory=list)
     accepted_warning_versions: dict[UUID, int] = Field(default_factory=dict)
+    #: The 主题 the user confirmed, or nothing. Empty is a legitimate
+    #: confirmation: `docs/design/the-theme.md` — a 任务版本 with no 主题 runs no
+    #: 主题知言 and is gated on its 来源 alone.
+    theme: str | None = None
 
 
 class SourceRevisionResponse(BaseModel):
@@ -71,6 +78,8 @@ class ConfirmTaskResponse(BaseModel):
     task: TaskSummary
     source_revision: SourceRevisionResponse
     source_revisions: list[SourceRevisionResponse]
+    theme: str | None
+    theme_revision_id: str | None
 
 
 def normalize_source(source: SourceInput) -> PreparedSource:
@@ -121,6 +130,17 @@ def _revision_responses(session: Session, task: Task) -> list[SourceRevisionResp
     ]
 
 
+def _current_theme(session: Session, task: Task) -> ThemeRevision | None:
+    version = (
+        session.get(TaskVersion, task.current_version_id)
+        if task.current_version_id is not None
+        else None
+    )
+    if version is None or version.theme_revision_id is None:
+        return None
+    return session.get(ThemeRevision, version.theme_revision_id)
+
+
 def task_creation_router(
     settings: Settings,
     database: Database,
@@ -129,11 +149,22 @@ def task_creation_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    def start_zhiyan(owner_id: UUID, revision_ids: list[UUID]) -> None:
+    def start_zhiyan(
+        owner_id: UUID,
+        revision_ids: list[UUID],
+        theme_revision_id: UUID | None = None,
+    ) -> None:
         queue_initial_runs(
             database,
             dispatcher,
             source_revision_ids=revision_ids,
+            owner_id=owner_id,
+            model=settings.zhiyan_model,
+        )
+        queue_initial_theme_run(
+            database,
+            dispatcher,
+            theme_revision_id=theme_revision_id,
             owner_id=owner_id,
             model=settings.zhiyan_model,
         )
@@ -176,9 +207,13 @@ def task_creation_router(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="An idempotency key is required.",
             )
+        theme = normalized_theme(request.theme)
         if request.source is not None:
             prepared_sources = [normalize_source(request.source)]
-            request_identity: object = [prepared_sources[0].model_dump()]
+            request_identity: object = {
+                "sources": [prepared_sources[0].model_dump()],
+                "theme": theme,
+            }
         else:
             client_session_id = (request.client_session_id or "").strip()
             if not client_session_id or not 1 <= len(request.source_ids) <= 3:
@@ -194,6 +229,7 @@ def task_creation_router(
             request_identity = {
                 "client_session_id": client_session_id,
                 "source_ids": [str(source_id) for source_id in request.source_ids],
+                "theme": theme,
             }
             prepared_sources = []
         request_hash = _request_hash(request_identity)
@@ -218,15 +254,21 @@ def task_creation_router(
                     detail="This creation request was already used with different content.",
                 )
             existing_revisions = _revision_responses(session, existing)
+            existing_theme = _current_theme(session, existing)
             session.commit()  # Release the number lock before queueing outside this transaction.
             start_zhiyan(
                 locked_user.id,
                 [UUID(revision.id) for revision in existing_revisions],
+                existing_theme.id if existing_theme is not None else None,
             )
             return ConfirmTaskResponse(
                 task=task_summary(session, existing),
                 source_revision=existing_revisions[0],
                 source_revisions=existing_revisions,
+                theme=existing_theme.content if existing_theme is not None else None,
+                theme_revision_id=(
+                    str(existing_theme.id) if existing_theme is not None else None
+                ),
             )
 
         refuse_when_at_capacity(session, settings, owner_id=user.id)
@@ -313,12 +355,31 @@ def task_creation_router(
                 )
             )
             created_revisions.append(revision)
+        theme_revision = theme_revision_for(
+            session,
+            task_id=task.id,
+            content=theme,
+            source_revisions=created_revisions,
+            now=now,
+        )
+        version.theme_revision_id = theme_revision.id if theme_revision else None
         task.current_version_id = version.id
+        if theme:
+            # The 主题 is what this task is about, so it is what the task is
+            # called. A task with no 主题 keeps the first 来源's title.
+            task.display_name = theme
         if request.source is None:
             for session_source in ordered_sources:
                 session_source.confirmed_task_id = task.id
         locked_user.next_task_number += 1
-        hold_zhiyan_batch(session, user.id, created_revisions, model=settings.zhiyan_model)
+        hold_zhiyan_batch(
+            session,
+            user.id,
+            created_revisions,
+            model=settings.zhiyan_model,
+            theme=theme_revision,
+            theme_sources=created_revisions,
+        )
         session.commit()
         revision_responses = [
             SourceRevisionResponse(
@@ -329,11 +390,18 @@ def task_creation_router(
             )
             for revision in created_revisions
         ]
-        start_zhiyan(locked_user.id, [revision.id for revision in created_revisions])
+        theme_revision_id = theme_revision.id if theme_revision is not None else None
+        start_zhiyan(
+            locked_user.id,
+            [revision.id for revision in created_revisions],
+            theme_revision_id,
+        )
         return ConfirmTaskResponse(
             task=task_summary(session, task),
             source_revision=revision_responses[0],
             source_revisions=revision_responses,
+            theme=theme or None,
+            theme_revision_id=str(theme_revision_id) if theme_revision_id else None,
         )
 
     return router

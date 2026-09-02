@@ -117,12 +117,17 @@ function execution(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function overviewResponse(sources: unknown[], liyan: Record<string, unknown>) {
+function overviewResponse(
+  sources: unknown[],
+  liyan: Record<string, unknown>,
+  theme: unknown = null,
+) {
   return {
     task_id: "task-1",
     task_version_id: "version-1",
     task_version_number: 1,
     sources,
+    theme,
     liyan,
   };
 }
@@ -333,6 +338,7 @@ describe("TaskZhiyanArea", () => {
         task_version_id: "version-1",
         report_id: "report-1",
         item_id: "F-01",
+        report_kind: "source",
       },
     });
   });

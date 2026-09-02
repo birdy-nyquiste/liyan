@@ -26,9 +26,16 @@ from sqlalchemy.orm import Session
 
 from liyan_server import credits
 from liyan_server.credits import hold
-from liyan_server.database import SourceRevision
+from liyan_server.database import SourceRevision, ThemeRevision
 from liyan_server.liyan.runs import LIYAN_TARGET_TYPE
-from liyan_server.rate_card import estimate_liyan_credits, estimate_zhiyan_credits
+from liyan_server.rate_card import (
+    estimate_liyan_credits,
+    estimate_theme_credits,
+    estimate_theme_proposal_credits,
+    estimate_zhiyan_credits,
+)
+from liyan_server.theme.orchestration import accepted_theme_report
+from liyan_server.theme.runs import PROPOSAL_TARGET_TYPE, THEME_TARGET_TYPE
 from liyan_server.zhiyan.orchestration import accepted_report
 from liyan_server.zhiyan.runs import ZHIYAN_TARGET_TYPE
 
@@ -83,6 +90,8 @@ def hold_zhiyan_batch(
     revisions: Sequence[SourceRevision],
     *,
     model: str,
+    theme: ThemeRevision | None = None,
+    theme_sources: Sequence[SourceRevision] = (),
 ) -> None:
     """预扣 for every 来源 one act will analyze, or refuse the act.
 
@@ -102,19 +111,38 @@ def hold_zhiyan_batch(
     applies to the work itself.
     """
     wanted = [
-        (revision.id, estimate_zhiyan_credits(source_characters=len(revision.body), model=model))
+        (
+            ZHIYAN_TARGET_TYPE,
+            revision.id,
+            estimate_zhiyan_credits(source_characters=len(revision.body), model=model),
+        )
         for revision in revisions
         if accepted_report(session, revision.id) is None
     ]
+    # The 主题 of the version being created joins the same batch. A 任务版本 whose
+    # 主题 run was refused for funds is one that can never open 立言, which is the
+    # same half-analyzed version this refuses to create for 来源.
+    if theme is not None and accepted_theme_report(session, theme.id) is None:
+        wanted.append(
+            (
+                THEME_TARGET_TYPE,
+                theme.id,
+                estimate_theme_credits(
+                    theme_characters=len(theme.content),
+                    source_characters=sum(len(source.body) for source in theme_sources),
+                    model=model,
+                ),
+            )
+        )
     if not wanted:
         return
-    refuse_when_short(session, owner_id, needed=sum(estimate for _, estimate in wanted))
-    for revision_id, estimate in wanted:
+    refuse_when_short(session, owner_id, needed=sum(estimate for *_, estimate in wanted))
+    for target_type, target_id, estimate in wanted:
         hold(
             session,
             owner_id,
-            target_type=ZHIYAN_TARGET_TYPE,
-            target_id=revision_id,
+            target_type=target_type,
+            target_id=target_id,
             input_version=ZHIYAN_INPUT_VERSION,
             attempt=1,
             credits=estimate,
@@ -179,5 +207,65 @@ def hold_liyan_attempt(
         target_id=article_id,
         input_version=input_version,
         attempt=attempt,
+        credits=estimate,
+    )
+
+
+def hold_theme_attempt(
+    session: Session,
+    owner_id: UUID,
+    revision: ThemeRevision,
+    *,
+    source_characters: int,
+    attempt: int,
+    model: str,
+) -> None:
+    """预扣 for one 主题知言 run, when a user asks for it again themselves.
+
+    One hold per attempt, as in 知言: the attempt before it settled at what it
+    cost, which for a failed run is nothing, so a user pays once for one report
+    however many tries it took to get one.
+    """
+    estimate = estimate_theme_credits(
+        theme_characters=len(revision.content),
+        source_characters=source_characters,
+        model=model,
+    )
+    refuse_when_short(session, owner_id, needed=estimate)
+    hold(
+        session,
+        owner_id,
+        target_type=THEME_TARGET_TYPE,
+        target_id=revision.id,
+        input_version=ZHIYAN_INPUT_VERSION,
+        attempt=attempt,
+        credits=estimate,
+    )
+
+
+def hold_theme_proposal(
+    session: Session,
+    owner_id: UUID,
+    proposal_id: UUID,
+    *,
+    source_characters: int,
+    model: str,
+) -> None:
+    """预扣 for one press of 提炼主题.
+
+    Every press is charged, and every press is its own target row — so unlike a
+    retried 知言 run there is no attempt to key on, and no press can collide with
+    the one before it. That is the honest shape: a second press is a second
+    answer the provider was paid for, not another try at the first.
+    """
+    estimate = estimate_theme_proposal_credits(source_characters=source_characters, model=model)
+    refuse_when_short(session, owner_id, needed=estimate)
+    hold(
+        session,
+        owner_id,
+        target_type=PROPOSAL_TARGET_TYPE,
+        target_id=proposal_id,
+        input_version=ZHIYAN_INPUT_VERSION,
+        attempt=1,
         credits=estimate,
     )

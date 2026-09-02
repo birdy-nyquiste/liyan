@@ -36,7 +36,7 @@ test("the sign-in screen asks for an address before anything else", async ({ bro
 test("browser history cannot discard an unfinished source without confirmation", async ({ page }) => {
   await openWorkbench(page);
   await page.getByRole("link", { name: "发布" }).click();
-  await page.getByRole("link", { name: "新建立言任务" }).click();
+  await page.getByRole("link", { name: "新建任务" }).click();
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByLabel("来源标题").fill("尚未保存的来源");
 
@@ -171,7 +171,7 @@ test("a URL 来源 that cannot be reached fails with a reason, not a spinner", a
   test.skip(!AGAINST_STAGING, "A local run has no Chromium behind the worker to fetch with.");
   await openWorkbench(page);
 
-  await page.getByRole("link", { name: "新建立言任务" }).click();
+  await page.getByRole("link", { name: "新建任务" }).click();
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByRole("button", { name: "公共文章链接" }).click();
   await page.getByLabel("来源网址").fill("https://example.invalid/does-not-resolve");

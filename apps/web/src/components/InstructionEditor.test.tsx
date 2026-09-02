@@ -13,6 +13,7 @@ const capsule = (nonce: number): CapsuleSelection => ({
     task_version_id: "version-1",
     report_id: "report-1",
     item_id: "F-01",
+  report_kind: "source" as const,
   },
 });
 
@@ -44,6 +45,7 @@ describe("InstructionEditor", () => {
           task_version_id: "version-1",
           report_id: "report-1",
           item_id: "F-01",
+  report_kind: "source" as const,
         },
         { type: "text", text: "并改写" },
       ],

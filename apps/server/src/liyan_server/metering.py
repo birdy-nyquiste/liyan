@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 #: worker that made it. For these, a missing `usage` leaves the cost unknown —
 #: everything else has no provider term to be missing, and its worker time and
 #: bytes really are the whole of what it cost.
-TOKEN_METERED_OPERATIONS = frozenset({"analyze_source", "generate_article"})
+TOKEN_METERED_OPERATIONS = frozenset(
+    {"analyze_source", "generate_article", "analyze_theme", "propose_themes"}
+)
 
 #: Operations charged a flat fee per 来源 rather than from what they measured.
 #: A 250x difference in a 来源's length makes only a few times' difference in

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -309,6 +309,9 @@ describe("确认创建任务", () => {
         "a-basket",
         ["a", "b"],
         { b: 1 },
+        // 主题 is optional in the panel and empty here: an empty 主题 is a real
+        // answer, and the Agent that offers candidates is the workbench's.
+        null,
       ),
     );
     expect(onCreated).toHaveBeenCalledWith({ id: "task-1", display_name: "那件事" });
@@ -504,5 +507,51 @@ describe("a 来源 the server has no address for", () => {
       expect(screen.getByRole("button", { name: "添加当前页面" })).toBeDisabled(),
     );
     expect(screen.getByText("该页面已添加。")).toBeInTheDocument();
+  });
+});
+
+describe("主题", () => {
+  it("sends what the writer typed, and only when they typed something", async () => {
+    const user = userEvent.setup();
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    confirmTaskCreationSession.mockResolvedValue({ id: "task-1", display_name: "那件事" });
+    renderBasket();
+
+    await user.type(
+      await screen.findByLabelText(/主题/),
+      "四天工作制在不同行业的实际效果",
+    );
+    await user.click(screen.getByRole("button", { name: /确认创建任务/ }));
+
+    await waitFor(() =>
+      expect(confirmTaskCreationSession).toHaveBeenCalledWith(
+        "a-token",
+        expect.any(String),
+        "a-basket",
+        ["a"],
+        {},
+        "四天工作制在不同行业的实际效果",
+      ),
+    );
+  });
+
+  it("offers no Agent here, only the box", async () => {
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    renderBasket();
+
+    expect(await screen.findByLabelText(/主题/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /提炼主题/ })).not.toBeInTheDocument();
+  });
+
+  it("holds the confirmation when the theme is longer than the server allows", async () => {
+    const user = userEvent.setup();
+    getTaskCreationSession.mockResolvedValue(session([source({ id: "a" })]));
+    renderBasket();
+    const box = await screen.findByLabelText(/主题/);
+    // Past the box's own maxLength, as a paste would be.
+    await user.click(box);
+    fireEvent.change(box, { target: { value: "四".repeat(81) } });
+
+    expect(screen.getByRole("button", { name: /确认创建任务/ })).toBeDisabled();
   });
 });

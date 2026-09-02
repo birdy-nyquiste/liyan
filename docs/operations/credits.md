@@ -43,6 +43,16 @@ so the table assumes it. The fixed 30¢ is why the small 额度包 nets five poi
 less than the large one at an identical 额度 rate; that gap is the price of
 having a cheap way in, not a pricing mistake.
 
+Checkout accepts promotion codes, and what a code moves is the money and not
+the 额度: fulfillment credits the pack its Price names, so a half-price code
+buys the whole pack for half of what the table above assumes. That is what a
+coupon is, and it is also where the margin goes — a 50% code on the $5 pack
+nets $2.10 against the $1.00 of cost those 额度 can consume, and the crossover
+where a code starts selling 额度 below what they cost to honour is around 73%
+off for the $5 pack and 79% for the $50 one. Fulfillment must not start
+reading `amount_total` to "fix" this: a discount would silently become a
+smaller pack, which is a different product than the one that was bought.
+
 Break-even against ~$37/month of fixed infrastructure (API, worker, beat,
 Redis, Postgres) is **two or three $20 额度包 a month**. Fixed cost is deliberately not
 loaded into any per-operation price: the per-unit share depends on a volume

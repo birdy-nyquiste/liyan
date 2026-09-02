@@ -112,6 +112,14 @@ class HttpStripeApi:
         how fulfillment knows *whom* to credit; how much is read from the Price,
         server-side, in `packs.py`. A client that could influence this object
         must not be able to influence the amount.
+
+        Promotion codes are accepted, and what that means is worth stating: a
+        coupon changes what the user pays and not what they bought. 额度 are
+        credited from the Price on the line item, so a half-price code buys the
+        pack's whole 额度 for half the money — which is what a coupon is. Nothing
+        here needs to know a code was used, and fulfillment must not start
+        reading `amount_total`, or a discount would quietly become a smaller
+        pack.
         """
         form = {
             "mode": "payment",
@@ -119,6 +127,9 @@ class HttpStripeApi:
             "line_items[0][quantity]": "1",
             "success_url": success_url,
             "cancel_url": cancel_url,
+            # Stripe hides the code field unless asked, so a code 立言阁 issued
+            # would be unusable at the only place it could be typed.
+            "allow_promotion_codes": "true",
             "metadata[liyan_user_id]": user_id,
             # Repeated on the PaymentIntent so a refund reaching this server as a
             # charge event can still name the user, without walking back to the

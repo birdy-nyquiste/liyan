@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -459,9 +459,84 @@ describe("routed workbench shell", () => {
     render(<App authProvider={authProvider} />);
 
     expect(await screen.findByRole("navigation", { name: "主导航" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "新建立言任务" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新建任务" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "发布" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/task");
+  });
+
+  it("stops marking 新建任务 as the current place once a task is open", async () => {
+    /*
+      React Router counts /task/:taskId as a descendant of /task, so the rail
+      showed 新建任务 as selected while the writer was reading a task — two
+      places selected at once, and the wrong one of them highlighted.
+
+      Driven by the URL rather than by clicking the task in the rail: this suite
+      shares one React Query client, so a task list cached by an earlier test
+      decides what the rail lists, and the rule under test is about the route.
+    */
+    const authProvider: AuthProvider = {
+      getAccessToken: vi.fn().mockResolvedValue("token"),
+      sendEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
+    };
+    const task = {
+      id: "task-1",
+      number: 1,
+      display_name: "四天工作制的实际代价",
+      first_source_title: "工时来源",
+      additional_source_count: 0,
+      current_version_id: "version-1",
+      current_version_number: 1,
+      created_at: "2026-09-02T10:00:00Z",
+      last_activity_at: "2026-09-02T10:00:00Z",
+      can_delete: true,
+      delete_disabled_reason: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (request: Request) => {
+        if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
+        if (request.url.endsWith("/auth/me")) {
+          return Response.json({ id: "user-1", email: "writer@example.com" });
+        }
+        if (request.url.includes("/tasks/task-1/versions")) {
+          return Response.json({ items: [], historical_limit: 3 });
+        }
+        if (request.url.includes("/tasks/task-1/zhiyan")) {
+          return Response.json({
+            task_id: "task-1",
+            task_version_id: "version-1",
+            task_version_number: 1,
+            sources: [],
+            theme: null,
+            liyan: { can_generate: false, unavailable_reason: null },
+          });
+        }
+        if (request.url.includes("/tasks/task-1")) return Response.json(task);
+        if (request.url.includes("/tasks")) {
+          return Response.json({ items: [task], next_cursor: null });
+        }
+        return new Response(null, { status: 404 });
+      }),
+    );
+
+    // At the creation page: this is where 新建任务 leads, so it is current.
+    window.history.pushState({}, "", "/task");
+    const atCreation = render(<App authProvider={authProvider} />);
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "新建任务" }))
+        .toHaveAttribute("aria-current", "page");
+    });
+    atCreation.unmount();
+
+    // Reading a task is somewhere else, whatever the URL happens to start with.
+    window.history.pushState({}, "", "/task/task-1");
+    render(<App authProvider={authProvider} />);
+    const newTask = await screen.findByRole("link", { name: "新建任务" });
+
+    expect(newTask).not.toHaveAttribute("aria-current");
   });
 
   it("renders the signed-out, task, and publication routes in English", async () => {

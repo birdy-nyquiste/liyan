@@ -52,6 +52,10 @@ const copy = {
   zh: {
     navigation: "主导航",
     newTask: "新建立言任务",
+    // The rail's own label. The page it opens keeps the full term as its
+    // heading, where there is room for it; in a 240px rail beside a list of
+    // task names, 新建任务 is the same instruction with less to read.
+    newTaskAction: "新建任务",
     publications: "发布",
     tasks: "任务",
     collapse: "折叠侧栏",
@@ -90,6 +94,7 @@ const copy = {
   en: {
     navigation: "Primary navigation",
     newTask: "New task",
+    newTaskAction: "New task",
     publications: "Publications",
     tasks: "Tasks",
     collapse: "Collapse sidebar",
@@ -413,9 +418,15 @@ function Sidebar({
       </div>
 
       <nav className="sidebar-primary" aria-label={text.navigation}>
-        <RailTooltip label={text.newTask} show={collapsed}>
-          <NavLink aria-label={text.newTask} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate("/task")) event.preventDefault(); }}>
-            <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTask}</span> : null}
+        <RailTooltip label={text.newTaskAction} show={collapsed}>
+          {/*
+            `end`, so this is current only at /task itself. Without it React
+            Router counts /task/:taskId as a descendant and the rail showed
+            新建任务 as the selected place while the writer was reading a task —
+            two things selected at once, and the wrong one of them highlighted.
+          */}
+          <NavLink end aria-label={text.newTaskAction} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate("/task")) event.preventDefault(); }}>
+            <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTaskAction}</span> : null}
           </NavLink>
         </RailTooltip>
         <RailTooltip label={text.publications} show={collapsed}>

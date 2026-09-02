@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,7 @@ const versionOne = {
   created_at: "2026-08-22T18:00:00Z",
   is_current: true,
   sources: [sourceA, sourceB],
+  theme: null,
   capabilities,
 };
 
@@ -162,7 +163,7 @@ describe("来源 editing and 任务版本 history", () => {
       .toBe(true);
   });
 
-  it("keeps one save identity across a lost response and discards on committed navigation", async () => {
+  it("keeps one save identity across a lost response", async () => {
     let saveAttempts = 0;
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
       if (request.method === "GET") {
@@ -222,9 +223,110 @@ describe("来源 editing and 任务版本 history", () => {
     const keys = await Promise.all(saves.map(async (request) =>
       (JSON.parse(await request.clone().text()) as { idempotency_key: string }).idempotency_key));
     expect(keys[0]).toBe(keys[1]);
+  });
 
+  it("discards a session the writer abandons", async () => {
+    type FetchCall = (request: Request) => Promise<Response>;
+    const fetch = vi.fn<FetchCall>(async (request) => {
+      if (request.url.endsWith("/tasks/task-1/versions")) {
+        return Response.json({ items: [versionOne], historical_limit: 3 });
+      }
+      if (request.url.endsWith("/source-edit-sessions") && request.method === "POST") {
+        return Response.json({ id: "edit-left", base_version: versionOne }, { status: 201 });
+      }
+      if (request.url.endsWith("/source-edit-sessions/edit-left/discard")) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    render(
+      <TaskSourceVersions
+        accessToken="token"
+        taskId="task-1"
+        onVersionSelected={vi.fn()}
+        onCurrentVersionChanged={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑" }));
+    await user.click(screen.getByRole("button", { name: /Alpha/ }));
+    const alpha = screen.getByRole("group", { name: "来源 Alpha" });
+    await user.type(within(alpha).getByLabelText("来源标题"), " edited");
+
+    // Navigation the browser has committed to: nothing was saved, so the
+    // session is unrecoverable by design and says so now rather than being
+    // left behind on the server.
     window.dispatchEvent(new PageTransitionEvent("pagehide"));
+
+    // The discard resolves a token before it is sent, so it leaves on the next
+    // tick rather than inside the event.
+    await waitFor(() => {
+      expect(fetch.mock.calls.some(([request]) =>
+        (request as Request).url.endsWith("/source-edit-sessions/edit-left/discard"))).toBe(true);
+    });
+  });
+
+  it("does not discard a session whose save is still in flight", async () => {
+    /*
+      Leaving this pane discards the editing session, which is deliberate: an
+      unfinished 来源编辑会话 is unrecoverable. A save is not an unfinished
+      session, and the two raced — pressing 保存修改 and then leaving let the
+      discard reach the server first, and the save was refused against a
+      session that no longer existed. The writer's changes were gone and the
+      screen showed the version they started from, with nothing saying why.
+
+      CI found it before a user did: the same steps pass on a fast machine and
+      lose the race on a slow one.
+    */
+    let releaseSave: (() => void) | null = null;
+    const saveReached = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    type FetchCall = (request: Request) => Promise<Response>;
+    const fetch = vi.fn<FetchCall>(async (request) => {
+      if (request.url.endsWith("/tasks/task-1/versions")) {
+        return Response.json({ items: [versionOne], historical_limit: 3 });
+      }
+      if (request.url.endsWith("/source-edit-sessions") && request.method === "POST") {
+        return Response.json({ id: "edit-slow", base_version: versionOne }, { status: 201 });
+      }
+      if (request.url.endsWith("/source-edit-sessions/edit-slow/save")) {
+        releaseSave?.();
+        // Still travelling when the pane goes away.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return Response.json({ ...versionOne, id: "version-2", number: 2 });
+      }
+      if (request.url.endsWith("/source-edit-sessions/edit-slow/discard")) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const user = userEvent.setup();
+    const view = render(
+      <TaskSourceVersions
+        accessToken="token"
+        taskId="task-1"
+        onVersionSelected={vi.fn()}
+        onCurrentVersionChanged={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "编辑" }));
+    await user.click(screen.getByRole("button", { name: /Alpha/ }));
+    const alpha = screen.getByRole("group", { name: "来源 Alpha" });
+    await user.clear(within(alpha).getByLabelText("来源标题"));
+    await user.type(within(alpha).getByLabelText("来源标题"), "Alpha edited");
+    void user.click(screen.getByRole("button", { name: "保存修改" }));
+    await saveReached;
+
+    // The writer switches to another view — this pane unmounts mid-save.
+    view.unmount();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+
     expect(fetch.mock.calls.some(([request]) =>
-      (request as Request).url.endsWith("/source-edit-sessions/edit-retry/discard"))).toBe(true);
+      (request as Request).url.endsWith("/source-edit-sessions/edit-slow/discard"))).toBe(false);
   });
 });

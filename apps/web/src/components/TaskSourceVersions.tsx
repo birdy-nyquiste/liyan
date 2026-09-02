@@ -136,11 +136,25 @@ export function TaskSourceVersions({
     void load();
   }, [load]);
 
+  /*
+    Whether a save has been sent for the session being torn down.
+
+    Leaving this pane discards the editing session, which is the whole point:
+    an unfinished 来源编辑会话 is deliberately unrecoverable. But a save is not
+    an unfinished session, and the two used to race — pressing 保存修改 and then
+    switching tabs unmounted this pane, the discard reached the server first,
+    and the save was refused against a session that no longer existed. The
+    writer's changes were gone and the screen showed the version they had
+    before, with nothing saying why.
+  */
+  const savingRef = useRef(false);
+
   useEffect(() => {
     if (!editSessionId) return;
     editingChangeRef.current(true);
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     const discardOnCommittedNavigation = () => {
+      if (savingRef.current) return;
       void discardSourceEditSession(accessToken, editSessionId, true).catch(() => undefined);
     };
     window.addEventListener("beforeunload", warn);
@@ -148,7 +162,9 @@ export function TaskSourceVersions({
     return () => {
       window.removeEventListener("beforeunload", warn);
       window.removeEventListener("pagehide", discardOnCommittedNavigation);
-      void discardSourceEditSession(accessToken, editSessionId).catch(() => undefined);
+      if (!savingRef.current) {
+        void discardSourceEditSession(accessToken, editSessionId).catch(() => undefined);
+      }
       editingChangeRef.current(false);
     };
   }, [accessToken, editSessionId]);
@@ -272,6 +288,9 @@ export function TaskSourceVersions({
   async function save() {
     if (!editSessionId) return;
     setBusy(true);
+    // From here until this either lands or fails, leaving the pane must not
+    // discard the session out from under the request.
+    savingRef.current = true;
     try {
       const saved = await saveSourceEditSession(accessToken, editSessionId, {
         idempotency_key: saveIdempotencyKey ?? crypto.randomUUID(),
@@ -314,6 +333,9 @@ export function TaskSourceVersions({
       currentChangeRef.current(saved);
       setError(null);
     } catch {
+      // Refused or unreachable: the session is still the writer's to abandon,
+      // so leaving may discard it again.
+      savingRef.current = false;
       setError(SAVE_FAILED);
     } finally {
       setBusy(false);

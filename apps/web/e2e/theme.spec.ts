@@ -119,13 +119,20 @@ test("主题可以在编辑来源时改写与清空", async ({ page }) => {
   });
 
   await card.getByRole("tab", { name: "来源 · 主题" }).click();
-  await card.getByRole("button", { name: "编辑" }).click();
+  await card.getByRole("button", { name: "编辑", exact: true }).click();
   const themeField = card.getByLabel("主题", { exact: true });
   await expect(themeField).toHaveValue("四天工作制的实际代价");
 
   // Clearing it is a save like any other, and it takes the 主题 report with it.
   await themeField.fill("");
   await card.getByRole("button", { name: /保存修改/ }).click();
+  // Wait for the save to have landed before reading the 知言 area. Leaving the
+  // pane while it is in flight is a thing a writer may do — and the product now
+  // survives it — but a test that asserts the state *after* a save has to wait
+  // for the save, or it is asserting on whichever arrived first.
+  // The read-only 主题 card saying 未设置 is the save having landed *and* the
+  // thing this test is about: this version has no 主题 now.
+  await expect(card.getByText("未设置")).toBeVisible();
   await card.getByRole("tab", { name: "知言 · 立言" }).click();
   // One tab left: the 主题 that was cleared is gone, and so is its report.
   await expect(reportTabs(card).getByRole("tab")).toHaveCount(1);

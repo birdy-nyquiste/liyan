@@ -296,8 +296,7 @@ export function Basket({
               onChange={(event) => setTheme(event.target.value)}
             />
             <span className="form-hint">
-              一句话，最多 {MAX_THEME_CHARACTERS} 字。留空即不生成主题知言报告；
-              想让 Agent 提炼候选，请到工作台创建。
+              一句话，最多 {MAX_THEME_CHARACTERS} 字。留空即不生成主题知言报告。
             </span>
           </label>
         ) : null}

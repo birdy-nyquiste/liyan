@@ -247,6 +247,20 @@ export async function createTaskWithReport(page: Page, title: string): Promise<v
   ).not.toHaveText(/分析失败/);
 }
 
+/**
+ * One of the rail's own navigation links, and not a task that happens to share
+ * its name.
+ *
+ * A role name match is a substring match, and the rail lists every task the
+ * run has left behind beside these two links — so a task titled
+ * 发布页面视觉校验… answers to 发布 just as well as the 发布 link does, and the
+ * click fails as a strict mode violation. The task list is a sibling of
+ * 主导航, so asking inside the landmark is enough to tell them apart.
+ */
+export function railLink(page: Page, name: string) {
+  return page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name });
+}
+
 /** The 任务详情 of one open 立言任务, which every later step works inside. */
 export function openedTask(page: Page, title: string) {
   return page.getByRole("article", { name: `已打开任务 ${title}` });

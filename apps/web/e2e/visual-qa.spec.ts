@@ -7,14 +7,32 @@ import {
   openWorkbench,
   openedTask,
   PROVIDER_TIMEOUT,
+  railLink,
   test,
 } from "./support/workbench";
+
+/**
+ * Where a capture from this run goes.
+ *
+ * Not `docs/design/`. The two `*-implementation.png` files there are the closed
+ * record of the issue #23 sign-off — `workbench-design-qa.md` cites one of them
+ * as the post-fix evidence its comparison history turns on — and writing them
+ * from here overwrote that record with whatever the interface happened to look
+ * like on the machine running the suite. A screenshot's bytes differ between
+ * machines even when nothing about the design moved, so it also left every
+ * local run with two PNGs in `git status` that no change had asked for.
+ *
+ * These captures are for looking at while working on the layout the assertions
+ * above them check. `test-results/` is where the run's other evidence already
+ * lands, and it is ignored.
+ */
+const capture = (name: string) => resolve(process.cwd(), "test-results/design", name);
 
 test.use({ viewport: { width: 1440, height: 640 } });
 
 test("the task creation page advances through a responsive source-to-theme pipeline", async ({ page }) => {
   await openWorkbench(page);
-  await page.getByRole("link", { name: "新建任务" }).click();
+  await railLink(page, "新建任务").click();
 
   const session = page.getByRole("region", { name: "任务创建会话" });
   const panes = session.locator(".creation-pane");
@@ -298,7 +316,7 @@ test("the desktop task workspace preserves the approved two-pane composition", a
 
   await page.setViewportSize({ width: 1440, height: 640 });
   await page.screenshot({
-    path: resolve(process.cwd(), "../../docs/design/workbench-implementation.png"),
+    path: capture("workbench-implementation.png"),
   });
 });
 
@@ -332,6 +350,6 @@ test("the mobile task workspace stacks without clipping its active stage", async
   expect(boxes[1]!.top).toBeGreaterThanOrEqual(boxes[0]!.bottom - 1);
 
   await page.screenshot({
-    path: resolve(process.cwd(), "../../docs/design/workbench-mobile-implementation.png"),
+    path: capture("workbench-mobile-implementation.png"),
   });
 });

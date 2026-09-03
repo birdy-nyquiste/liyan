@@ -34,3 +34,15 @@ apps/web/playwright-report/
 # Where Playwright's browsers land when installed into the project, which is
 # how they survive from a Render build into the running service.
 .playwright/
+
+# A design tool's own working notes: scored against one revision of one file,
+# addressed to the absolute path it was run from. Like a test run's traces,
+# this is a record of one pass on one machine and not of the project.
+.impeccable/
+
+# Local overrides, which is where a real key ends up on a real machine.
+# `.env.e2e` and `.env.example` are committed on purpose and say so; anything
+# a developer writes for themselves is theirs and must not be committable by
+# a stray `git add -A`.
+.env.local
+.env.*.local

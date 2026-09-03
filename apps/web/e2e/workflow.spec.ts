@@ -6,6 +6,7 @@ import {
   openedTask,
   openWorkbench,
   PROVIDER_TIMEOUT,
+  railLink,
   test,
 } from "./support/workbench";
 
@@ -35,8 +36,8 @@ test("the sign-in screen asks for an address before anything else", async ({ bro
 
 test("browser history cannot discard an unfinished source without confirmation", async ({ page }) => {
   await openWorkbench(page);
-  await page.getByRole("link", { name: "发布" }).click();
-  await page.getByRole("link", { name: "新建任务" }).click();
+  await railLink(page, "发布").click();
+  await railLink(page, "新建任务").click();
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByLabel("来源标题").fill("尚未保存的来源");
 

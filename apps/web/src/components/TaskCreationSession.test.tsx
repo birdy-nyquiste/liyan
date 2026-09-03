@@ -108,6 +108,37 @@ describe("task creation session", () => {
     window.localStorage.clear();
   });
 
+  it("reveals theme only after sources and preserves it when returning", async () => {
+    const retained: TestSource = {
+      id: "pasted-1",
+      client_source_id: "client-pasted",
+      kind: "pasted",
+      input_version: 1,
+      status: "ready",
+      title: "Retained source",
+      body: "Retained body.",
+      provenance: "Notes",
+      warnings: [],
+      failure: null,
+      active_execution: null,
+      capabilities,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) =>
+      accountAnswer(request) ?? Response.json(sessionResponse([retained]))));
+    const user = userEvent.setup();
+
+    renderSession();
+
+    expect(await screen.findByRole("button", { name: "下一步：确定主题" })).toBeEnabled();
+    expect(screen.queryByRole("textbox", { name: "主题" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下一步：确定主题" }));
+    await user.type(screen.getByRole("textbox", { name: "主题" }), "保留的主题");
+    await user.click(screen.getByRole("button", { name: "返回来源" }));
+    expect(screen.queryByRole("textbox", { name: "主题" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下一步：确定主题" }));
+    expect(screen.getByRole("textbox", { name: "主题" })).toHaveValue("保留的主题");
+  });
+
   it("retains three mixed sources and confirms their accepted snapshot in order", async () => {
     const sources: TestSource[] = [];
     const fetch = vi.fn().mockImplementation(async (request: Request) => {
@@ -201,7 +232,8 @@ describe("task creation session", () => {
     expect(await screen.findByText("粘贴文本 · Pasted source")).toBeInTheDocument();
     // A warning no longer holds the task back; it is shown on the source itself.
     expect(screen.getByText("缺少出处信息；仍可继续创建任务。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "创建任务" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "下一步：确定主题" })).toBeEnabled();
+    expect(screen.queryByRole("textbox", { name: "主题" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.click(screen.getByRole("button", { name: "公共文章链接" }));
@@ -228,6 +260,8 @@ describe("task creation session", () => {
     // Leaving the field is what commits it; there is no save button to press.
     await user.tab();
     expect(await screen.findByText("粘贴文本 · Edited pasted source")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下一步：确定主题" }));
+    expect(screen.getByRole("textbox", { name: "主题" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "创建任务" }));
 
     expect(onCreated).toHaveBeenCalledWith({ ...formalTask, additional_source_count: 2 });
@@ -346,9 +380,11 @@ describe("task creation session", () => {
     }));
     const user = userEvent.setup();
     renderSession();
+    await user.click(await screen.findByRole("button", { name: "下一步：确定主题" }));
     await user.click(await screen.findByRole("button", { name: "创建任务" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("创建失败，来源仍保留在此会话中。请重试。");
+    await user.click(screen.getByRole("button", { name: "返回来源" }));
     expect(screen.getByText("粘贴文本 · Retained source")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "编辑来源 Retained source" }));
     expect(screen.getByDisplayValue("Retained body.")).toBeInTheDocument();

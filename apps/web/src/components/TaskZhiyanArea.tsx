@@ -230,10 +230,8 @@ export function TaskZhiyanArea({
               <Tabs.Trigger
                 className="zhiyan-tab zhiyan-tab--theme"
                 value={THEME_TAB}
-                title={theme.theme}
               >
-                <span className="zhiyan-tab__index">{t("主题")}</span>
-                <span className="zhiyan-tab__title">{theme.theme}</span>
+                <span className="zhiyan-tab__title">{t("主题")}</span>
                 <span className={`zhiyan-tab__dot zhiyan-tab__dot--${theme.status}`} aria-hidden="true" />
                 <span className="sr-only">{t(STATUS_LABELS[theme.status])}</span>
               </Tabs.Trigger>
@@ -243,10 +241,10 @@ export function TaskZhiyanArea({
                 className="zhiyan-tab"
                 key={source.source_revision_id}
                 value={source.source_revision_id}
-                title={source.source_title}
               >
-                <span className="zhiyan-tab__index">{position + 1}</span>
-                <span className="zhiyan-tab__title">{source.source_title}</span>
+                <span className="zhiyan-tab__title">
+                  {locale === "en" ? `Source #${position + 1}` : `来源 #${position + 1}`}
+                </span>
                 <span className={`zhiyan-tab__dot zhiyan-tab__dot--${source.status}`} aria-hidden="true" />
                 {/* The dot is the visible signal; this is the one screen readers get. */}
                 <span className="sr-only">{t(STATUS_LABELS[source.status])}</span>

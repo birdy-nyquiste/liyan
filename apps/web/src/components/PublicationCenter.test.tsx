@@ -54,6 +54,38 @@ afterEach(() => {
 });
 
 describe("PublicationCenter", () => {
+  it("keeps the new publication flow closed until explicitly requested", async () => {
+    respondWith();
+    const user = userEvent.setup();
+
+    render(<PublicationCenter userId="user-1" accessToken="token" />);
+
+    expect(await screen.findByRole("heading", { name: "发布历史" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "选择草稿" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "新发布" }));
+
+    expect(await screen.findByRole("heading", { name: "选择草稿" })).toBeInTheDocument();
+  });
+
+  it("consumes a task deep-link selection once so changing drafts returns to step one", async () => {
+    respondWith();
+    const user = userEvent.setup();
+    render(
+      <PublicationCenter
+        userId="user-1"
+        accessToken="token"
+        initialTaskId="task-1"
+        initialRevisionId="revision-2"
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "更换草稿" }));
+
+    expect(await screen.findByRole("button", { name: /四天工作制的真问题/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText("作者（显示在 Blog 上）")).not.toBeInTheDocument();
+  });
+
   it("sends the browser draft's own hash so unsaved edits cannot publish unnoticed", async () => {
     localStorage.setItem(
       "liyan:working-copy:v1:user-1:task-1",
@@ -65,6 +97,7 @@ describe("PublicationCenter", () => {
       <PublicationCenter userId="user-1" accessToken="token" />,
     );
 
+    await user.click(await screen.findByRole("button", { name: "新发布" }));
     await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
     await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
     await user.click(screen.getByRole("button", { name: "确认发布" }));
@@ -89,6 +122,7 @@ describe("PublicationCenter", () => {
       <PublicationCenter userId="user-1" accessToken="token" />,
     );
 
+    await user.click(await screen.findByRole("button", { name: "新发布" }));
     await user.click(await screen.findByRole("button", { name: /四天工作制的真问题/ }));
     await user.type(await screen.findByLabelText("作者（显示在 Blog 上）"), "Birdy Yao");
     await user.click(screen.getByRole("button", { name: "确认发布" }));
@@ -134,8 +168,9 @@ describe("PublicationCenter", () => {
 
     render(<PublicationCenter userId="user-1" accessToken="token" />);
 
-    // A record's evidence is behind its own row now: opening one is what shows
-    // the attempts, the payload, and the Preview it produced.
+    // History remains its own section; each record controls the evidence nested
+    // under that row.
+    expect(await screen.findByRole("heading", { name: "发布历史" })).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: /仍可追溯的文章/ }));
     expect(screen.getByRole("link", { name: "打开 Blog Preview" })).toHaveAttribute(
       "href",
@@ -274,6 +309,7 @@ describe("PublicationCenter", () => {
     await user.click(await screen.findByText("四天工作制的真问题"));
     expect(screen.getAllByText("提交失败").length).toBeGreaterThan(0);
     expect(screen.getByRole("alert")).toHaveTextContent("发布未能启动，请稍后重试。");
+    await user.click(screen.getByText("技术详情"));
     expect(screen.getAllByText("发布未能启动，请稍后重试。")).toHaveLength(2);
     expect(screen.getByText("trace-publication-1")).toBeInTheDocument();
     expect(screen.getByText("dispatch_failed")).toBeInTheDocument();

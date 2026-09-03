@@ -377,10 +377,12 @@ describe("TaskZhiyanArea", () => {
     // of the other is on its tab rather than hidden until you scroll to it.
     const tabs = await screen.findByRole("tablist", { name: "知言报告" });
     expect(within(tabs).getAllByRole("tab")).toHaveLength(2);
+    expect(within(tabs).getByRole("tab", { name: /来源 #1/ })).toBeInTheDocument();
+    expect(within(tabs).queryByRole("tab", { name: /城市空气质量年度回顾/ })).not.toBeInTheDocument();
     const succeeded = screen.getByLabelText("知言报告 城市空气质量年度回顾");
     expect(within(succeeded).getAllByText("F-01")).not.toHaveLength(0);
 
-    const failedTab = within(tabs).getByRole("tab", { name: /四天工作制已经没有争议/ });
+    const failedTab = within(tabs).getByRole("tab", { name: /来源 #2/ });
     expect(failedTab).toHaveTextContent("分析未完成");
 
     await userEvent.click(failedTab);

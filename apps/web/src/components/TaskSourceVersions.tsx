@@ -451,20 +451,21 @@ export function TaskSourceVersions({
     return <p role={error ? "alert" : undefined}>{error ?? t("版本加载中")}</p>;
   }
 
-  return (
-    <section className="source-versions" aria-labelledby={`sources-${taskId}`}>
-      {/*
-       * One row where there were three. 来源 was printed twice and the version
-       * three times — as a heading, as a count suffix, and inside the control
-       * that sets it — while the two actions sat at the far bottom of the page.
-       * What is left is the version being shown and what can be done to it.
-       */}
-      <h3 className="sr-only" id={`sources-${taskId}`}>
+  const sourceHeader = (sourceCount: number) => (
+    <header className="task-pane-heading">
+      <h2 id={`sources-${taskId}`}>{t("来源")}</h2>
+      <span className="sr-only">
         {selected.is_current
           ? locale === "en" ? `Current version V${selected.number}` : `当前版本 V${selected.number}`
           : locale === "en" ? `Read-only history V${selected.number}` : `只读历史 V${selected.number}`}
-      </h3>
-      <div className="source-toolbar">
+      </span>
+      <span>{locale === "en" ? `${sourceCount} sources` : `${sourceCount} 个来源`}</span>
+    </header>
+  );
+
+  const sourceTools = (
+    <div className="source-pane-tools">
+      <div className="source-pane-tools__version">
         <label className="source-toolbar__version">
           <span className="sr-only">{t("版本")}</span>
           <select
@@ -483,27 +484,37 @@ export function TaskSourceVersions({
           </select>
         </label>
         {!selected.is_current ? <span className="source-chip">{t("只读")}</span> : null}
-        <div className="source-toolbar__actions">
-          {!editSessionId && selected.capabilities.can_edit ? (
-            <button className="button button--quiet" type="button" disabled={busy} onClick={() => void beginEditing()}>
-              {t("编辑")}
-            </button>
-          ) : null}
-          {!editSessionId && selected.capabilities.can_restore ? (
-            <button className="button" type="button" disabled={busy} onClick={() => setConfirming("restore")}>
-              {t("恢复为当前版本")}
-            </button>
-          ) : null}
-        </div>
       </div>
-      {error ? (
-        <p role="alert" className="form-error">
-          {domainMessage(error)}
-          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
-        </p>
-      ) : null}
+      <div className="source-pane-tools__actions">
+        {!editSessionId && selected.capabilities.can_edit ? (
+          <button className="button button--quiet" type="button" disabled={busy} onClick={() => void beginEditing()}>
+            {t("编辑")}
+          </button>
+        ) : null}
+        {!editSessionId && selected.capabilities.can_restore ? (
+          <button className="button" type="button" disabled={busy} onClick={() => setConfirming("restore")}>
+            {t("恢复为当前版本")}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="source-versions" aria-labelledby={`sources-${taskId}`}>
       {editSessionId ? (
         <>
+          <div className="source-theme-split">
+            <section className="source-theme-pane">
+              {sourceHeader(drafts.length)}
+              <div className="source-theme-pane__body">
+          {sourceTools}
+          {error ? (
+            <p role="alert" className="form-error">
+              {domainMessage(error)}
+              {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+            </p>
+          ) : null}
           <p className="form-hint">
             {locale === "en" ? `The current version remains V${selected.number}; changes enter history only when saved.` : `当前版本仍是 V${selected.number}；保存前的改动不会进入历史。`}
           </p>
@@ -652,28 +663,40 @@ export function TaskSourceVersions({
               </button>
             ) : null
           ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
-
+              </div>
+            </section>
+            <section className="source-theme-pane">
+              <header className="task-pane-heading">
+                <h2>{t("主题")}</h2>
+                <span>{(themeDraft ?? "").trim() ? t("已设置") : t("可留空")}</span>
+              </header>
+              <div className="source-theme-pane__body">
           {editSessionId ? (
-            <ThemeChoice
-              accessToken={accessToken}
-              clientSessionId={editSessionId}
-              theme={themeDraft ?? ""}
-              onThemeChange={setThemeDraft}
-              // Every draft as it stands, including text typed and not yet
-              // saved: that is what the writer is looking at, and a candidate
-              // drawn from the 来源 they have replaced would be about material
-              // that is on its way out.
-              sources={drafts.map((source) => ({
-                title: source.title,
-                body: source.body,
-                provenance: source.provenance || null,
-              }))}
-              canPropose={stagedReady && !busy && drafts.length > 0}
-              disabledReason={stagedReady ? null : "请等待所有来源处理完成。"}
-              footnote={t("最多 80 字。清空即移除主题及其知言报告；改写主题会重新生成报告。")}
-              inputId="edit-theme"
-            />
+            <div>
+              <ThemeChoice
+                accessToken={accessToken}
+                clientSessionId={editSessionId}
+                theme={themeDraft ?? ""}
+                onThemeChange={setThemeDraft}
+                // Every draft as it stands, including text typed and not yet
+                // saved: that is what the writer is looking at, and a candidate
+                // drawn from the 来源 they have replaced would be about material
+                // that is on its way out.
+                sources={drafts.map((source) => ({
+                  title: source.title,
+                  body: source.body,
+                  provenance: source.provenance || null,
+                }))}
+                canPropose={stagedReady && !busy && drafts.length > 0}
+                disabledReason={stagedReady ? null : "请等待所有来源处理完成。"}
+                footnote={t("最多 80 字。清空即移除主题及其知言报告；改写主题会重新生成报告。")}
+                inputId="edit-theme"
+              />
+            </div>
           ) : null}
+              </div>
+            </section>
+          </div>
 
           <div className="workspace__actions">
             <button className="button" type="button" disabled={busy || !stagedReady || !hasChanges} onClick={() => void save()}>
@@ -685,7 +708,17 @@ export function TaskSourceVersions({
           </div>
         </>
       ) : (
-        <>
+        <div className="source-theme-split">
+          <section className="source-theme-pane">
+            {sourceHeader(selected.sources.length)}
+            <div className="source-theme-pane__body">
+          {sourceTools}
+          {error ? (
+            <p role="alert" className="form-error">
+              {domainMessage(error)}
+              {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+            </p>
+          ) : null}
           <ol className="source-list">
             {selected.sources.map((source, position) => (
               <li key={source.id}>
@@ -724,6 +757,14 @@ export function TaskSourceVersions({
               </li>
             ))}
           </ol>
+            </div>
+          </section>
+          <section className="source-theme-pane">
+            <header className="task-pane-heading">
+              <h2>{t("主题")}</h2>
+              <span>{selected.theme ? t("已设置") : t("可留空")}</span>
+            </header>
+            <div className="source-theme-pane__body">
           {/*
             The 主题 under the 来源 it was drawn from, which is the order they
             were decided in and the order they are read in. It was a chip in the
@@ -736,12 +777,6 @@ export function TaskSourceVersions({
             is what they turned out to be about, and it is read last.
           */}
           <article className="source-operation source-operation--theme">
-            <p className="source-operation__status source-operation__summary--theme">
-              <strong>{t("主题")}</strong>
-              {selected.theme ? null : (
-                <span className="source-operation__pending">{t("未设置")}</span>
-              )}
-            </p>
             {selected.theme ? (
               <p className="version-theme__text">{selected.theme}</p>
             ) : (
@@ -753,7 +788,9 @@ export function TaskSourceVersions({
           {selected.capabilities.unavailable_reason ? (
             <p className="form-hint">{domainMessage(selected.capabilities.unavailable_reason)}</p>
           ) : null}
-        </>
+            </div>
+          </section>
+        </div>
       )}
       <ConfirmDialog
         open={confirming === "discard"}

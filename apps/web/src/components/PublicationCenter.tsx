@@ -67,6 +67,7 @@ export function PublicationCenter({
   const [articleCursor, setArticleCursor] = useState<string | null>(null);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<EligibleArticleResponse | null>(null);
+  const [flowOpen, setFlowOpen] = useState(Boolean(initialTaskId && initialRevisionId));
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One record open at a time: each carries attempts, evidence, and a payload.
@@ -76,6 +77,7 @@ export function PublicationCenter({
     null,
   );
   const retryKeys = useRef(new Map<string, string>());
+  const initialSelectionHandled = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -128,18 +130,32 @@ export function PublicationCenter({
   }, [load]);
 
   useEffect(() => {
+    if (initialTaskId && initialRevisionId) setFlowOpen(true);
+  }, [initialRevisionId, initialTaskId]);
+
+  useEffect(() => {
     if (!records?.some((record) => record.status === "pending")) return;
     const timer = window.setInterval(() => void refreshPublicationHistory(), 2_000);
     return () => window.clearInterval(timer);
   }, [records, refreshPublicationHistory]);
 
   useEffect(() => {
-    if (selected || !articles || !initialTaskId || !initialRevisionId) return;
+    if (
+      initialSelectionHandled.current
+      || selected
+      || !articles
+      || !initialTaskId
+      || !initialRevisionId
+    ) return;
     const initial = articles.find(
       (article) => article.task_id === initialTaskId && article.revision_id === initialRevisionId,
     );
-    if (initial) setSelected(initial);
+    if (initial) {
+      initialSelectionHandled.current = true;
+      setSelected(initial);
+    }
     else if (articleCursor) void loadMoreArticles();
+    else initialSelectionHandled.current = true;
   }, [articleCursor, articles, initialRevisionId, initialTaskId, loadMoreArticles, selected]);
 
   /**
@@ -201,77 +217,131 @@ export function PublicationCenter({
     };
   }, [selected, userId]);
 
+  const closeFlow = () => {
+    setSelected(null);
+    setFlowOpen(false);
+    void load();
+  };
+
   return (
     <section className="publication-center" aria-labelledby="publication-center-heading">
-      {/* A route, so it is a page rather than a card with a way out of itself.
-          The numbers the three sections used to carry said what the headings
-          say, and the middle one only becomes available once a draft is
-          chosen — which the section itself is what tells you. */}
-      <header className="page-heading">
+      {/* The route is the publication ledger. A new submission is an explicit
+          action that opens its own ordered flow above that persistent history. */}
+      <header className="page-heading publication-page-heading">
         <h1 id="publication-center-heading">{t("发布")}</h1>
+        {!flowOpen ? (
+          <button className="button" type="button" onClick={() => setFlowOpen(true)}>
+            {t("新发布")}
+          </button>
+        ) : null}
       </header>
 
       {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
 
-      <h2 className="publication-section">{t("选择草稿")}</h2>
-      {articles && articles.length === 0 ? (
-        <p className="creation-hint">
-          {t("还没有可发布的文章。保存某个任务当前版本的立言文章后，它会出现在这里。")}
-        </p>
-      ) : null}
-      <ul className="publication-candidates publication-candidates--selectable">
-        {(articles ?? []).map((article) => {
-          const isSelected = selected?.revision_id === article.revision_id;
-          const locked = selected !== null && !isSelected;
-          return (
-            <li key={article.revision_id} data-selected={isSelected || undefined}>
-              <button
-                className="publication-candidate-choice"
-                type="button"
-                aria-pressed={isSelected}
-                disabled={locked}
-                onClick={() => setSelected(isSelected ? null : article)}
-              >
-                <span className="liyan-revision__title">{article.title}</span>
-                <span className="form-hint">
-                  {article.task_display_name} · {t("草稿")} {article.revision_number} · {new Date(article.saved_at).toLocaleString(dateLocale)}
-                </span>
-                <span className="publication-candidate-preview">{article.body_markdown.slice(0, 120)}</span>
-                <span className={`source-chip${isSelected ? " source-chip--ready" : ""}`}>
-                  {isSelected ? t("已选择，再次点击可取消") : t("可发布")}
-                </span>
-              </button>
-              {onOpenTask ? (
-                <button className="button button--quiet" type="button" onClick={() => onOpenTask(article.task_id)}>
-                  {t("打开任务")}
+      {flowOpen ? (
+        <section className="publication-flow" aria-labelledby="publication-flow-heading">
+          <header className="publication-flow__heading">
+            <h2 id="publication-flow-heading">{t("新发布")}</h2>
+            <button className="button button--quiet" type="button" onClick={closeFlow}>
+              {t("关闭")}
+            </button>
+          </header>
+          <ol className="process-pipeline publication-pipeline" aria-label={t("发布")}>
+        <li data-state={selected ? "complete" : "current"}>
+              <span className="process-pipeline__index">1</span>
+          <span>{t("选择草稿")}</span>
+        </li>
+        <li data-state={selected ? "current" : "locked"}>
+              <span className="process-pipeline__index">2</span>
+          <span>{t("确认发布")}</span>
+        </li>
+          </ol>
+
+      {!selected ? (
+        <section className="publication-stage" aria-labelledby="publication-drafts-heading">
+          <header className="publication-stage__heading">
+            <h2 id="publication-drafts-heading">{t("选择草稿")}</h2>
+            <span>{articles === null ? t("读取中") : `${articles.length} ${t("草稿")}`}</span>
+          </header>
+          {articles === null ? <p className="publication-empty">{t("读取中")}</p> : null}
+          {articles && articles.length === 0 ? (
+            <p className="publication-empty">
+              {t("还没有可发布的文章。保存某个任务当前版本的立言文章后，它会出现在这里。")}
+            </p>
+          ) : null}
+          <ul className="publication-candidates publication-candidates--selectable">
+            {(articles ?? []).map((article) => (
+              <li key={article.revision_id}>
+                <button
+                  className="publication-candidate-choice"
+                  type="button"
+                  onClick={() => setSelected(article)}
+                >
+                  <span className="liyan-revision__title">{article.title}</span>
+                  <span className="form-hint">
+                    {article.task_display_name} · {t("草稿")} {article.revision_number} · {new Date(article.saved_at).toLocaleString(dateLocale)}
+                  </span>
+                  <span className="publication-candidate-preview">{article.body_markdown.slice(0, 120)}</span>
+                  <span className="source-chip">{t("可发布")}</span>
                 </button>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-      {articleCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreArticles()}>{t("加载更多草稿")}</button> : null}
-
-      <h2 className="publication-section">{t("确认发布")}</h2>
-      {selected && draftHash ? (
-        <PublicationConfirmation
-          userId={userId}
-          accessToken={accessToken}
-          article={publicationArticle(selected)}
-          workingCopyHash={draftHash}
-          onStatusChange={onPublicationChanged}
-          onClose={() => {
-            setSelected(null);
-            void load();
-          }}
-        />
-      ) : <p className="creation-hint">{t("选择一个草稿后，可配置发布目标与作者并确认锁定快照。")}</p>}
-
-      <h2 className="publication-section">{t("发布历史")}</h2>
-      {records && records.length === 0 ? (
-        <p className="creation-hint">{t("还没有发布记录。")}</p>
+                {onOpenTask ? (
+                  <button className="button button--quiet" type="button" onClick={() => onOpenTask(article.task_id)}>
+                    {t("打开任务")}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {articleCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreArticles()}>{t("加载更多草稿")}</button> : null}
+        </section>
+      ) : (
+        <section className="publication-stage publication-stage--confirmation" aria-labelledby="publication-confirmation-heading">
+          <header className="publication-stage__heading">
+            <h2 id="publication-confirmation-heading">{t("确认发布")}</h2>
+            <span>{t("草稿")} {selected.revision_number}</span>
+          </header>
+          <article className="publication-selected-draft">
+            <div>
+              <strong className="liyan-revision__title">{selected.title}</strong>
+              <p className="form-hint">
+                {selected.task_display_name} · {t("草稿")} {selected.revision_number} · {new Date(selected.saved_at).toLocaleString(dateLocale)}
+              </p>
+            </div>
+            <button className="button button--quiet" type="button" onClick={() => setSelected(null)}>
+              {t("更换草稿")}
+            </button>
+          </article>
+          {draftHash ? (
+            <PublicationConfirmation
+              userId={userId}
+              accessToken={accessToken}
+              article={publicationArticle(selected)}
+              workingCopyHash={draftHash}
+              onStatusChange={onPublicationChanged}
+              onClose={closeFlow}
+            />
+          ) : <p className="publication-empty">{t("读取中")}</p>}
+        </section>
+          )}
+        </section>
       ) : null}
-      <ul className="publication-candidates">
+
+      <section className="publication-history-section" aria-labelledby="publication-history-heading">
+        <header className="publication-history-section__heading">
+          <h2 id="publication-history-heading">{t("发布历史")}</h2>
+          <span className="form-hint">
+            {records === null
+              ? t("读取中")
+              : records.length === 0
+                ? t("暂无记录")
+                : t("共 {count} 条记录").replace("{count}", String(records.length))}
+          </span>
+        </header>
+        <div className="publication-history-section__body">
+        {records && records.length === 0 ? (
+          <p className="creation-hint">{t("还没有发布记录。")}</p>
+        ) : null}
+        <ul className="publication-candidates">
         {(records ?? []).map((record) => (
           <li key={record.id}>
             <article className="publication-history-entry">
@@ -313,30 +383,37 @@ export function PublicationCenter({
                   </p>
                 </div>
               ) : null}
-              {record.attempts?.length ? (
-                <div className="publication-evidence">
-                  <h4>{t("提交尝试")}</h4>
-                  {record.attempts.map((attempt) => (
-                    <dl className="publication-locked" key={attempt.id}>
-                      <div><dt>{t("尝试次数")}</dt><dd>{attempt.attempt}</dd></div>
-                      <div><dt>{t("状态")}</dt><dd>{executionStatus(attempt.status)}</dd></div>
-                      <div><dt>{t("提交时间")}</dt><dd>{new Date(attempt.created_at).toLocaleString(dateLocale)}</dd></div>
-                      <div><dt>{t("开始时间")}</dt><dd>{attempt.started_at ? new Date(attempt.started_at).toLocaleString(dateLocale) : t("尚未完成")}</dd></div>
-                      <div><dt>{t("结束时间")}</dt><dd>{attempt.finished_at ? new Date(attempt.finished_at).toLocaleString(dateLocale) : t("尚未完成")}</dd></div>
-                      <div><dt>{t("追踪 ID")}</dt><dd><code>{attempt.trace_id}</code></dd></div>
-                      {attempt.error ? <>
-                        <div><dt>{t("错误代码")}</dt><dd><code>{attempt.error.code}</code></dd></div>
-                        <div><dt>{t("失败原因")}</dt><dd>{domainMessage(attempt.error.message, attempt.error.code)}</dd></div>
-                      </> : null}
-                    </dl>
-                  ))}
-                </div>
-              ) : null}
-              {record.response_evidence ? (
-                <div className="publication-evidence">
-                  <h4>{t("不可变响应证据")}</h4>
-                  <pre>{JSON.stringify(record.response_evidence, null, 2)}</pre>
-                </div>
+              {record.attempts?.length || record.response_evidence ? (
+                <details className="publication-technical-details">
+                  <summary>{t("技术详情")}</summary>
+                  <div className="publication-technical-details__body">
+                    {record.attempts?.length ? (
+                      <div className="publication-evidence">
+                        <h4>{t("提交尝试")}</h4>
+                        {record.attempts.map((attempt) => (
+                          <dl className="publication-locked" key={attempt.id}>
+                            <div><dt>{t("尝试次数")}</dt><dd>{attempt.attempt}</dd></div>
+                            <div><dt>{t("状态")}</dt><dd>{executionStatus(attempt.status)}</dd></div>
+                            <div><dt>{t("提交时间")}</dt><dd>{new Date(attempt.created_at).toLocaleString(dateLocale)}</dd></div>
+                            <div><dt>{t("开始时间")}</dt><dd>{attempt.started_at ? new Date(attempt.started_at).toLocaleString(dateLocale) : t("尚未完成")}</dd></div>
+                            <div><dt>{t("结束时间")}</dt><dd>{attempt.finished_at ? new Date(attempt.finished_at).toLocaleString(dateLocale) : t("尚未完成")}</dd></div>
+                            <div><dt>{t("追踪 ID")}</dt><dd><code>{attempt.trace_id}</code></dd></div>
+                            {attempt.error ? <>
+                              <div><dt>{t("错误代码")}</dt><dd><code>{attempt.error.code}</code></dd></div>
+                              <div><dt>{t("失败原因")}</dt><dd>{domainMessage(attempt.error.message, attempt.error.code)}</dd></div>
+                            </> : null}
+                          </dl>
+                        ))}
+                      </div>
+                    ) : null}
+                    {record.response_evidence ? (
+                      <div className="publication-evidence">
+                        <h4>{t("不可变响应证据")}</h4>
+                        <pre>{JSON.stringify(record.response_evidence, null, 2)}</pre>
+                      </div>
+                    ) : null}
+                  </div>
+                </details>
               ) : null}
             {record.preview_url ? (
               <p>
@@ -377,8 +454,10 @@ export function PublicationCenter({
             </article>
           </li>
         ))}
-      </ul>
-      {historyCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreHistory()}>{t("加载更多发布记录")}</button> : null}
+        </ul>
+        {historyCursor ? <button className="button button--quiet" type="button" onClick={() => void loadMoreHistory()}>{t("加载更多发布记录")}</button> : null}
+        </div>
+      </section>
 
     </section>
   );

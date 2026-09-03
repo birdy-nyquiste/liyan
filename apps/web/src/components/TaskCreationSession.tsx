@@ -257,6 +257,7 @@ export function TaskCreationSession({
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const [step, setStep] = useState<"sources" | "theme">("sources");
   // Never cleared by anything but the user. Not by a 来源 changing, and not by
   // pressing 提炼主题 again.
   const [theme, setTheme] = useState("");
@@ -339,6 +340,13 @@ export function TaskCreationSession({
       && !busy
       && theme.length <= MAX_THEME_CHARACTERS,
   );
+  const canAdvance = Boolean(
+    session?.can_confirm && editingSourceIds.size === 0 && !busy,
+  );
+
+  useEffect(() => {
+    if (step === "theme" && sourceCount === 0) setStep("sources");
+  }, [sourceCount, step]);
 
   const updateEditingSource = useCallback((sourceId: string, editing: boolean) => {
     setEditingSourceIds((current) => {
@@ -380,7 +388,23 @@ export function TaskCreationSession({
 
   return (
     <section className="creation-session" aria-label={t("任务创建会话")}>
-      <p className="section-kicker">{t("添加 1-3 个来源")}</p>
+      <ol className="process-pipeline creation-pipeline" aria-label={t("创建任务")}>
+        <li data-state={step === "sources" ? "current" : "complete"}>
+          <span className="process-pipeline__index">1</span>
+          <span>{t("添加来源")}</span>
+        </li>
+        <li data-state={step === "theme" ? "current" : "locked"}>
+          <span className="process-pipeline__index">2</span>
+          <span>{t("确定主题")}</span>
+        </li>
+      </ol>
+      <div className="creation-workspace">
+        {step === "sources" ? (
+        <section className="creation-pane creation-pane--sources" aria-labelledby="creation-sources-heading">
+          <header className="creation-pane__heading">
+            <h2 id="creation-sources-heading">{t("来源")}</h2>
+            <span>{sourceCount}/3</span>
+          </header>
 
       {/*
         * One list, one spine. A source being added is an item on it like any
@@ -494,20 +518,20 @@ export function TaskCreationSession({
         ) : null
       ) : <p className="creation-hint">{t("已达到三个来源上限；删除一个来源后可继续添加。")}</p>}
 
-      <ThemeChoice
-        accessToken={accessToken}
-        clientSessionId={clientSessionId}
-        theme={theme}
-        onThemeChange={setTheme}
-        canPropose={Boolean(session?.can_confirm) && !busy}
-        disabledReason={
-          sourceCount === 0
-            ? "请先添加来源，全部抓取成功后才能提炼主题。"
-            : session?.can_confirm
-              ? null
-              : "请等待所有来源处理完成。"
-        }
-      />
+        </section>
+        ) : (
+          <section className="creation-pane creation-pane--theme" aria-label={t("主题")}>
+            <ThemeChoice
+              accessToken={accessToken}
+              clientSessionId={clientSessionId}
+              theme={theme}
+              onThemeChange={setTheme}
+              canPropose={Boolean(session?.can_confirm) && !busy}
+              disabledReason={session?.can_confirm ? null : "请等待所有来源处理完成。"}
+            />
+          </section>
+        )}
+      </div>
 
       {error ? (
         <p role="alert" className="form-error">
@@ -515,18 +539,42 @@ export function TaskCreationSession({
           {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
         </p>
       ) : null}
-      <div className="button-row">
-        <button className="button" type="button" disabled={!canConfirm} onClick={() => void confirm()}>{busy ? t("正在创建…") : t("创建任务")}</button>
-        {!canConfirm ? (
-          <p className="creation-hint">
-            {sourceCount === 0
-              ? t("请先添加来源。")
-              : busy
-                ? t("正在保存来源…")
-                : t("请等待所有来源处理完成。")}
-          </p>
-        ) : null}
-      </div>
+      <footer className="creation-session__footer">
+        {step === "sources" ? (
+          <>
+            {!canAdvance ? (
+              <p className="creation-hint">
+                {sourceCount === 0
+                  ? t("请先添加来源。")
+                  : busy || editingSourceIds.size > 0
+                    ? t("正在保存来源…")
+                    : t("请等待所有来源处理完成。")}
+              </p>
+            ) : null}
+            <button
+              className="button"
+              type="button"
+              disabled={!canAdvance}
+              onClick={() => {
+                setAdding(false);
+                setExpandedSourceId(null);
+                setStep("theme");
+              }}
+            >
+              {t("下一步：确定主题")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="button button--quiet" type="button" disabled={busy} onClick={() => setStep("sources")}>
+              {t("返回来源")}
+            </button>
+            <button className="button" type="button" disabled={!canConfirm} onClick={() => void confirm()}>
+              {busy ? t("正在创建…") : t("创建任务")}
+            </button>
+          </>
+        )}
+      </footer>
     </section>
   );
 }

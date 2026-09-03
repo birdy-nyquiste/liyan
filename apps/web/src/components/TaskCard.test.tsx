@@ -133,7 +133,10 @@ afterEach(() => {
 });
 
 describe("TaskCard", () => {
-  beforeEach(() => localStorage.setItem("liyan.taskStage.task-1", "work"));
+  beforeEach(() => {
+    localStorage.removeItem("liyan.taskWorkspace.task-1");
+    localStorage.setItem("liyan.taskStage.task-1", "work");
+  });
   it("adopts refreshed server deletion capability after publication starts", () => {
     const { rerender } = render(
       <TaskCard task={task} userId="user-1" accessToken="token" />,
@@ -198,9 +201,10 @@ describe("TaskCard", () => {
 
     await user.click(screen.getByRole("button", { name: "重命名 Test Header" }));
     const input = screen.getByLabelText("任务名称");
+    expect(input).toHaveValue("Test Header");
     await user.clear(input);
     await user.type(input, "Renamed");
-    await user.click(screen.getByRole("button", { name: "保存名称" }));
+    await user.keyboard("{Enter}");
 
     // The task's own name changes; what it was recognised from does not.
     expect(await screen.findByRole("heading", { name: "Renamed" })).toBeInTheDocument();
@@ -313,23 +317,26 @@ describe("TaskCard", () => {
     await waitFor(() => expect(heading).toHaveFocus());
   });
 
-  it("opens 来源 · 主题 first and remembers the task's selected view", async () => {
+  it("opens 来源与主题 first and remembers the selected workspace", async () => {
     respondWithVersionListLast();
     const user = userEvent.setup();
     localStorage.removeItem("liyan.taskStage.task-1");
+    localStorage.removeItem("liyan.taskWorkspace.task-1");
 
     render(<TaskCard task={task} userId="user-1" accessToken="token" opened />);
-    const sources = screen.getByRole("tab", { name: "来源 · 主题" });
-    expect(sources).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("navigation", { name: "任务视图" })).getAllByRole("button")).toHaveLength(2);
+    const sources = screen.getByRole("button", { name: "来源 · 主题" });
+    expect(sources).toHaveAttribute("aria-current", "page");
     // The count and version live in the task header now; the 来源 view shows the
     // version it is displaying, once, in the control that changes it.
     expect(await screen.findByRole("combobox")).toHaveDisplayValue("版本 V1（当前）");
 
-    await user.click(screen.getByRole("tab", { name: "知言 · 立言" }));
+    await user.click(screen.getByRole("button", { name: "知言 · 立言" }));
 
     expect(await screen.findByRole("button", { name: "默认生成" })).toBeInTheDocument();
-    expect(sources).toHaveAttribute("aria-selected", "false");
-    expect(localStorage.getItem("liyan.taskStage.task-1")).toBe("work");
+    expect(sources).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("button", { name: "知言 · 立言" })).toHaveAttribute("aria-current", "page");
+    expect(localStorage.getItem("liyan.taskWorkspace.task-1")).toBe("work");
   });
 
   it("states how many reports are done in the 知言 area summary", async () => {

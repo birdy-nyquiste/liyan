@@ -241,34 +241,37 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
       }}
     />
   ) : auth.screen === "checking" ? null : (
-    <main className="signed-out-shell">
-      {/* Both pills name their setting's current value, the way the workbench's
-          own preference rows do. */}
-      <div className="signed-out-preferences">
-        <button
-          className="signed-out-pill"
-          type="button"
-          aria-label={`${THEME_LABEL[signedOutLocale].name}: ${THEME_LABEL[signedOutLocale][signedOutTheme]}`}
-          onClick={() =>
-            setSignedOutTheme(
-              signedOutTheme === "light" ? "dark" : signedOutTheme === "dark" ? "system" : "light",
-            )
-          }
-        >
-          {signedOutTheme === "light" ? <Sun size={16} aria-hidden="true" />
-            : signedOutTheme === "dark" ? <MoonStar size={16} aria-hidden="true" />
-            : <MonitorCog size={16} aria-hidden="true" />}
-          <span>{THEME_LABEL[signedOutLocale][signedOutTheme]}</span>
-        </button>
-        <button
-          className="signed-out-pill"
-          type="button"
-          aria-label={`${signedOutLocale === "en" ? "Language" : "语言"}: ${signedOutLocale === "en" ? "English" : "中文"}`}
-          onClick={() => setSignedOutLocale(signedOutLocale === "en" ? "zh" : "en")}
-        >
-          <Languages size={16} aria-hidden="true" />
-          <span>{signedOutLocale === "en" ? "English" : "中文"}</span>
-        </button>
+    <main className={`signed-out-shell${health === "unavailable" ? " signed-out-shell--degraded" : ""}`}>
+      <div className="signed-out-topbar">
+        {health === "unavailable" ? <div className="service-banner" role="alert">{signedOutLocale === "en" ? "The service is temporarily unavailable. Some actions may fail." : "服务暂不可用，部分操作可能失败。"}</div> : null}
+        {/* Both pills name their setting's current value, the way the workbench's
+            own preference rows do. */}
+        <div className="signed-out-preferences">
+          <button
+            className="signed-out-pill"
+            type="button"
+            aria-label={`${THEME_LABEL[signedOutLocale].name}: ${THEME_LABEL[signedOutLocale][signedOutTheme]}`}
+            onClick={() =>
+              setSignedOutTheme(
+                signedOutTheme === "light" ? "dark" : signedOutTheme === "dark" ? "system" : "light",
+              )
+            }
+          >
+            {signedOutTheme === "light" ? <Sun size={16} aria-hidden="true" />
+              : signedOutTheme === "dark" ? <MoonStar size={16} aria-hidden="true" />
+              : <MonitorCog size={16} aria-hidden="true" />}
+            <span>{THEME_LABEL[signedOutLocale][signedOutTheme]}</span>
+          </button>
+          <button
+            className="signed-out-pill"
+            type="button"
+            aria-label={`${signedOutLocale === "en" ? "Language" : "语言"}: ${signedOutLocale === "en" ? "English" : "中文"}`}
+            onClick={() => setSignedOutLocale(signedOutLocale === "en" ? "zh" : "en")}
+          >
+            <Languages size={16} aria-hidden="true" />
+            <span>{signedOutLocale === "en" ? "English" : "中文"}</span>
+          </button>
+        </div>
       </div>
       <header className="signed-out-hero">
         <div className="masthead__brand">
@@ -279,7 +282,6 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
           </div>
         </div>
       </header>
-      {health === "unavailable" ? <div className="service-banner" role="alert">{signedOutLocale === "en" ? "The service is temporarily unavailable. Some actions may fail." : "服务暂不可用，部分操作可能失败。"}</div> : null}
       <AuthPanel
         state={auth}
         onEmailChange={(email) => setAuth({ ...auth, email })}

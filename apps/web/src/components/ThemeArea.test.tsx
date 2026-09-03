@@ -282,7 +282,7 @@ describe("TaskZhiyanArea with a theme", () => {
 });
 
 describe("ThemeChoice", () => {
-  it("does not offer the button until every source is captured", () => {
+  it("does not offer the button until every source is captured", async () => {
     render(
       <ThemeChoice
         accessToken="token"
@@ -294,7 +294,11 @@ describe("ThemeChoice", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /提炼主题/ })).toBeDisabled();
+    const propose = screen.getByRole("button", { name: /提炼主题/ });
+    const description = screen.getByText("使用 AI 从来源中提炼共同主题，从3个候选中选择。");
+    expect(propose).toBeDisabled();
+    expect(propose.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(description.closest("details")).toBeNull();
     expect(
       screen.getByText("请先添加来源，全部抓取成功后才能提炼主题。"),
     ).toBeInTheDocument();
@@ -338,6 +342,7 @@ describe("ThemeChoice", () => {
     await user.click(candidate);
 
     expect(onThemeChange).toHaveBeenCalledWith("四天工作制的实际代价");
+    expect(screen.getAllByRole("button", { name: /四天工作制|试验数据|工时政策/ })).toHaveLength(3);
   });
 
   it("says a press failed without blaming the writer, and stays pressable", async () => {

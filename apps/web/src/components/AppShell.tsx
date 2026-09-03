@@ -9,6 +9,7 @@ import {
   FilePlus2,
   Languages,
   LogOut,
+  ListTodo,
   Menu,
   MoreHorizontal,
   MonitorCog,
@@ -35,7 +36,7 @@ import {
   useParams,
 } from "react-router-dom";
 
-import { deleteTask, getAccount, getTask, listTaskPage, renameTask, type AccessToken, type TaskListResponse } from "../api/client";
+import { ApiError, deleteTask, getAccount, getTask, listTaskPage, renameTask, type AccessToken, type TaskListResponse } from "../api/client";
 import type { Identity, TaskSummary } from "../auth/state";
 import { InterfaceLocaleProvider, type InterfaceLocale } from "../interfaceLocale";
 import { setHistoryGuard } from "../navigationGuard";
@@ -78,6 +79,9 @@ const copy = {
     confirmDelete: "删除任务",
     empty: "还没有立言任务",
     missing: "找不到这个任务",
+    loadingTask: "正在读取任务…",
+    taskLoadFailed: "任务暂时无法读取，请重试。",
+    retry: "重试",
     openNavigation: "打开导航",
     closeNavigation: "关闭导航",
     unavailable: "服务暂不可用，部分操作可能失败。",
@@ -117,6 +121,9 @@ const copy = {
     confirmDelete: "Delete task",
     empty: "No tasks yet",
     missing: "This task could not be found",
+    loadingTask: "Loading task…",
+    taskLoadFailed: "This task could not be loaded. Try again.",
+    retry: "Try again",
     openNavigation: "Open navigation",
     closeNavigation: "Close navigation",
     unavailable: "The service is temporarily unavailable. Some actions may fail.",
@@ -405,16 +412,16 @@ function Sidebar({
   return (
     <Tooltip.Provider delayDuration={250}>
     <aside className="app-sidebar" data-collapsed={collapsed || undefined}>
-      {/* Collapsed, the mark occupies the only spot a control could sit in, so it
-          becomes the control: pointing at it swaps the mark for the toggle. */}
       <div className="sidebar-brand">
-        <img src="/liyan-mark.svg" alt="" />
-        {!collapsed ? <strong>立言阁</strong> : null}
         <RailTooltip label={collapsed ? text.expand : text.collapse} show>
           <button className="icon-button sidebar-collapse" type="button" aria-label={collapsed ? text.expand : text.collapse} onClick={onCollapse}>
-            {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={18} />}
+            {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
           </button>
         </RailTooltip>
+        <span className="sidebar-brand__identity">
+          <img src="/liyan-mark.svg" alt="" />
+          <strong>立言阁</strong>
+        </span>
       </div>
 
       <nav className="sidebar-primary" aria-label={text.navigation}>
@@ -426,37 +433,43 @@ function Sidebar({
             two things selected at once, and the wrong one of them highlighted.
           */}
           <NavLink end aria-label={text.newTaskAction} className="sidebar-nav-link" to="/task" onClick={(event) => { if (!onNavigate("/task")) event.preventDefault(); }}>
-            <FilePlus2 size={19} aria-hidden="true" /> {!collapsed ? <span>{text.newTaskAction}</span> : null}
+            <FilePlus2 size={19} aria-hidden="true" /> <span>{text.newTaskAction}</span>
           </NavLink>
         </RailTooltip>
         <RailTooltip label={text.publications} show={collapsed}>
           <NavLink aria-label={text.publications} className="sidebar-nav-link" to="/publications" onClick={(event) => { if (!onNavigate("/publications")) event.preventDefault(); }}>
-            <Newspaper size={19} aria-hidden="true" /> {!collapsed ? <span>{text.publications}</span> : null}
+            <Newspaper size={19} aria-hidden="true" /> <span>{text.publications}</span>
           </NavLink>
         </RailTooltip>
       </nav>
 
-      {/* Not merely hidden with CSS: a rail full of identical book icons is not
-          a task list, and rendering it would put every task in the tab order
-          behind a label no one can tell apart. */}
-      {!collapsed ? (
       <section className="sidebar-tasks" aria-label={text.tasks}>
-        {!collapsed ? (
+        <RailTooltip label={text.tasks} show={collapsed}>
           <button
-            className="sidebar-section-toggle"
+            className="sidebar-nav-link sidebar-section-toggle"
             type="button"
-            aria-expanded={tasksOpen}
+            aria-expanded={!collapsed && tasksOpen}
             onClick={() => {
+              if (collapsed) {
+                if (!tasksOpen) {
+                  setTasksOpen(true);
+                  window.localStorage.setItem("liyan.tasksOpen", "true");
+                }
+                onCollapse();
+                return;
+              }
               const next = !tasksOpen;
               setTasksOpen(next);
               window.localStorage.setItem("liyan.tasksOpen", String(next));
             }}
           >
-            {text.tasks} {tasksOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            <ListTodo size={19} aria-hidden="true" />
+            <span>{text.tasks}</span>
+            {tasksOpen ? <ChevronDown className="sidebar-section-toggle__caret" size={14} aria-hidden="true" /> : <ChevronRight className="sidebar-section-toggle__caret" size={14} aria-hidden="true" />}
           </button>
-        ) : null}
+        </RailTooltip>
         {tasksOpen || collapsed ? (
-          <div className="sidebar-task-list">
+          <div className="sidebar-task-list" aria-hidden={collapsed || undefined} inert={collapsed}>
             {tasks.map((task) => (
               <SidebarTask
                 key={task.id}
@@ -477,7 +490,6 @@ function Sidebar({
           </div>
         ) : null}
       </section>
-      ) : null}
 
       <div className="sidebar-account">
         <div className="sidebar-account__group" id="sidebar-preferences" data-open={accountOpen || undefined}>
@@ -485,23 +497,15 @@ function Sidebar({
         <RailTooltip label={`${text.theme}: ${text.themes[theme]}`} show={collapsed}>
           <button aria-label={`${text.theme}: ${text.themes[theme]}`} className="sidebar-account__action" type="button" onClick={onTheme} tabIndex={accountOpen ? undefined : -1}>
             {themeIcon}
-            {!collapsed ? (
-              <>
-                <span>{text.theme}</span>
-                <span className="sidebar-account__value">{text.themes[theme]}</span>
-              </>
-            ) : null}
+            <span>{text.theme}</span>
+            <span className="sidebar-account__value">{text.themes[theme]}</span>
           </button>
         </RailTooltip>
         <RailTooltip label={`${text.language}: ${text.languageValue}`} show={collapsed}>
           <button aria-label={`${text.language}: ${text.languageValue}`} className="sidebar-account__action" type="button" onClick={onLocale} tabIndex={accountOpen ? undefined : -1}>
             <Languages size={18} />
-            {!collapsed ? (
-              <>
-                <span>{text.language}</span>
-                <span className="sidebar-account__value">{text.languageValue}</span>
-              </>
-            ) : null}
+            <span>{text.language}</span>
+            <span className="sidebar-account__value">{text.languageValue}</span>
           </button>
         </RailTooltip>
         <RailTooltip label={`${text.account}: ${text.creditsRemaining} ${creditsLabel}`} show={collapsed}>
@@ -519,20 +523,16 @@ function Sidebar({
             onClick={(event) => { if (!onNavigate("/account")) event.preventDefault(); }}
           >
             <Coins size={18} />
-            {!collapsed ? (
-              <>
-                <span>{text.account}</span>
-                <span className="sidebar-account__value">
-                  <span className="sidebar-account__value-label">{text.creditsRemaining}</span>
-                  {creditsLabel}
-                </span>
-              </>
-            ) : null}
+            <span>{text.account}</span>
+            <span className="sidebar-account__value">
+              <span className="sidebar-account__value-label">{text.creditsRemaining}</span>
+              {creditsLabel}
+            </span>
           </NavLink>
         </RailTooltip>
         <RailTooltip label={text.signOut} show={collapsed}>
           <button aria-label={text.signOut} className="sidebar-account__action" type="button" onClick={() => setSignOutOpen(true)} tabIndex={accountOpen ? undefined : -1}>
-            <LogOut size={18} /> {!collapsed ? <span>{text.signOut}</span> : null}
+            <LogOut size={18} /> <span>{text.signOut}</span>
           </button>
         </RailTooltip>
 
@@ -568,12 +568,8 @@ function Sidebar({
             }}
           >
             <span className="avatar" aria-hidden="true">{identity.email.charAt(0).toUpperCase()}</span>
-            {!collapsed ? (
-              <>
-                <span className="sidebar-identity__email">{identity.email}</span>
-                <ChevronDown className="sidebar-identity__caret" size={15} aria-hidden="true" />
-              </>
-            ) : null}
+            <span className="sidebar-identity__email">{identity.email}</span>
+            <ChevronDown className="sidebar-identity__caret" size={15} aria-hidden="true" />
           </button>
         </RailTooltip>
       </div>
@@ -589,6 +585,9 @@ function TaskRoute({
   onDeleted,
   onSourceEditing,
   missingLabel,
+  loadingLabel,
+  failedLabel,
+  retryLabel,
 }: {
   tasks: TaskSummary[];
   identity: Identity;
@@ -596,6 +595,9 @@ function TaskRoute({
   onDeleted(taskId: string): void;
   onSourceEditing(dirty: boolean): void;
   missingLabel: string;
+  loadingLabel: string;
+  failedLabel: string;
+  retryLabel: string;
 }) {
   const { taskId } = useParams();
   const navigate = useNavigate();
@@ -604,9 +606,27 @@ function TaskRoute({
     queryKey: ["task", accessToken, taskId],
     queryFn: () => getTask(accessToken, taskId!),
     enabled: Boolean(taskId && !cached),
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 404) && failureCount < 2,
   });
   const task = cached ?? taskQuery.data;
-  if (!task) return <div className="route-empty"><h1>{missingLabel}</h1></div>;
+  if (!task) {
+    if (taskQuery.isPending) {
+      return <div className="route-empty" role="status"><h1>{loadingLabel}</h1></div>;
+    }
+    const taskError = taskQuery.error;
+    if (taskError instanceof ApiError && taskError.status === 404) {
+      return <div className="route-empty"><h1>{missingLabel}</h1></div>;
+    }
+    return (
+      <div className="route-empty">
+        <h1>{failedLabel}</h1>
+        <button className="button" type="button" onClick={() => void taskQuery.refetch()}>
+          {retryLabel}
+        </button>
+      </div>
+    );
+  }
   return (
     <TaskCard
       // Remounted per task, not reused. `TaskCard` copies the task it is given
@@ -831,6 +851,9 @@ export function AppShell({
                 onDeleted={deleted}
                 onSourceEditing={setSourceDirty}
                 missingLabel={preferences.text.missing}
+                loadingLabel={preferences.text.loadingTask}
+                failedLabel={preferences.text.taskLoadFailed}
+                retryLabel={preferences.text.retry}
               />
             }
           />

@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, deleteTask, renameTask, type AccessToken } from "../api/client";
 import type { TaskSummary } from "../auth/state";
@@ -8,6 +8,8 @@ import { TaskZhiyanArea, type ZhiyanAreaState } from "./TaskZhiyanArea";
 import { LiyanPanel } from "./LiyanPanel";
 import type { CapsuleChoice, CapsuleSelection } from "./InstructionEditor";
 import { TaskSourceVersions } from "./TaskSourceVersions";
+
+type TaskWorkspace = "context" | "work";
 
 export function TaskCard({
   task: initialTask,
@@ -39,13 +41,20 @@ export function TaskCard({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(task.current_version_id);
   const [zhiyan, setZhiyan] = useState<ZhiyanAreaState | null>(null);
-  const [focus, setFocus] = useState<"work" | "sources">(() =>
-    window.localStorage.getItem(`liyan.taskStage.${initialTask.id}`) === "work"
+  const [workspace, setWorkspace] = useState<TaskWorkspace>(() => {
+    const stored = window.localStorage.getItem(`liyan.taskWorkspace.${initialTask.id}`);
+    if (stored === "context" || stored === "work") return stored;
+
+    // Preserve the writer's last view when upgrading from the former four-tab
+    // navigation. 来源 and 主题 were one surface; 知言 and 立言 were the other.
+    const legacyStage = window.localStorage.getItem(`liyan.taskStage.${initialTask.id}`);
+    return legacyStage === "work" || legacyStage === "zhiyan" || legacyStage === "liyan"
       ? "work"
-      : "sources",
-  );
+      : "context";
+  });
   const [capsuleSelection, setCapsuleSelection] = useState<CapsuleSelection | null>(null);
   const cardRef = useRef<HTMLElement>(null);
+  const cancelRenameRef = useRef(false);
 
   useEffect(() => {
     if (opened) cardRef.current?.focus();
@@ -59,14 +68,37 @@ export function TaskCard({
     }));
   }, [initialTask.can_delete, initialTask.delete_disabled_reason]);
 
-  async function saveName(event: FormEvent) {
-    event.preventDefault();
+  async function saveName() {
+    if (cancelRenameRef.current) {
+      cancelRenameRef.current = false;
+      return;
+    }
+    const normalized = name.trim().replace(/\s+/g, " ");
+    if (!normalized || normalized === task.display_name) {
+      setName(task.display_name);
+      setEditing(false);
+      return;
+    }
     try {
-      setTask(await renameTask(accessToken, task.id, name));
+      setTask(await renameTask(accessToken, task.id, normalized));
+      setName(normalized);
       setEditing(false);
       setError(null);
     } catch {
       setError(t("重命名失败，请重试。"));
+    }
+  }
+
+  function renameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelRenameRef.current = true;
+      setName(task.display_name);
+      setEditing(false);
     }
   }
 
@@ -104,10 +136,62 @@ export function TaskCard({
     setCapsuleSelection((current) => ({ ...choice, nonce: (current?.nonce ?? 0) + 1 }));
   };
 
-  const chooseFocus = (next: "work" | "sources") => {
-    setFocus(next);
-    window.localStorage.setItem(`liyan.taskStage.${task.id}`, next);
+  const chooseWorkspace = (next: TaskWorkspace) => {
+    setWorkspace(next);
+    window.localStorage.setItem(`liyan.taskWorkspace.${task.id}`, next);
+    window.requestAnimationFrame(() => {
+      // On mobile, reveal the beginning of the newly selected workspace below
+      // the task chrome. Desktop panes keep their independent reading position.
+      if (window.innerWidth <= 800) {
+        const targetId = next === "context" ? `sources-${task.id}` : `zhiyan-${task.id}-heading`;
+        document.getElementById(targetId)?.scrollIntoView?.({ block: "start" });
+      }
+    });
   };
+
+  const sourceView = workspace === "context";
+  const workspaces: { key: TaskWorkspace; label: string }[] = [
+    { key: "context", label: t("来源 · 主题") },
+    { key: "work", label: t("知言 · 立言") },
+  ];
+
+  const taskActions = (
+    <div className="workspace__actions task-card__actions">
+      {opened ? null : (
+        <button
+          className="button button--quiet"
+          type="button"
+          aria-label={`${t("打开")} ${task.display_name}`}
+          onClick={() => onOpen?.(task.id)}
+        >
+          {t("打开")}
+        </button>
+      )}
+      {!editing ? (
+        <button
+          className="button button--quiet"
+          type="button"
+          aria-label={`${t("重命名")} ${task.display_name}`}
+          onClick={() => {
+            setName(task.display_name);
+            setEditing(true);
+          }}
+        >
+          {t("重命名")}
+        </button>
+      ) : null}
+      <button
+        className="button button--quiet"
+        type="button"
+        aria-label={`${t("删除")} ${task.display_name}`}
+        aria-describedby={task.delete_disabled_reason ? `delete-reason-${task.id}` : undefined}
+        disabled={!task.can_delete || deleting}
+        onClick={() => setConfirmingDelete(true)}
+      >
+        {deleting ? t("删除中") : t("删除")}
+      </button>
+    </div>
+  );
 
   return (
     <article
@@ -117,23 +201,35 @@ export function TaskCard({
       tabIndex={opened ? -1 : undefined}
     >
       <div className="task-card__number">#{task.number}</div>
-      {editing ? (
-        <form className="rename-form" onSubmit={(event) => void saveName(event)}>
-          <label htmlFor={`task-name-${task.id}`}>{t("任务名称")}</label>
-          <input
-            id={`task-name-${task.id}`}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <button className="button" type="submit">{t("保存名称")}</button>
-          {error ? (
-            <p role="alert" className="form-error">{error}</p>
-          ) : null}
-        </form>
-      ) : (
-        <div className="task-card__content">
-          <div>
+      <div className="task-card__content">
+        <div className="task-card__identity">
+          {editing ? (
+            <input
+              className="task-card__rename-input"
+              aria-label={t("任务名称")}
+              value={name}
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+              onChange={(event) => setName(event.target.value)}
+              onBlur={() => void saveName()}
+              onKeyDown={renameKeyDown}
+            />
+          ) : (
             <h3>{task.display_name}</h3>
+          )}
+          {opened ? (
+            <div className="task-card__subline">
+              <p className="task-card__meta">
+                <span>{locale === "en" ? `${sourceCount} sources` : `共 ${sourceCount} 个来源`}</span>
+                <span aria-hidden="true">·</span>
+                <span>V{task.current_version_number}</span>
+                <span aria-hidden="true">·</span>
+                <span>{new Date(task.created_at).toLocaleDateString(dateLocale)}</span>
+              </p>
+              {taskActions}
+            </div>
+          ) : (
+            <>
             <p className="task-card__source">{task.first_source_title}</p>
             <p className="task-card__meta">
               <span>{locale === "en" ? `${sourceCount} sources` : `共 ${sourceCount} 个来源`}</span>
@@ -142,58 +238,26 @@ export function TaskCard({
               <span aria-hidden="true">·</span>
               <span>{new Date(task.created_at).toLocaleDateString(dateLocale)}</span>
             </p>
+            </>
+          )}
           </div>
-          <div className="workspace__actions">
-            {opened ? null : (
-              <button
-                className="button button--quiet"
-                type="button"
-                aria-label={`${t("打开")} ${task.display_name}`}
-                onClick={() => onOpen?.(task.id)}
-              >
-                {t("打开")}
-              </button>
-            )}
-            <button
-              className="button button--quiet"
-              type="button"
-              aria-label={`${t("重命名")} ${task.display_name}`}
-              onClick={() => setEditing(true)}
-            >
-              {t("重命名")}
-            </button>
-            <button
-              className="button button--quiet"
-              type="button"
-              aria-label={`${t("删除")} ${task.display_name}`}
-              aria-describedby={
-                task.delete_disabled_reason ? `delete-reason-${task.id}` : undefined
-              }
-              disabled={!task.can_delete || deleting}
-              onClick={() => setConfirmingDelete(true)}
-            >
-              {deleting ? t("删除中") : t("删除")}
-            </button>
-          </div>
+          {opened ? null : taskActions}
           {opened ? (
-            <div className="task-stage-tabs" role="tablist" aria-label={t("任务视图")}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={focus === "sources"}
-                onClick={() => chooseFocus("sources")}
-              >
-                {t("来源 · 主题")}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={focus === "work"}
-                onClick={() => chooseFocus("work")}
-              >
-                {t("知言 · 立言")}
-              </button>
-            </div>
+            <nav className="task-workspace-switcher" aria-label={t("任务视图")}>
+              <ol>
+                {workspaces.map((item) => (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      aria-current={workspace === item.key ? "page" : undefined}
+                      onClick={() => chooseWorkspace(item.key)}
+                    >
+                      <span className="task-workspace-switcher__label">{item.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
           ) : null}
           {task.delete_disabled_reason ? (
             <p className="form-hint" id={`delete-reason-${task.id}`}>
@@ -202,7 +266,6 @@ export function TaskCard({
           ) : null}
           {error ? <p role="alert" className="form-error">{error}</p> : null}
         </div>
-      )}
       <ConfirmDialog
         open={confirmingDelete}
         title={t("永久删除这个任务？")}
@@ -214,7 +277,7 @@ export function TaskCard({
       />
       {opened ? (
         <div className="task-detail">
-          {focus === "sources" ? (
+          {sourceView ? (
             <section className="task-source-view" aria-label={t("来源 · 主题")}>
               {/* No pane heading: the tab above already says 来源 and the task
                   header already says 共 N 个来源 · V2. What this view needs is
@@ -244,7 +307,10 @@ export function TaskCard({
           ) : (
             <div className="task-workspace-split">
 
-            <section className="task-workspace-pane" aria-labelledby={`zhiyan-${task.id}-heading`}>
+            <section
+              className="task-workspace-pane"
+              aria-labelledby={`zhiyan-${task.id}-heading`}
+            >
               <header className="task-pane-heading">
                 <h2 id={`zhiyan-${task.id}-heading`}>{t("知言")}</h2>
                 <span>{zhiyanSummary}</span>
@@ -258,7 +324,10 @@ export function TaskCard({
               />
             </section>
 
-            <section className="task-workspace-pane" aria-labelledby={`liyan-${task.id}-heading`}>
+            <section
+              className="task-workspace-pane"
+              aria-labelledby={`liyan-${task.id}-heading`}
+            >
               <header className="task-pane-heading">
                 <h2 id={`liyan-${task.id}-heading`}>{t("立言")}</h2>
                 <span>{

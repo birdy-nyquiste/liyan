@@ -130,36 +130,6 @@ export function ThemeChoice({
       <p className="creation-hint">
         {t("添加来源共同的主题，知言 Agent 将深度检索该主题的相关内容，打破信息茧房，取其精华，去其糟粕。")}
       </p>
-      <div className="button-row">
-        <button
-          className="button button--quiet"
-          type="button"
-          disabled={!canPropose || running}
-          onClick={() => void propose()}
-        >
-          <Sparkles size={14} aria-hidden="true" />
-          {running ? t("正在提炼…") : t("提炼主题")}
-        </button>
-        {!canPropose && disabledReason ? (
-          <p className="creation-hint">{domainMessage(disabledReason)}</p>
-        ) : null}
-      </div>
-      {candidates.length > 0 ? (
-        <ul className="theme-candidates" aria-label={t("主题候选")}>
-          {candidates.map((candidate) => (
-            <li key={candidate.theme}>
-              <button
-                className="theme-candidate"
-                type="button"
-                onClick={() => onThemeChange(candidate.theme)}
-              >
-                <strong>{candidate.theme}</strong>
-                <span>{candidate.why}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
       <label className="sr-only" htmlFor={inputId}>{t("主题")}</label>
       <input
         id={inputId}
@@ -173,12 +143,48 @@ export function ThemeChoice({
         {footnote ?? t("最多 80 字")}
       </p>
       {tooLong ? <p role="alert" className="form-error">{t("主题不能超过 80 个字。")}</p> : null}
-      {error ? (
-        <p role="alert" className="form-error">
-          {domainMessage(error)}
-          {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
-        </p>
-      ) : null}
+      <section className="theme-assistant" aria-label={t("提炼主题")}>
+        <div className="theme-assistant__body">
+          <div className="button-row">
+            <button
+              className="button button--quiet"
+              type="button"
+              disabled={!canPropose || running}
+              onClick={() => void propose()}
+            >
+              <Sparkles size={14} aria-hidden="true" />
+              {running ? t("正在提炼…") : candidates.length ? t("重新提炼") : t("提炼主题")}
+            </button>
+            {!canPropose && disabledReason ? (
+              <p className="creation-hint">{domainMessage(disabledReason)}</p>
+            ) : null}
+          </div>
+          <p className="creation-hint">{t("使用 AI 从来源中提炼共同主题，从3个候选中选择。")}</p>
+          {candidates.length > 0 ? (
+            <ul className="theme-candidates" aria-label={t("主题候选")}>
+              {candidates.map((candidate) => (
+                <li key={candidate.theme}>
+                  <button
+                    className="theme-candidate"
+                    type="button"
+                    aria-pressed={candidate.theme === theme}
+                    onClick={() => onThemeChange(candidate.theme)}
+                  >
+                    <strong>{candidate.theme}</strong>
+                    <span>{candidate.why}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {error ? (
+            <p role="alert" className="form-error">
+              {domainMessage(error)}
+              {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+            </p>
+          ) : null}
+        </div>
+      </section>
     </article>
   );
 }

@@ -249,6 +249,7 @@ describe("a session that outlives its access token", () => {
     // What supabase-js does in the background once the first token expires.
     session.token = "token-after-refresh";
     await user.click(screen.getByRole("link", { name: "发布" }));
+    await user.click(await screen.findByRole("button", { name: "新发布" }));
     expect(await screen.findByRole("heading", { name: "选择草稿" })).toBeInTheDocument();
 
     const publicationRequests = fetch.mock.calls
@@ -539,6 +540,39 @@ describe("routed workbench shell", () => {
     expect(newTask).not.toHaveAttribute("aria-current");
   });
 
+  it("keeps an uncached deep link in loading until a settled 404", async () => {
+    const authProvider: AuthProvider = {
+      getAccessToken: vi.fn().mockResolvedValue("deep-link-token"),
+      sendEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      onAuthStateChange: vi.fn().mockReturnValue(() => undefined),
+    };
+    let resolveTask!: (response: Response) => void;
+    const taskResponse = new Promise<Response>((resolve) => {
+      resolveTask = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (request: Request) => {
+      if (request.url.endsWith("/health/live")) return Response.json({ status: "alive" });
+      if (request.url.endsWith("/auth/me")) {
+        return Response.json({ id: "user-deep", email: "writer@example.com" });
+      }
+      if (request.url.endsWith("/tasks/task-late")) return taskResponse;
+      if (request.url.endsWith("/tasks")) return Response.json({ items: [], next_cursor: null });
+      return new Response(null, { status: 404 });
+    }));
+    window.history.pushState({}, "", "/task/task-late");
+
+    render(<App authProvider={authProvider} />);
+
+    expect(await screen.findByRole("status")).toHaveTextContent("正在读取任务");
+    expect(screen.queryByText("找不到这个任务")).not.toBeInTheDocument();
+
+    await act(async () => resolveTask(Response.json({ detail: "not found" }, { status: 404 })));
+
+    expect(await screen.findByRole("heading", { name: "找不到这个任务" })).toBeInTheDocument();
+  });
+
   it("renders the signed-out, task, and publication routes in English", async () => {
     window.localStorage.setItem("liyan.locale", "en");
     const authProvider: AuthProvider = {
@@ -563,9 +597,12 @@ describe("routed workbench shell", () => {
 
     expect(await screen.findByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "New task" })).toBeInTheDocument();
-    expect(screen.getByText("Add 1–3 sources")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add source" })).toBeInTheDocument();
+    expect(screen.getByText("Set theme")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "Publications" }));
     expect(await screen.findByRole("heading", { name: "Publish", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Publication history" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "New publication" }));
     expect(screen.getByRole("heading", { name: "Choose a draft" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("en");
   });

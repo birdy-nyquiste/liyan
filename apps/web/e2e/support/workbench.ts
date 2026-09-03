@@ -226,6 +226,7 @@ export async function createTaskWithReport(page: Page, title: string): Promise<v
   await page.getByLabel("出处（可选）").fill("https://press.example/four-day-week");
   await page.getByRole("button", { name: "添加来源" }).click();
   await expect(page.getByText("已就绪", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "下一步：确定主题" }).click();
   await page.getByRole("button", { name: "创建任务" }).click();
 
   // A confirmed 立言任务 opens itself: the user just told the product what they
@@ -237,7 +238,7 @@ export async function createTaskWithReport(page: Page, title: string): Promise<v
   // 已完成, and waiting the full provider budget for it costs five minutes and
   // then reports a timeout, which reads like the product hung. The workbench
   // already tells these apart on screen, so this reads what it says.
-  await card.getByRole("tab", { name: "知言 · 立言" }).click();
+  await card.getByRole("button", { name: "知言 · 立言" }).click();
   const zhiyan = card.getByText(/份报告已完成|个来源分析失败/).first();
   await expect(zhiyan).toHaveText(/已完成|分析失败/, { timeout: PROVIDER_TIMEOUT });
   await expect(
@@ -252,7 +253,7 @@ export function openedTask(page: Page, title: string) {
 }
 
 /**
- * Expand 立言 and wait until it can be written.
+ * Open the 知言与立言 workspace and wait until it can be written.
  *
  * The three task areas are collapsible and only the expanded one renders, so
  * 立言's controls do not exist until this has happened — which is deliberate in
@@ -260,7 +261,7 @@ export function openedTask(page: Page, title: string) {
  */
 export async function openLiyan(page: Page, title: string): Promise<void> {
   const card = openedTask(page, title);
-  await card.getByRole("tab", { name: "知言 · 立言" }).click();
+  await card.getByRole("button", { name: "知言 · 立言" }).click();
   await expect(card.getByRole("button", { name: "默认生成" })).toBeEnabled({
     timeout: PROVIDER_TIMEOUT,
   });

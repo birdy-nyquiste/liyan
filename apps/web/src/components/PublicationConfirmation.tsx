@@ -293,10 +293,12 @@ export function PublicationConfirmation({
       ) : null}
 
       <p className="form-hint">{t("确认页只能预览。要修改标题或正文，请返回编辑并保存新草稿。")}</p>
-      <ArticleReader
-        label={`${t("草稿")} ${article.revisionNumber} ${t("文章正文")}`}
-        bodyMarkdown={article.bodyMarkdown}
-      />
+      <div className="publication-article-preview">
+        <ArticleReader
+          label={`${t("草稿")} ${article.revisionNumber} ${t("文章正文")}`}
+          bodyMarkdown={article.bodyMarkdown}
+        />
+      </div>
 
       {error ? <p role="alert" className="form-error">{domainMessage(error)}</p> : null}
 

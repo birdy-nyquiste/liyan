@@ -172,7 +172,7 @@ test("a URL 来源 that cannot be reached fails with a reason, not a spinner", a
   test.skip(!AGAINST_STAGING, "A local run has no Chromium behind the worker to fetch with.");
   await openWorkbench(page);
 
-  await page.getByRole("link", { name: "新建任务" }).click();
+  await railLink(page, "新建任务").click();
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByRole("button", { name: "公共文章链接" }).click();
   await page.getByLabel("来源网址").fill("https://example.invalid/does-not-resolve");

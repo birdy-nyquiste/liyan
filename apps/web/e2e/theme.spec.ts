@@ -4,6 +4,7 @@ import {
   expect,
   openWorkbench,
   openedTask,
+  railLink,
   test,
 } from "./support/workbench";
 
@@ -31,7 +32,7 @@ function reportTabs(card: ReturnType<typeof openedTask>) {
 }
 
 async function addPastedSource(page: import("@playwright/test").Page, title: string) {
-  await page.getByRole("link", { name: "新建任务" }).click();
+  await railLink(page, "新建任务").click();
   await page.getByRole("button", { name: "添加来源" }).click();
   await page.getByLabel("来源标题").fill(title);
   await page.getByLabel("来源正文").fill(SOURCE_BODY);

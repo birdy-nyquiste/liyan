@@ -282,96 +282,50 @@ describe("TaskZhiyanArea with a theme", () => {
 });
 
 describe("ThemeChoice", () => {
-  it("does not offer the button until every source is captured", async () => {
+  it("offers no press while 提炼主题 is hidden, and asks for nothing", async () => {
+    const fetchMock = respondWith({});
+
     render(
       <ThemeChoice
         accessToken="token"
         clientSessionId="session-1"
         theme=""
         onThemeChange={vi.fn()}
+        canPropose
+        disabledReason={null}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /提炼主题/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "提炼主题" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("使用 AI 从来源中提炼共同主题，从3个候选中选择。"),
+    ).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still confirms a 主题 the writer types, which is now the only way in", async () => {
+    const user = userEvent.setup();
+    const onThemeChange = vi.fn();
+
+    render(
+      <ThemeChoice
+        accessToken="token"
+        clientSessionId="session-1"
+        theme=""
+        onThemeChange={onThemeChange}
         canPropose={false}
         disabledReason="请先添加来源，全部抓取成功后才能提炼主题。"
       />,
     );
 
-    const propose = screen.getByRole("button", { name: /提炼主题/ });
-    const description = screen.getByText("使用 AI 从来源中提炼共同主题，从3个候选中选择。");
-    expect(propose).toBeDisabled();
-    expect(propose.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(description.closest("details")).toBeNull();
+    await user.type(screen.getByLabelText("主题"), "四");
+
+    expect(onThemeChange).toHaveBeenCalledWith("四");
+    // The reason a press is unavailable is not worth a line when there is no
+    // press to explain.
     expect(
-      screen.getByText("请先添加来源，全部抓取成功后才能提炼主题。"),
-    ).toBeInTheDocument();
-  });
-
-  it("drops a pressed candidate into the box without touching what was typed elsewhere", async () => {
-    const user = userEvent.setup();
-    const onThemeChange = vi.fn();
-    respondWith(
-      { id: "proposal-1", client_session_id: "session-1", status: "running", candidates: [], execution: null },
-      {
-        id: "proposal-1",
-        client_session_id: "session-1",
-        status: "succeeded",
-        candidates: [
-          { theme: "四天工作制的实际代价", why: "两个来源都在谈代价。" },
-          { theme: "试验数据的口径问题", why: "两个来源引用同一组数据。" },
-          { theme: "工时政策的行业差异", why: "材料共同指向行业差异。" },
-        ],
-        execution: null,
-      },
-    );
-
-    render(
-      <ThemeChoice
-        accessToken="token"
-        clientSessionId="session-1"
-        theme="我自己写的主题"
-        onThemeChange={onThemeChange}
-        canPropose
-        disabledReason={null}
-        pollIntervalMs={5}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: /提炼主题/ }));
-    const candidate = await screen.findByRole("button", { name: /四天工作制的实际代价/ });
-    // The box still holds what the writer typed: a press replaces the
-    // candidates, never the text.
-    expect(screen.getByLabelText("主题")).toHaveValue("我自己写的主题");
-    await user.click(candidate);
-
-    expect(onThemeChange).toHaveBeenCalledWith("四天工作制的实际代价");
-    expect(screen.getAllByRole("button", { name: /四天工作制|试验数据|工时政策/ })).toHaveLength(3);
-  });
-
-  it("says a press failed without blaming the writer, and stays pressable", async () => {
-    const user = userEvent.setup();
-    type FetchCall = (target: unknown, options?: unknown) => Promise<Response>;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn<FetchCall>(async () =>
-        new Response(JSON.stringify({ detail: "服务繁忙，请重试。" }), {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
-
-    render(
-      <ThemeChoice
-        accessToken="token"
-        clientSessionId="session-1"
-        theme=""
-        onThemeChange={vi.fn()}
-        canPropose
-        disabledReason={null}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: /提炼主题/ }));
-
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /提炼主题/ })).toBeEnabled();
+      screen.queryByText("请先添加来源，全部抓取成功后才能提炼主题。"),
+    ).not.toBeInTheDocument();
   });
 });

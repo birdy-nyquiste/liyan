@@ -13,8 +13,9 @@ import {
  *
  * The step sits between capturing 来源 and creating the task, and it is optional
  * — so both halves are walked here: a task confirmed with a 主题 gets a second
- * report and a gate that waits for it, and the Agent's three candidates are an
- * offer the writer may take, edit, or ignore.
+ * report and a gate that waits for it, and a task confirmed without one gets
+ * neither. 提炼主题 is hidden, so typing is the only way in, and this asserts the
+ * assistant is nowhere on the pane.
  */
 
 function unique(): string {
@@ -42,50 +43,25 @@ async function addPastedSource(page: import("@playwright/test").Page, title: str
   await page.getByRole("button", { name: "下一步：确定主题" }).click();
 }
 
-test("三个候选可选可改，主题随任务一起确认并生成主题知言报告", async ({ page }) => {
+test("写下的主题随任务一起确认并生成主题知言报告", async ({ page }) => {
   const title = unique();
   await openWorkbench(page);
   await addPastedSource(page, title);
 
-  // The always-visible button is live only now that the 来源 is captured.
-  const propose = page.getByRole("button", { name: /提炼主题/ });
-  await expect(propose).toBeEnabled();
-  const assistant = page.getByRole("region", { name: "提炼主题" });
-  const assistantLayout = await assistant.evaluate((element) => {
-    const button = element.querySelector("button")?.getBoundingClientRect();
-    const description = Array.from(element.querySelectorAll("p"))
-      .find((paragraph) => paragraph.textContent?.includes("使用 AI"))
-      ?.getBoundingClientRect();
-    if (!button || !description) throw new Error("Theme assistant controls must be present");
-    return {
-      borderTopWidth: getComputedStyle(element).borderTopWidth,
-      buttonBottom: button.bottom,
-      descriptionTop: description.top,
-    };
-  });
-  expect(assistantLayout.borderTopWidth).toBe("0px");
-  expect(assistantLayout.descriptionTop).toBeGreaterThanOrEqual(assistantLayout.buttonBottom);
-  await propose.click();
+  // 提炼主题 is not offered: no button, no region, nothing to press.
+  await expect(page.getByRole("button", { name: /提炼主题/ })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "提炼主题" })).toHaveCount(0);
 
-  // Three candidates, each with its own reason for fitting the material.
-  const candidates = page.getByRole("list", { name: "主题候选" }).getByRole("listitem");
-  await expect(candidates).toHaveCount(3, { timeout: PROVIDER_TIMEOUT });
-  const chosen = (await candidates.first().getByRole("strong").textContent()) ?? "";
-  await candidates.first().getByRole("button").click();
-
-  // A choice fills the box without removing the choices. A later choice simply
-  // replaces the current text, and the box remains the writer's to edit.
+  // Unique, because the card is found by the 主题 it was confirmed with and
+  // another spec in this file confirms one of its own.
+  const theme = `四天工作制的实际代价 ${title}`;
   const box = page.getByRole("textbox", { name: "主题", exact: true });
-  await expect(box).toHaveValue(chosen);
-  await expect(candidates).toHaveCount(3);
-  const replacement = (await candidates.nth(1).getByRole("strong").textContent()) ?? "";
-  await candidates.nth(1).getByRole("button").click();
-  await expect(box).toHaveValue(replacement);
-  await box.fill(`${replacement}（我改过）`);
+  await box.fill(theme);
+  await expect(box).toHaveValue(theme);
 
   await page.getByRole("button", { name: "创建任务" }).click();
 
-  const card = openedTask(page, `${replacement}（我改过）`);
+  const card = openedTask(page, theme);
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "知言 · 立言" }).click();
 

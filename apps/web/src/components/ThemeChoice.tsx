@@ -18,12 +18,26 @@ import { MAX_THEME_CHARACTERS } from "./themeLimits";
 const PROPOSE_FAILED = "主题提炼失败，请重试，或自己写一个主题。";
 
 /**
+ * Whether 提炼主题 is offered at all.
+ *
+ * Off: the assistant is hidden, and with it the only way to press. Nothing can
+ * reach `propose`, so no 额度 can be spent on a press the interface no longer
+ * shows. The server side is untouched — flipping this back on is the whole of
+ * re-enabling it.
+ */
+const PROPOSAL_OFFERED: boolean = false;
+
+/**
  * 确认主题, between capturing 来源 and creating the task.
  *
  * Two ways in, and the typed one is not the lesser: pressing 提炼主题 asks an
  * Agent what the 来源 have in common and offers three answers, and typing over
  * them — or instead of them — is a complete way to confirm. So is leaving the
  * box empty, which is why nothing here gates 创建任务.
+ *
+ * 提炼主题 is currently not offered — see `PROPOSAL_OFFERED` — so typing is the
+ * only way in, and the rules below describe the assistant as it behaves when it
+ * is offered again.
  *
  * The rules that look like details and are not:
  *
@@ -143,48 +157,50 @@ export function ThemeChoice({
         {footnote ?? t("最多 80 字")}
       </p>
       {tooLong ? <p role="alert" className="form-error">{t("主题不能超过 80 个字。")}</p> : null}
-      <section className="theme-assistant" aria-label={t("提炼主题")}>
-        <div className="theme-assistant__body">
-          <div className="button-row">
-            <button
-              className="button button--quiet"
-              type="button"
-              disabled={!canPropose || running}
-              onClick={() => void propose()}
-            >
-              <Sparkles size={14} aria-hidden="true" />
-              {running ? t("正在提炼…") : candidates.length ? t("重新提炼") : t("提炼主题")}
-            </button>
-            {!canPropose && disabledReason ? (
-              <p className="creation-hint">{domainMessage(disabledReason)}</p>
+      {PROPOSAL_OFFERED ? (
+        <section className="theme-assistant" aria-label={t("提炼主题")}>
+          <div className="theme-assistant__body">
+            <div className="button-row">
+              <button
+                className="button button--quiet"
+                type="button"
+                disabled={!canPropose || running}
+                onClick={() => void propose()}
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                {running ? t("正在提炼…") : candidates.length ? t("重新提炼") : t("提炼主题")}
+              </button>
+              {!canPropose && disabledReason ? (
+                <p className="creation-hint">{domainMessage(disabledReason)}</p>
+              ) : null}
+            </div>
+            <p className="creation-hint">{t("使用 AI 从来源中提炼共同主题，从3个候选中选择。")}</p>
+            {candidates.length > 0 ? (
+              <ul className="theme-candidates" aria-label={t("主题候选")}>
+                {candidates.map((candidate) => (
+                  <li key={candidate.theme}>
+                    <button
+                      className="theme-candidate"
+                      type="button"
+                      aria-pressed={candidate.theme === theme}
+                      onClick={() => onThemeChange(candidate.theme)}
+                    >
+                      <strong>{candidate.theme}</strong>
+                      <span>{candidate.why}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {error ? (
+              <p role="alert" className="form-error">
+                {domainMessage(error)}
+                {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
+              </p>
             ) : null}
           </div>
-          <p className="creation-hint">{t("使用 AI 从来源中提炼共同主题，从3个候选中选择。")}</p>
-          {candidates.length > 0 ? (
-            <ul className="theme-candidates" aria-label={t("主题候选")}>
-              {candidates.map((candidate) => (
-                <li key={candidate.theme}>
-                  <button
-                    className="theme-candidate"
-                    type="button"
-                    aria-pressed={candidate.theme === theme}
-                    onClick={() => onThemeChange(candidate.theme)}
-                  >
-                    <strong>{candidate.theme}</strong>
-                    <span>{candidate.why}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {error ? (
-            <p role="alert" className="form-error">
-              {domainMessage(error)}
-              {isCreditRefusal(error) ? <BuyCreditsLink /> : null}
-            </p>
-          ) : null}
-        </div>
-      </section>
+        </section>
+      ) : null}
     </article>
   );
 }

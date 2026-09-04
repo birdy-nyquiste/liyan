@@ -54,7 +54,7 @@ export function ThemeReportView({
         ) : null}
       </Section>
 
-      <Section id={`${idPrefix}-blind-spots`} heading={t("来源之外的角度")}>
+      <Section id={`${idPrefix}-blind-spots`} heading={t("“知”盲点")}>
         <EmptyState
           items={report.blind_spots.items.length}
           reason={report.blind_spots.empty_state}
@@ -82,7 +82,7 @@ export function ThemeReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-facts`} heading={t("主题事实")}>
+      <Section id={`${idPrefix}-facts`} heading={t("“知”事实")}>
         <EmptyState items={report.facts.items.length} reason={report.facts.empty_state} />
         <ul className="zhiyan-items">
           {report.facts.items.map((fact) => (
@@ -106,7 +106,7 @@ export function ThemeReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-viewpoints`} heading={t("观点谱系")}>
+      <Section id={`${idPrefix}-viewpoints`} heading={t("“知”观点")}>
         <EmptyState
           items={report.viewpoints.items.length}
           reason={report.viewpoints.empty_state}
@@ -134,7 +134,7 @@ export function ThemeReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-disagreements`} heading={t("分歧焦点")}>
+      <Section id={`${idPrefix}-disagreements`} heading={t("“知”分歧")}>
         <EmptyState
           items={report.disagreements.items.length}
           reason={report.disagreements.empty_state}
@@ -162,7 +162,7 @@ export function ThemeReportView({
         </ul>
       </Section>
 
-      <Section id={`${idPrefix}-evidence`} heading={t("外部依据")}>
+      <Section id={`${idPrefix}-evidence`} heading={t("“知”依据")}>
         <EmptyState items={report.evidence.items.length} reason={report.evidence.empty_state} />
         <ul className="zhiyan-items">
           {report.evidence.items.map((evidence) => {

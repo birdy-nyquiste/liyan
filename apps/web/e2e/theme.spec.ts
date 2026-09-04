@@ -73,7 +73,7 @@ test("写下的主题随任务一起确认并生成主题知言报告", async ({
   await expect(
     card.getByRole("article", { name: /主题知言报告/ }),
   ).toBeVisible({ timeout: PROVIDER_TIMEOUT });
-  await card.getByRole("button", { name: "来源之外的角度" }).click();
+  await card.getByRole("button", { name: "“知”盲点" }).click();
   await expect(card.getByText(/来源.*未提及|来源.*只引用/).first()).toBeVisible();
 
   // The gate counts it: 立言 opened only once both reports were in.

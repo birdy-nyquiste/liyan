@@ -237,7 +237,9 @@ const ENGLISH: Record<string, string> = {
   "这些来源共同在谈什么": "What these sources are all about",
   "最多 80 字。清空即移除主题及其知言报告；改写主题会重新生成报告。":
     "80 characters max. Clearing it removes the theme and its Zhiyan report; rewriting it generates a new one.",
-  // The 主题 report: six sections, and 来源之外的角度 is the one it exists for.
+  // The 主题 report: six sections, and “知”盲点 is the one it exists for. Three of
+  // its headings are the 来源 report's own — 事实, 观点 and 依据 name the same kind
+  // of thing in both, so they share one entry rather than drifting apart.
   "主题知言报告": "Theme Zhiyan report",
   "正在生成主题知言报告…": "Generating the theme Zhiyan report…",
   "开始主题知言分析": "Start theme analysis",
@@ -245,11 +247,8 @@ const ENGLISH: Record<string, string> = {
     "If the theme report keeps failing, clear the theme while editing sources and save; Liyan can then continue.",
   "主题全景": "The landscape",
   "共识与争议": "Consensus and dispute",
-  "来源之外的角度": "Angles your sources miss",
-  "主题事实": "Facts about the theme",
-  "观点谱系": "The spread of viewpoints",
-  "分歧焦点": "Where they disagree",
-  "外部依据": "External evidence",
+  "“知”盲点": "Know · Blind Spots",
+  "“知”分歧": "Know · Disagreements",
   "明确目的": "Explicit purpose",
   "目标受众": "Target audience",
   "依据：": "Evidence:",

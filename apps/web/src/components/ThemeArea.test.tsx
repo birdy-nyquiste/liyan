@@ -144,7 +144,7 @@ afterEach(() => {
 });
 
 describe("ThemeReportView", () => {
-  it("renders the six sections with 来源之外的角度 above the rest", () => {
+  it("renders the six sections with “知”盲点 above the rest", () => {
     render(<ThemeReportView document={themeDocument()} theme="主题" idPrefix="theme-1" />);
 
     const headings = screen
@@ -153,11 +153,11 @@ describe("ThemeReportView", () => {
 
     expect(headings).toEqual([
       "概要",
-      "来源之外的角度",
-      "主题事实",
-      "观点谱系",
-      "分歧焦点",
-      "外部依据",
+      "“知”盲点",
+      "“知”事实",
+      "“知”观点",
+      "“知”分歧",
+      "“知”依据",
     ]);
   });
 
@@ -175,7 +175,7 @@ describe("ThemeReportView", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "来源之外的角度" }));
+    await user.click(screen.getByRole("button", { name: "“知”盲点" }));
     await user.click(await screen.findByRole("button", { name: "插入 TB-01 到立言指令" }));
 
     expect(onCapsuleSelect).toHaveBeenCalledWith({
@@ -194,7 +194,7 @@ describe("ThemeReportView", () => {
     const user = userEvent.setup();
     render(<ThemeReportView document={themeDocument()} theme="主题" idPrefix="theme-1" />);
 
-    await user.click(screen.getByRole("button", { name: "来源之外的角度" }));
+    await user.click(screen.getByRole("button", { name: "“知”盲点" }));
 
     expect(
       await screen.findByText("三个来源均未提及连续生产行业的排班安排。"),

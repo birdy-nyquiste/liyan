@@ -27,6 +27,9 @@ const THEME_LABEL = {
   en: { name: "Theme", light: "Light", dark: "Dark", system: "System" },
 } as const;
 type AppProps = { authProvider?: AuthProvider };
+/** How often the workbench re-probes a server that did not answer. */
+const HEALTH_RECHECK_MS = 5_000;
+
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000 } } });
 
 const signedOut = (message: string | null = null): SignedOutState => ({
@@ -95,17 +98,50 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
     [accessToken, authProvider],
   );
 
+  /**
+   * Watch whether the server answers, until it does.
+   *
+   * One failed probe is usually not a service that is down. It is a page that
+   * loaded while the server was still waking, or a single flaky request. A
+   * one-shot check turns that instant into a banner that stays up for the rest
+   * of the session: every action the writer takes succeeds while the top of the
+   * screen still says the service is unavailable, and only a reload clears it.
+   * So the probe repeats while the answer is bad and stops once it is good —
+   * the banner is allowed to go away by itself, the way the outage does.
+   */
   useEffect(() => {
     let active = true;
-    void serverIsAlive()
-      .then((isAlive) => {
-        if (active) setHealth(isAlive ? "available" : "unavailable");
-      })
-      .catch(() => {
-        if (active) setHealth("unavailable");
-      });
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const probe = () => {
+      void serverIsAlive()
+        .then((isAlive) => {
+          if (!active) return;
+          setHealth(isAlive ? "available" : "unavailable");
+          if (isAlive) stopWatching();
+        })
+        .catch(() => {
+          if (active) setHealth("unavailable");
+        });
+    };
+
+    const stopWatching = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+      window.removeEventListener("online", probe);
+      window.removeEventListener("focus", probe);
+    };
+
+    probe();
+    timer = setInterval(probe, HEALTH_RECHECK_MS);
+    // 网络恢复或写作者回到这个标签页时立刻再探一次，而不是等下一个周期 —
+    // 这两件事正是"刚才那次失败已经过时了"最强的信号。
+    window.addEventListener("online", probe);
+    window.addEventListener("focus", probe);
+
     return () => {
       active = false;
+      stopWatching();
     };
   }, []);
 

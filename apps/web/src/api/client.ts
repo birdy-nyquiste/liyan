@@ -82,11 +82,23 @@ export function refusalWithoutTiming(thrown: unknown): string | null {
   return thrown.detail;
 }
 
+/**
+ * How long the liveness probe waits before calling the server unreachable.
+ *
+ * A server still starting up can leave a request hanging instead of refusing
+ * it, and a probe with no deadline of its own would leave the workbench stuck
+ * in "checking" — saying neither that the service is fine nor that it is not.
+ */
+const LIVENESS_TIMEOUT_MS = 5_000;
+
+/** Whether the server answers. Rejects when it does not answer in time. */
 export async function serverIsAlive(): Promise<boolean> {
   const api = createClient<paths>({
     baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
   });
-  const { data, error } = await api.GET("/health/live");
+  const { data, error } = await api.GET("/health/live", {
+    signal: AbortSignal.timeout(LIVENESS_TIMEOUT_MS),
+  });
 
   if (error || data?.status !== "alive") {
     return false;

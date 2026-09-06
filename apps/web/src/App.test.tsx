@@ -8,6 +8,7 @@ import type { AuthProvider } from "./auth/provider";
 describe("server health", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("checks that the server is alive without promoting normal health", async () => {
@@ -38,6 +39,36 @@ describe("server health", () => {
     render(<App />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("服务暂不可用");
+  });
+
+  /**
+   * A failed probe is a moment, not a verdict. The banner used to outlive the
+   * outage it described, because the check ran once and nothing could take it
+   * back — a writer whose every action worked was still told otherwise.
+   */
+  it("takes the unavailable banner back down once the server answers again", async () => {
+    const fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetch);
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("服务暂不可用");
+
+    fetch.mockResolvedValue(Response.json({ status: "alive" }));
+    // 网络恢复是"刚才那次失败已经过时"的信号，工作台不必等下一个轮询周期。
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+
+    // 服务回来之后就不再探了：横幅撤下来了，探测也该停。
+    const probes = fetch.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(fetch.mock.calls).toHaveLength(probes);
   });
 });
 

@@ -1,9 +1,15 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 import type { AuthProvider } from "./auth/provider";
+
+// Authentication and workbench regressions start at the shared OTP entry.
+beforeEach(() => {
+  window.history.replaceState({}, "", "/sign-in");
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+});
 
 describe("server health", () => {
   afterEach(() => {
@@ -22,7 +28,7 @@ describe("server health", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "立言阁" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "邮箱验证" })).toBeInTheDocument();
     expect(screen.queryByText("服务正常")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0]?.[0]).toEqual(
@@ -399,8 +405,8 @@ describe("routed workbench shell", () => {
 
     render(<App authProvider={authProvider} />);
 
-    expect(await screen.findByRole("heading", { name: "立言阁" })).toBeInTheDocument();
-    expect(screen.getByText("有感而发，知言而立")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "邮箱验证" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "立言阁首页" })).toBeInTheDocument();
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
     expect(screen.queryByText("服务正常")).not.toBeInTheDocument();
   });
@@ -456,13 +462,13 @@ describe("routed workbench shell", () => {
     const user = userEvent.setup();
 
     render(<App authProvider={authProvider} />);
-    await user.click(await screen.findByRole("button", { name: "主题: 浅色" }));
+    await user.click(await screen.findByRole("button", { name: "模式: 浅色" }));
 
     expect(document.documentElement.dataset.theme).toBe("dark");
     // The same key AppShell reads, so the choice survives sign-in.
     expect(window.localStorage.getItem("liyan.theme")).toBe("dark");
 
-    await user.click(screen.getByRole("button", { name: "主题: 深色" }));
+    await user.click(screen.getByRole("button", { name: "模式: 深色" }));
     expect(document.documentElement.dataset.theme).toBe("system");
   });
 
@@ -596,7 +602,7 @@ describe("routed workbench shell", () => {
 
     render(<App authProvider={authProvider} />);
 
-    expect(await screen.findByRole("status")).toHaveTextContent("正在读取任务");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("正在读取任务"));
     expect(screen.queryByText("找不到这个任务")).not.toBeInTheDocument();
 
     await act(async () => resolveTask(Response.json({ detail: "not found" }, { status: 404 })));

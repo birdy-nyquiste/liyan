@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext } from "react";
 export type InterfaceLocale = "zh" | "en";
 
 const ENGLISH: Record<string, string> = {
+  "邮箱验证": "Continue with email",
   "购买额度": "Buy credits",
   "恢复这个历史 Revision？": "Restore this historical Revision?",
   "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？": "Restoring a historical Revision overwrites the unsaved changes in your working copy.",

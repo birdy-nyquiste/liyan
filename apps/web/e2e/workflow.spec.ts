@@ -27,7 +27,7 @@ test("the sign-in screen asks for an address before anything else", async ({ bro
   // step signed in. Whatever else is wrong, an unauthenticated visitor must
   // land somewhere that tells them what to do.
   const page = await browser.newPage({ storageState: undefined });
-  await page.goto("/");
+  await page.goto("/sign-in");
 
   await expect(page.getByLabel("邮箱")).toBeVisible();
   await expect(page.getByRole("button", { name: "发送验证码" })).toBeVisible();

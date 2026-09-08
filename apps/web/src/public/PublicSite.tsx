@@ -2,6 +2,7 @@ import { ArrowRight, ChevronDown, FileText, Languages, MonitorCog, MoonStar, Sun
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { InterfaceLocale } from "../interfaceLocale";
+import { LegalDocument } from "./legal";
 import "./public.css";
 
 export type DisplayMode = "light" | "dark" | "system";
@@ -128,7 +129,7 @@ export function PublicSite({ locale, mode, onLocaleChange, onModeChange, signedI
         {action}
       </div>
     </header>
-    {pathname === "/" ? <Homepage en={en} action={action} /> : legal ? <main id="main-content" className="site-legal"><h1>{pathname === "/terms" ? (en ? "Terms of Use" : "使用条款") : (en ? "Privacy Policy" : "隐私政策")}</h1><p>{en ? "Under construction. Content will be added here." : "页面建设中，内容待补充。"}</p><Link className="site-text-link" to="/">{en ? "Back to home" : "返回首页"}<ArrowRight size={16} aria-hidden="true" /></Link></main> : <main id="main-content" className="site-auth">{children}</main>}
+    {pathname === "/" ? <Homepage en={en} action={action} /> : legal ? <main id="main-content" className="site-legal"><LegalDocument kind={pathname === "/terms" ? "terms" : "privacy"} en={en} /><Link className="site-text-link" to="/">{en ? "Back to home" : "返回首页"}<ArrowRight size={16} aria-hidden="true" /></Link></main> : <main id="main-content" className="site-auth">{children}</main>}
     <footer className="site-footer"><div className="site-footer-brand"><span>立言阁</span><p>{en ? "A product of Nyquiste Corporation" : "Nyquiste Corporation 旗下产品"}</p></div><div className="site-footer-bottom"><small>© {new Date().getFullYear()} Nyquiste Corporation</small><nav aria-label={en ? "Legal and contact" : "法律与联系"}><Link to="/terms">{en ? "Terms of Use" : "使用条款"}</Link><Link to="/privacy">{en ? "Privacy Policy" : "隐私政策"}</Link><a href="mailto:birdyyao@nyquiste.com">{en ? "Contact us" : "联系我们"}</a></nav></div></footer>
   </div>;
 }

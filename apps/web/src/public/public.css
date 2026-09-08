@@ -110,6 +110,29 @@
 .site-legal, .site-auth { width: calc(100% - 40px); max-width: 620px; margin: 64px auto 100px; min-height: 42vh; }
 .site-legal h1 { font-size: 40px; margin-bottom: 24px; }
 .site-legal .site-text-link { margin-top: 32px; }
+/* A legal document is read in long lines, not skimmed in cards: prose width,
+   generous leading, and headings that separate sections without competing
+   with the page title. */
+.site-legal section { margin-top: 40px; }
+.site-legal h2 { font-size: 22px; margin-bottom: 14px; }
+.site-legal p { margin: 0 0 14px; line-height: 1.75; color: var(--ink-muted); }
+.site-legal p strong { color: var(--ink); font-weight: var(--weight-strong); }
+.site-legal a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.site-legal code { font-size: 0.92em; padding: 1px 5px; border-radius: 4px; background: var(--surface-sunk); }
+.site-legal-notice { padding: 14px 16px; border-radius: 8px; background: var(--surface-sunk); border: 1px solid var(--rule); }
+.site-legal-preamble { padding: 20px 22px; margin-bottom: 8px; border-radius: 10px; background: var(--surface-sunk); border: 1px solid var(--rule); }
+.site-legal-preamble p:last-child { margin-bottom: 0; }
+.site-legal ol { margin: 0 0 14px; padding-left: 24px; color: var(--ink-muted); line-height: 1.75; }
+.site-legal ol li { margin-bottom: 6px; }
+/* The one thing a legal document must never do on a phone: push the page
+   sideways. The table scrolls inside its own box instead. */
+.site-legal-table { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 10px; }
+.site-legal table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 13px; line-height: 1.65; }
+.site-legal :is(th, td) { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule-soft); }
+.site-legal th { background: var(--surface-sunk); color: var(--ink); font-weight: var(--weight-strong); white-space: nowrap; }
+.site-legal td { color: var(--ink-muted); }
+.site-legal tbody tr:last-child :is(th, td) { border-bottom: 0; }
+.site-legal blockquote { margin: 0 0 18px; padding: 16px 18px; border-radius: 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--ink); line-height: 1.75; }
 .site-auth { max-width: 460px; }
 .site-auth .auth-card { margin: 0; width: 100%; box-shadow: none; background: var(--surface); padding: 32px; }
 .site-auth .auth-card h2 { font-size: 30px; }

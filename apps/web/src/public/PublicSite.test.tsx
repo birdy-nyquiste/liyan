@@ -77,9 +77,24 @@ describe("public entry routes", () => {
     await user.click(screen.getByRole("link", { name: "使用条款" }));
     expect(window.location.pathname).toBe("/terms");
     expect(screen.getByRole("heading", { name: "使用条款" })).toBeInTheDocument();
-    expect(screen.getByText("页面建设中，内容待补充。")).toBeInTheDocument();
-    await user.click(screen.getByRole("link", { name: "隐私政策" }));
+    expect(screen.getByRole("heading", { name: "四、你的内容" })).toBeInTheDocument();
+    // Scoped to the footer: both documents link to each other, so more than one
+    // link by this name is the expected state rather than an ambiguity to fix.
+    const legalNav = screen.getByRole("navigation", { name: "法律与联系" });
+    await user.click(within(legalNav).getByRole("link", { name: "隐私政策" }));
     expect(window.location.pathname).toBe("/privacy");
+    expect(screen.getByRole("heading", { name: "隐私政策" })).toBeInTheDocument();
+    // The parts of this page the Chrome Web Store's review depends on. Its
+    // Limited Use policy requires that statement to be on the privacy policy
+    // itself rather than only in the developer dashboard, and the listing's
+    // data disclosures have to agree with what 第三章 and 第四章 say — so these
+    // are not decorative paragraphs, they are why the extension is publishable.
+    expect(screen.getByRole("heading", { name: "三、浏览器插件" })).toBeInTheDocument();
+    expect(screen.getByText(/Limited Use 要求/)).toBeInTheDocument();
+    expect(screen.getByText(/没有内容脚本/)).toBeInTheDocument();
+    // The cross-border disclosure, and the recipient it is about.
+    expect(screen.getByRole("heading", { name: /五、存储地点、保存期限与跨境传输/ })).toBeInTheDocument();
+    expect(screen.getByText(/DeepSeek/)).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "价格" }));
     expect(window.location.pathname + window.location.hash).toBe("/#pricing");
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();

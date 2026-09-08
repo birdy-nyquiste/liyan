@@ -26,6 +26,35 @@ it should be a company account rather than a personal one.
 **A verified contact email**, set on the account. Unverified means no
 publishing.
 
+**The trader declaration.** The dashboard asks, once, whether the account is a
+**trader** or a **non-trader**, and it asks before anything can be published.
+This is the EU's definition, not Google's: a trader is a person or company
+"acting for purposes relating to his trade, business, craft or profession", and
+a non-trader is one acting outside it.
+
+**Nyquiste Corporation is a trader.** It is a company publishing its own product
+and it sells 额度. Non-trader is for someone releasing something outside their
+profession. The declaration is a self-declaration and the Web Store puts the
+responsibility for its accuracy on the developer, so this is not a place to
+optimise.
+
+Declaring trader means providing, and passing verification on:
+
+- the legal name
+- a physical address
+- an **SMS-capable phone number** — verification is a code sent to it, so it has
+  to be a number someone can actually receive on
+- a contact email
+
+**All four are published at the foot of the extension's listing page.** That is
+worth knowing before choosing what the site's own legal pages disclose: it makes
+"the address is on the store page but not in the 隐私政策" the state of things,
+which is the wrong way round for most jurisdictions. A D-U-N-S number may be
+required later for corporate phone verification; today it is not.
+
+The declaration is account-wide rather than per-item, so neither Unlisted
+distribution nor a users-in-China-only audience changes what it should say.
+
 **A privacy policy that is live.** `https://<工作台>/privacy` — written, not a
 placeholder. The Limited Use statement has to be on that page, not only in the
 dashboard; it is already in `apps/web/src/public/legal.tsx`. Fill in the

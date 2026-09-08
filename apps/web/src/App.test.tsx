@@ -28,7 +28,7 @@ describe("server health", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "邮箱验证" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登入立言阁" })).toBeInTheDocument();
     expect(screen.queryByText("服务正常")).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledOnce();
     expect(fetch.mock.calls[0]?.[0]).toEqual(
@@ -405,7 +405,16 @@ describe("routed workbench shell", () => {
 
     render(<App authProvider={authProvider} />);
 
-    expect(await screen.findByRole("heading", { name: "邮箱验证" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登入立言阁" })).toBeInTheDocument();
+    // Consent has to be visible where it is being given, and both documents
+    // have to be reachable without losing the address already typed in.
+    const terms = screen.getByRole("link", { name: "《使用条款》" });
+    const privacy = screen.getByRole("link", { name: "《隐私政策》" });
+    expect(terms).toHaveAttribute("href", "/terms");
+    expect(privacy).toHaveAttribute("href", "/privacy");
+    expect(terms).toHaveAttribute("target", "_blank");
+    expect(privacy).toHaveAttribute("target", "_blank");
+    expect(screen.getByText(/首次登入自动创建账号/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "立言阁首页" })).toBeInTheDocument();
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
     expect(screen.queryByText("服务正常")).not.toBeInTheDocument();

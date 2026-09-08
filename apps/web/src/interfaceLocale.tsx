@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext } from "react";
 export type InterfaceLocale = "zh" | "en";
 
 const ENGLISH: Record<string, string> = {
-  "邮箱验证": "Continue with email",
+  "登入立言阁": "Sign in to Liyan",
   "购买额度": "Buy credits",
   "恢复这个历史 Revision？": "Restore this historical Revision?",
   "恢复历史 Revision 会覆盖当前未保存的修改，确定继续吗？": "Restoring a historical Revision overwrites the unsaved changes in your working copy.",
@@ -284,7 +284,7 @@ const ENGLISH: Record<string, string> = {
   "可从知言报告中引用内容": "You can quote from a Zhiyan report",
   "仅限受邀用户": "Invited users only",
   "登录立言阁": "Sign in to 立言阁",
-  "使用邮箱接收一次性验证码，无需密码。": "Receive a one-time code by email; no password is required.",
+  "使用邮箱接收一次性验证码，无需密码。首次登入自动创建账号。": "Receive a one-time code by email; no password is required. Your account is created the first time you sign in.",
   "邮箱": "Email",
   "发送验证码": "Send code",
   "发送中…": "Sending…",

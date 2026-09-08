@@ -1,4 +1,35 @@
-.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; }
+/*
+ * A column, so that the footer belongs to the bottom of the page rather than to
+ * the bottom of the content. On a short page — 登录, or a legal page while its
+ * text is still being written — the footer used to sit wherever the content
+ * happened to end, which on the sign-in page meant below the fold with nothing
+ * but whitespace above it.
+ */
+.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; display: flex; flex-direction: column; }
+.public-site > main { flex: 1 0 auto; }
+
+/*
+ * The header stays where the reader can reach it.
+ *
+ * Sticky on the full-width bar rather than on `.site-header` itself, because
+ * that one is a centred grid narrower than the viewport — sticking it would
+ * leave the page showing through on either side of it. The bar is translucent
+ * so the page reads as passing underneath, and it carries the hairline that
+ * separates the two.
+ */
+.site-header-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border-bottom: 1px solid var(--rule-soft);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+/* Where the blur is not available the bar has to be opaque, or the text of the
+   page shows through the words in it. */
+@supports not (backdrop-filter: blur(1px)) {
+  .site-header-bar { background: var(--surface); }
+}
 .public-site ::selection { background: var(--accent-soft); color: var(--ink); }
 .public-site a { text-underline-offset: 5px; }
 .public-site :is(a, button, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
@@ -107,7 +138,21 @@
 .site-footer-bottom nav { display: flex; gap: 24px; }
 .site-footer a { color: var(--ink-muted); font-size: 13px; text-decoration: none; display: inline-flex; min-height: 44px; align-items: center; }
 .site-footer small { font-size: 12px; }
-.site-legal, .site-auth { width: calc(100% - 40px); max-width: 620px; margin: 64px auto 100px; min-height: 42vh; }
+.site-legal, .site-auth { width: calc(100% - 40px); max-width: 620px; margin: 64px auto 96px; }
+/* `min-height` is gone from both: `main` grows instead, so a short page no
+   longer collapses and no longer pads itself past the fold. */
+.site-auth { margin-top: 32px; margin-bottom: 40px; }
+/*
+ * The footer on a page whose only job is signing in.
+ *
+ * The full one is 249px of brand block and rules — on 登录 it was both the
+ * wrong shape and the reason the footer could only be reached by scrolling a
+ * page that otherwise had nothing to scroll. What is left is the line that has
+ * to be there: copyright, the two documents, and a way to reach us.
+ */
+.site-footer--compact { padding: 20px 0; border-top: 1px solid var(--rule); }
+.site-footer--compact .site-footer-brand { display: none; }
+.site-footer--compact .site-footer-bottom { margin-top: 0; padding-top: 0; border-top: 0; }
 .site-legal h1 { font-size: 40px; margin-bottom: 24px; }
 .site-legal .site-text-link { margin-top: 32px; }
 /* A legal document is read in long lines, not skimmed in cards: prose width,
@@ -138,7 +183,9 @@
 .site-auth .auth-card h2 { font-size: 30px; }
 .site-skip { position: fixed; z-index: 100; top: 8px; left: 16px; transform: translateY(-160%); background: var(--ink); color: var(--surface); padding: 12px 20px; border-radius: 8px; }
 .site-skip:focus { transform: none; }
-.public-site :is(#workflow, #pricing, #faq) { scroll-margin-top: 24px; }
+/* Sections are scrolled to by the header's own links, and the header is now
+   on top of where they land. */
+.public-site :is(#workflow, #pricing, #faq) { scroll-margin-top: calc(var(--site-header-height) + 24px); }
 @media (max-width: 1100px) {
   .site-header { grid-template-columns: auto 1fr auto; gap: 20px; padding-inline: 24px; }
   .site-nav { justify-content: center; gap: 20px; }
@@ -149,9 +196,14 @@
   .site-report h4 { font-size: 21px; }
 }
 @media (max-width: 800px) {
-  .site-header { grid-template-columns: 1fr auto; gap: 14px; padding: 16px 24px 0; }
-  .site-nav { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; border-bottom: 1px solid var(--rule); gap: 28px; }
-  .site-nav a { padding: 14px 0; }
+  /* Two rows here, so the bar the header sticks inside is taller and the
+     anchors it scrolls under have further to clear. */
+  .public-site { --site-header-height: 116px; }
+  .site-header { grid-template-columns: 1fr auto; gap: 10px; padding: 12px 24px 0; }
+  /* The bar carries the hairline now; the nav's own would be a second line
+     directly beneath it. */
+  .site-nav { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; gap: 28px; }
+  .site-nav a { padding: 12px 0; }
   .site-brand span { font-size: 22px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }

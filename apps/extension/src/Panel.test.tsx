@@ -329,3 +329,31 @@ describe("when the browser's own storage fails", () => {
     expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument();
   });
 });
+
+/**
+ * The 条款 links inside a popup.
+ *
+ * `AuthPanel` is the workbench's component, and in the workbench `/terms` is a
+ * route. In a popup the same href resolves to `chrome-extension://<id>/terms`,
+ * which is a page that does not exist — so the one screen where a user is
+ * agreeing to those documents would be the screen that cannot show them. The
+ * panel passes 工作台's address, and this is what says so.
+ */
+describe("the 条款 a user agrees to at sign-in", () => {
+  it("points at 工作台 rather than at the extension itself", async () => {
+    renderPanel(fakeAuthProvider());
+
+    const terms = await screen.findByRole("link", { name: "《使用条款》" });
+    const privacy = screen.getByRole("link", { name: "《隐私政策》" });
+    for (const link of [terms, privacy]) {
+      const href = link.getAttribute("href") ?? "";
+      expect(href).toMatch(/^https?:\/\//);
+      expect(href).not.toContain("chrome-extension");
+      // A popup is destroyed by any navigation, so following one of these in
+      // place would take the half-typed address with it.
+      expect(link).toHaveAttribute("target", "_blank");
+    }
+    expect(terms.getAttribute("href")).toMatch(/\/terms$/);
+    expect(privacy.getAttribute("href")).toMatch(/\/privacy$/);
+  });
+});

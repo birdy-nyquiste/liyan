@@ -21,7 +21,7 @@ import {
   readSignInProgress,
   rememberSignInProgress,
 } from "./signInProgress";
-import { openWorkbench } from "./workbench";
+import { openWorkbench, workbenchUrl } from "./workbench";
 
 /**
  * What the panel is showing.
@@ -336,7 +336,10 @@ function Body({
 
   return (
     <div className="panel__body">
-      <AuthPanel state={state} {...handlers} />
+      {/* 工作台's address, because the panel has no /terms of its own: a
+          relative link inside a popup resolves to `chrome-extension://<id>/`
+          and lands nowhere. */}
+      <AuthPanel state={state} legalBaseUrl={workbenchUrl("/")} {...handlers} />
     </div>
   );
 }

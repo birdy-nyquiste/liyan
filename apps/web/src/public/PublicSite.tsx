@@ -118,18 +118,24 @@ export function PublicSite({ locale, mode, onLocaleChange, onModeChange, signedI
   const ctaText = checking ? (en ? "Loading…" : "读取中…") : signedIn ? (en ? "Go to workbench" : "前往工作台") : (en ? "Get started" : "立即体验");
   const action = checking ? <span className="site-cta" aria-busy="true">{ctaText}</span> : <Link className="site-cta" to={signedIn ? "/task" : "/sign-in"}>{ctaText}<ArrowRight size={16} aria-hidden="true" /></Link>;
   const legal = pathname === "/terms" || pathname === "/privacy";
+  // 登录 is a page with one thing to do on it, and a full marketing footer
+  // underneath was both the wrong shape and the reason the footer needed
+  // scrolling to reach. The legal links it carries are also inside the card.
+  const compactFooter = pathname !== "/" && !legal;
   return <div className="public-site">
     <a className="site-skip" href="#main-content">{en ? "Skip to content" : "跳至内容"}</a>
-    <header className="site-header">
-      <Link to="/" className="site-brand" aria-label={en ? "Liyan home" : "立言阁首页"}><img src="/liyan-mark.svg" alt="" /><span>立言阁</span></Link>
-      <nav className="site-nav" aria-label={en ? "Page sections" : "页面目录"}>{[["workflow", en ? "How it works" : "使用流程"], ["pricing", en ? "Pricing" : "价格"], ["faq", en ? "FAQ" : "常见问题"]].map(([id, label]) => <Link key={id} to={`/#${id}`}>{label}</Link>)}</nav>
-      <div className="site-controls">
-        <button type="button" className="site-toggle" onClick={onLocaleChange} aria-label={`${en ? "Language" : "语言"}: ${en ? "English" : "中文"}`}><Languages size={18} aria-hidden="true" /><span>{en ? "EN" : "中文"}</span></button>
-        <button type="button" className="site-toggle site-mode" onClick={onModeChange} aria-label={`${en ? "Mode" : "模式"}: ${modeLabel}`} title={modeLabel}>{mode === "light" ? <Sun size={18} aria-hidden="true" /> : mode === "dark" ? <MoonStar size={18} aria-hidden="true" /> : <MonitorCog size={18} aria-hidden="true" />}<span>{modeLabel}</span></button>
-        {action}
-      </div>
-    </header>
+    <div className="site-header-bar">
+      <header className="site-header">
+        <Link to="/" className="site-brand" aria-label={en ? "Liyan home" : "立言阁首页"}><img src="/liyan-mark.svg" alt="" /><span>立言阁</span></Link>
+        <nav className="site-nav" aria-label={en ? "Page sections" : "页面目录"}>{[["workflow", en ? "How it works" : "使用流程"], ["pricing", en ? "Pricing" : "价格"], ["faq", en ? "FAQ" : "常见问题"]].map(([id, label]) => <Link key={id} to={`/#${id}`}>{label}</Link>)}</nav>
+        <div className="site-controls">
+          <button type="button" className="site-toggle" onClick={onLocaleChange} aria-label={`${en ? "Language" : "语言"}: ${en ? "English" : "中文"}`}><Languages size={18} aria-hidden="true" /><span>{en ? "EN" : "中文"}</span></button>
+          <button type="button" className="site-toggle site-mode" onClick={onModeChange} aria-label={`${en ? "Mode" : "模式"}: ${modeLabel}`} title={modeLabel}>{mode === "light" ? <Sun size={18} aria-hidden="true" /> : mode === "dark" ? <MoonStar size={18} aria-hidden="true" /> : <MonitorCog size={18} aria-hidden="true" />}<span>{modeLabel}</span></button>
+          {action}
+        </div>
+      </header>
+    </div>
     {pathname === "/" ? <Homepage en={en} action={action} /> : legal ? <main id="main-content" className="site-legal"><LegalDocument kind={pathname === "/terms" ? "terms" : "privacy"} en={en} /><Link className="site-text-link" to="/">{en ? "Back to home" : "返回首页"}<ArrowRight size={16} aria-hidden="true" /></Link></main> : <main id="main-content" className="site-auth">{children}</main>}
-    <footer className="site-footer"><div className="site-footer-brand"><span>立言阁</span><p>{en ? "A product of Nyquiste Corporation" : "Nyquiste Corporation 旗下产品"}</p></div><div className="site-footer-bottom"><small>© {new Date().getFullYear()} Nyquiste Corporation</small><nav aria-label={en ? "Legal and contact" : "法律与联系"}><Link to="/terms">{en ? "Terms of Use" : "使用条款"}</Link><Link to="/privacy">{en ? "Privacy Policy" : "隐私政策"}</Link><a href="mailto:birdyyao@nyquiste.com">{en ? "Contact us" : "联系我们"}</a></nav></div></footer>
+    <footer className={`site-footer${compactFooter ? " site-footer--compact" : ""}`}><div className="site-footer-brand"><span>立言阁</span><p>{en ? "A product of Nyquiste Corporation" : "Nyquiste Corporation 旗下产品"}</p></div><div className="site-footer-bottom"><small>© {new Date().getFullYear()} Nyquiste Corporation</small><nav aria-label={en ? "Legal and contact" : "法律与联系"}><Link to="/terms">{en ? "Terms of Use" : "使用条款"}</Link><Link to="/privacy">{en ? "Privacy Policy" : "隐私政策"}</Link><a href="mailto:birdyyao@nyquiste.com">{en ? "Contact us" : "联系我们"}</a></nav></div></footer>
   </div>;
 }

@@ -50,6 +50,15 @@ So the flow has a container:
 The two buttons sit at the bottom of the panel and never move. What changes is
 what they say and whether they are live.
 
+"Never move" is a layout decision as well as a promise. Chrome will not draw a
+popup taller than 600px, and it scrolls the whole document past that — which
+takes the buttons with it. A full basket measures 552px, and it does not take
+much to pass the ceiling: a failed 来源 adds its reason and its blocker, and an
+oldest 来源 nearing cleanup adds a warning. So the panel owns the ceiling
+instead: the list is the only part that scrolls, and the header and the two
+buttons are fixed at the ends. Below 600px nothing changes — a popup holding
+one 来源 is still as tall as its contents.
+
 Nothing above needs a new endpoint. The 任务创建会话 was built for a client
 that collects before it commits; the extension is a second such client.
 

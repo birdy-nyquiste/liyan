@@ -6,7 +6,18 @@ import { loadEnv, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 import { buildManifest } from "./manifest";
+import { releaseRefusal } from "./releaseTarget";
 import packageJson from "./package.json" with { type: "json" };
+
+/**
+ * Set by `npm run package`, and by nothing else.
+ *
+ * `vite build` is how the extension is built for everyday work *and* how the
+ * uploaded package is made — `dev` is the same command with `--watch`, and all
+ * of them run in production mode. So the mode cannot tell a release apart from
+ * a local build, and the script that makes the release says so instead.
+ */
+const RELEASE_FLAG = "LIYAN_EXTENSION_RELEASE";
 
 /**
  * The workbench's source, imported rather than copied.
@@ -35,7 +46,15 @@ function manifest(mode: string): Plugin {
     generateBundle() {
       const env = loadEnv(mode, fileURLToPath(new URL("../..", import.meta.url)), "VITE_");
       const apiBaseUrl = env.VITE_API_BASE_URL ?? "http://localhost:8000";
+      const webBaseUrl = env.VITE_WEB_BASE_URL ?? "http://localhost:5173";
       const supabaseUrl = env.VITE_SUPABASE_URL;
+      // A release is held to every address being publishable. It is checked
+      // first because its message says which values are wrong and how to fix
+      // them, which is more use than the one below.
+      if (process.env[RELEASE_FLAG]) {
+        const refusal = releaseRefusal({ apiBaseUrl, webBaseUrl, supabaseUrl });
+        if (refusal) throw new Error(refusal);
+      }
       if (!supabaseUrl) {
         // Failing the build is the point: a manifest without Supabase's host
         // produces an extension that installs and then cannot sign anybody in.
@@ -45,7 +64,7 @@ function manifest(mode: string): Plugin {
         type: "asset",
         fileName: "manifest.json",
         source: JSON.stringify(
-          buildManifest({ apiBaseUrl, supabaseUrl, version: packageJson.version }),
+          buildManifest({ apiBaseUrl, supabaseUrl, webBaseUrl, version: packageJson.version }),
           null,
           2,
         ),
@@ -64,6 +83,11 @@ export default defineConfig(({ mode }) => ({
     // Chrome loads an unpacked directory, so the output is the extension.
     outDir: "dist",
     emptyOutDir: true,
+    // One browser, one version, and the same one `minimum_chrome_version`
+    // claims. Left at Vite's default this tracks whatever "widely available"
+    // means on the day of the build, which is not something a published
+    // manifest can promise on behalf of a future checkout.
+    target: "chrome111",
     rollupOptions: { input: fileURLToPath(new URL("./popup.html", import.meta.url)) },
   },
   test: {

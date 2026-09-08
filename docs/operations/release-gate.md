@@ -23,8 +23,21 @@ next one, and a failure early means the later ones would have told you nothing.
 npm run test:web
 npm run lint:web
 npm run typecheck:web
+npm run test:extension
+npm run lint:extension
+npm run typecheck:extension
+npm run build --workspace @liyan/extension -- --mode e2e
 npm run api:check
 ```
+
+The 插件's build is in this list because the 插件 is a shipped artifact — a
+package uploaded to the Chrome Web Store — and a build is the only check that
+sees its manifest at all. `--mode e2e` because that is the only configuration a
+checkout has: `.env` and `.env.production` are both gitignored, and without a
+Supabase host the manifest plugin refuses to build. `--workspace` directly
+rather than through `build:extension`, because npm does not forward flags
+through two nested `npm run`s and `-- --mode e2e` would reach vite as a bare
+`e2e` — a production build with a stray argument rather than an error.
 
 `api:check` is not a formality: `openapi.json` is committed and the workbench's
 client types are generated from it, so a route whose shape changed without it

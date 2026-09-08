@@ -75,8 +75,19 @@ staging package is made without keeping a second file for it:
 VITE_API_BASE_URL=https://staging… npm run package:extension
 ```
 
-Whichever route, check what came out before uploading — the manifest names the
-servers the build belongs to:
+`package` refuses to build when any of the three addresses is not a published
+one — not https, or a host only this machine can reach, or missing. That is the
+failure it exists for: without `.env.production`, `.env` answers instead, and a
+localhost API beside a real Supabase project builds cleanly into a package that
+installs, signs a user in, and cannot make a single request. `VITE_WEB_BASE_URL`
+is checked too, and it is the reason a guard beats a habit — it appears nowhere
+in the manifest, so reading the manifest cannot catch it.
+
+To build against a local 立言阁, use `npm run build:extension`, which is held
+only to Supabase existing.
+
+Check what came out anyway — the manifest names the servers the build belongs
+to:
 
 ```
 cat apps/extension/dist/manifest.json
@@ -114,10 +125,31 @@ otherwise provide stubbed: `chrome.*`, and a signed-in session.
 
 ```
 .venv/bin/python scripts/e2e_server.py --port 8099     # any bearer token signs in
-npm run dev:extension -- --mode e2e --port 5199
+cd apps/extension && npx vite --mode e2e --port 5199   # a dev server, not a build
 ```
 
-Then open `http://localhost:5199/harness.html`. `?url=` and `?title=` set the
+Then open `http://localhost:5199/harness.html`.
+
+Two things about that second command, both of which were wrong here before.
+`vite` in serve mode rather than `npm run dev`, because `dev` is `vite build
+--watch` and a build serves nothing — and because npm does not forward flags
+through two nested `npm run`s, so `npm run dev:extension -- --mode e2e` reaches
+vite as a bare `e2e`, which is not an error but a production build with a
+stray argument. `.claude/launch.json` has the working form as
+`extension-harness`.
+
+The harness needs a 付费用户, and `scripts/e2e_server.py` grants 额度 rather
+than selling any — `is_paying_user` is derived from a `purchase` entry in the
+ledger, so a fresh e2e database lands on 尚未购买额度 and the basket cannot be
+reached at all. Until the server seeds one, insert it by hand:
+
+```
+sqlite3 "$DB" "insert into credit_entries (id, owner_id, kind, amount, \
+  stripe_reference, created_at) select hex(randomblob(16)), id, 'purchase', 500, \
+  'pi_harness', datetime('now') from users"
+```
+
+The server prints `$DB` when it starts. `?url=` and `?title=` set the
 page the "current tab" is showing, which is how the failure and duplicate
 journeys are reached. `LIYAN_E2E_REAL_URL_FETCH=1` on the server makes captures
 real rather than deterministic.

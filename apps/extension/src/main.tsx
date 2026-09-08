@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { InterfaceLocaleProvider } from "@workbench/interfaceLocale";
 
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Panel } from "./Panel";
 import "./panel.css";
 
@@ -13,8 +14,12 @@ document.documentElement.dataset.theme = "system";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <InterfaceLocaleProvider locale="zh">
-      <Panel />
-    </InterfaceLocaleProvider>
+    {/* Outside the provider, so that the provider failing is caught too. The
+        fallback says its one sentence in Chinese without asking anything. */}
+    <ErrorBoundary>
+      <InterfaceLocaleProvider locale="zh">
+        <Panel />
+      </InterfaceLocaleProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

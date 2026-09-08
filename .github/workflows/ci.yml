@@ -71,6 +71,23 @@ jobs:
           npm run test:web
           npm run build --workspace @liyan/web
 
+      # The 插件 is a shipped artifact — a package uploaded to the Chrome Web
+      # Store — and until now nothing here looked at it. Its build is run with
+      # `--mode e2e` because that is the only configuration a checkout has:
+      # `.env` and `.env.production` are both gitignored, so without a mode the
+      # manifest plugin has no Supabase host and refuses to build.
+      #
+      # `--workspace` directly rather than through `build:extension`: npm does
+      # not forward flags through two nested `npm run`s, and `-- --mode e2e`
+      # reaches vite as a bare `e2e` — which is not an error, it is a
+      # production build with a stray argument.
+      - name: Check the browser extension
+        run: |
+          npm run lint:extension
+          npm run typecheck:extension
+          npm run test:extension
+          npm run build --workspace @liyan/extension -- --mode e2e
+
       - name: Check generated OpenAPI contract
         run: npm run api:check
 

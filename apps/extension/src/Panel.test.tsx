@@ -272,3 +272,60 @@ describe("a sign-in interrupted halfway", () => {
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
   });
 });
+
+/**
+ * `chrome.storage` is the panel's whole memory, and it is the one dependency
+ * with no fallback: the session, the open basket and a half-finished sign-in
+ * all live there. These are about what the user sees when it does not answer —
+ * which, before this, was a popup showing 读取中… with no way out of it.
+ */
+describe("when the browser's own storage fails", () => {
+  /** `chrome`, with storage that refuses whichever half is named. */
+  function stubBrokenChrome({ reads = false, writes = false }) {
+    const kept = new Map<string, unknown>();
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: async (key: string) => {
+            if (reads) throw new Error("storage is unavailable");
+            return kept.has(key) ? { [key]: kept.get(key) } : ({} as Record<string, unknown>);
+          },
+          set: async (entries: Record<string, unknown>) => {
+            if (writes) throw new Error("storage is unavailable");
+            for (const [key, value] of Object.entries(entries)) kept.set(key, value);
+          },
+          remove: async (key: string) => {
+            kept.delete(key);
+          },
+        },
+      },
+      tabs: {
+        create: vi.fn(async () => undefined),
+        query: async () => [{ url: "https://example.com/a", title: "A page" }],
+      },
+    });
+  }
+
+  it("does not leave the panel on its opening frame forever", async () => {
+    stubBrokenChrome({ reads: true });
+    renderPanel(fakeAuthProvider());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("读取本地数据失败，请重新打开插件。");
+    // The point of landing here: there is a form, so there is something to do.
+    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.queryByText("读取中…")).not.toBeInTheDocument();
+  });
+
+  it("says why 新建任务 did nothing, instead of nothing", async () => {
+    stubBrokenChrome({ writes: true });
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
+    const user = userEvent.setup();
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }));
+
+    await user.click(await screen.findByRole("button", { name: "新建任务" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("读取本地数据失败，请重新打开插件。");
+    // Still on 主屏, so the button is there to try again with.
+    expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument();
+  });
+});

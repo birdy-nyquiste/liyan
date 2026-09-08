@@ -177,7 +177,6 @@
 .site-legal th { background: var(--surface-sunk); color: var(--ink); font-weight: var(--weight-strong); white-space: nowrap; }
 .site-legal td { color: var(--ink-muted); }
 .site-legal tbody tr:last-child :is(th, td) { border-bottom: 0; }
-.site-legal blockquote { margin: 0 0 18px; padding: 16px 18px; border-radius: 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--ink); line-height: 1.75; }
 .site-auth { max-width: 460px; }
 .site-auth .auth-card { margin: 0; width: 100%; box-shadow: none; background: var(--surface); padding: 32px; }
 .site-auth .auth-card h2 { font-size: 30px; }

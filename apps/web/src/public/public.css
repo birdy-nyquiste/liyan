@@ -123,10 +123,8 @@
  *
  * Sans and recessed for the reader's problem; 宋体, larger and led wider for
  * what 立言阁 does about it — the form arriving at composed prose along with
- * the sentence. Between them the hinge: the smallest thing here and the only
- * one in brass, so it reads as a pivot rather than as a third statement. Its
- * rule is 1px and the width of two characters, which is the lead-in a classical
- * setting would give it.
+ * the sentence. Between them the hinge, which carries the weight rather than
+ * the brass: the accent is spent on 知 and 立 alone.
  */
 /*
  * The lede is measured to the couplet above it, not to the page.
@@ -183,10 +181,19 @@
 .site-stage h3 { font-size: 30px; }
 .site-stage-heading > p { margin-top: 20px; font-size: 14px; max-width: 26ch; }
 .site-inputs, .site-reports { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
-.site-inputs article > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+/* Icon then title, the same header 知言报告 uses below — the 你提供 label that
+   used to sit opposite is gone, so the row is one group rather than two ends. */
+.site-inputs article > header { display: flex; align-items: center; gap: 10px; }
+.site-inputs article > header svg { flex-shrink: 0; color: var(--accent); }
 .site-inputs h4, .site-direction h4 { font-size: 21px; }
-.site-inputs header > span { color: var(--ink-muted); font-size: 12px; }
-.site-inputs article > p { margin: 12px 0 24px; font-size: 14px; }
+/* The two explanations are one line and two, so without a floor the example
+   cards below them start 25px apart. `min-height` is what `.site-report-intro`
+   already does for the same problem two stages down, and it is released at the
+   width where the grid becomes one column and there is nothing to align to. */
+.site-inputs article > p { margin: 12px 0 24px; min-height: 50px; font-size: 14px; }
+/* English says the 主题 explanation in three lines where Chinese says it in
+   two, so the floor that aligns the pair is a line taller. */
+:lang(en) .site-inputs article > p { min-height: 76px; }
 .site-document { border: 1px solid var(--rule); border-radius: 12px; padding: 24px; background: var(--surface-sunk); min-width: 0; }
 .site-document > svg { vertical-align: middle; color: var(--accent); margin-right: 10px; }
 .site-document > strong { font: 17px "Songti SC", "Noto Serif SC", Georgia, serif; }
@@ -342,7 +349,7 @@
   .public-site .site-lede-promise { font-size: 19px; }
   .public-site .site-lede-turn { margin-top: 26px; font-size: 19px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }
-  .site-report-intro { min-height: 0; }
+  .site-report-intro, .site-inputs article > p { min-height: 0; }
   .site-document { padding: 20px; }
   .site-publication { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
   .site-publication .site-document { padding: 14px; }

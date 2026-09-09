@@ -1,4 +1,5 @@
-import { ArrowRight, ChevronDown, FileText, Languages, MonitorCog, MoonStar, Sun } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, FileStack, FileText, Languages, MonitorCog, MoonStar, Sun } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { InterfaceLocale } from "../interfaceLocale";
@@ -55,8 +56,8 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
   </article>;
 }
 
-function ExampleDocument({ title }: { title: string }) {
-  return <div className="site-document"><FileText size={20} aria-hidden="true" /><strong>{title}</strong><SampleLines /></div>;
+function ExampleDocument({ title, icon: Icon = FileText }: { title: string; icon?: LucideIcon }) {
+  return <div className="site-document"><Icon size={20} aria-hidden="true" /><strong>{title}</strong><SampleLines /></div>;
 }
 
 /**
@@ -176,8 +177,38 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
     <section id="workflow" className="site-workflow" aria-labelledby="workflow-heading">
       <h2 id="workflow-heading" className="site-section-title">{en ? "How it works" : "使用流程"}</h2>
       <section className="site-stage" aria-labelledby="inputs-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">01</span><h3 id="inputs-heading">{en ? "Sources · Theme" : "来源 · 主题"}</h3><p>[{en ? "What you provide and how to begin" : "你提供什么，以及如何开始的说明"}]</p></div>
-        <div className="site-inputs">{[en ? "Source" : "来源", en ? "Theme" : "主题"].map(title => <article key={title}><header><h4>{title}</h4><span>{en ? "You provide" : "你提供"}</span></header><p>[{en ? `${title} explanation` : `${title}说明`}]</p><ExampleDocument title={`${en ? "Example A" : "示例 A"} · ${title}`} /></article>)}</div>
+        <div className="site-stage-heading"><span className="site-stage-number">01</span><h3 id="inputs-heading">{en ? "Sources · Theme" : "来源 · 主题"}</h3><p>{en ? "Upload your sources, then add the theme they share." : "上传来源，添加来源的共同主题"}</p></div>
+        {/* 来源 is a stack of mixed formats and 主题 is the direction the agent
+            is pointed in, so the two icons differ in silhouette rather than in
+            detail — stacked rectangles against a circle, told apart at a glance
+            and at 20px. */}
+        <div className="site-inputs">
+          {[
+            {
+              title: en ? "Source" : "来源",
+              icon: FileStack,
+              body: en
+                ? "Pasted text, URL capture, Markdown, PDF, TXT, DOCX"
+                : "文本粘贴，URL抓取，Markdown，PDF，TXT，DOCX",
+            },
+            {
+              title: en ? "Theme" : "主题",
+              icon: Compass,
+              body: en
+                ? "The theme your sources share. The Zhiyan agent searches it in depth, breaking the information cocoon — keeping the essence, discarding the dross."
+                : "来源的共同主题，知言 Agent 将深度检索该主题的相关内容，打破信息茧房，取其精华，去其糟粕。",
+            },
+          ].map(({ title, icon: Icon, body }) => (
+            <article key={title}>
+              <header>
+                <Icon size={20} aria-hidden="true" />
+                <h4>{title}</h4>
+              </header>
+              <p>{body}</p>
+              <ExampleDocument title={`${en ? "Example A" : "示例 A"} · ${title}`} icon={Icon} />
+            </article>
+          ))}
+        </div>
       </section>
       <section className="site-stage" aria-labelledby="reports-heading">
         <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "Zhiyan" : "知言"}</h3><p>[{en ? "How Liyan analyses your sources and topic" : "立言阁如何分析来源与主题的说明"}]</p></div>

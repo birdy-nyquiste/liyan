@@ -32,7 +32,7 @@ function SampleLines() {
 }
 
 function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
-  const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Topic Zhiyan report" : "主题知言报告");
+  const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Theme Zhiyan report" : "主题知言报告");
   return <article className="site-report" aria-label={title}>
     <header><FileText size={22} aria-hidden="true" /><h4>{title}</h4></header>
     <p className="site-report-intro">[{en ? `${title}: purpose and what you learn` : `${title}：作用与收获说明`}]</p>
@@ -45,7 +45,7 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
           <div className="site-report-example">
             {index === 0 ? (kind === "source"
               ? (en ? ["Content summary", "Fact-check summary", "Reading note"] : ["内容概要", "核查概况", "阅读提示"])
-              : (en ? ["Topic landscape", "Consensus and dispute", "Reading note"] : ["主题全景", "共识与争议", "阅读提示"])
+              : (en ? ["Theme landscape", "Consensus and dispute", "Reading note"] : ["主题全景", "共识与争议", "阅读提示"])
             ).map(label => <div key={label}><span>{label}</span><SampleLines /></div>)
               : <>{kind === "theme" && index === 1 ? <span className="site-example-ref">TB-01</span> : null}<span>[{en ? "Example content" : "示例内容"}]</span><SampleLines />{kind === "theme" && index === 1 ? <a className="site-example-link" href="#example-instruction">{en ? "See this example in the instruction" : "查看此示例在立言指令中的引用"}<ArrowRight size={14} aria-hidden="true" /></a> : null}</>}
           </div>
@@ -90,81 +90,84 @@ function Clause({ children }: { children: ReactNode }) {
 function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
   return <main id="main-content" className="site-main">
     <section className="site-hero" aria-labelledby="site-headline">
-      <div className="site-hero-copy">
-        {/* A couplet, so the only place it may turn is between its halves. */}
-        <h1 id="site-headline">
-          {en ? (
-            <>
+      {/* A couplet: two lines by construction, not by wrapping. Both halves
+          begin with the marked verb, so 知 sits directly above 立 — and the
+          same is true of the two promise lines below, which are the same
+          couplet again at reading size. Nothing may indent or centre these or
+          that column of verbs comes apart. */}
+      <h1 id="site-headline">
+        {en ? (
+          <>
+            <Clause>
+              <Verb>Know</Verb> the vast world
+            </Clause>
+            <Clause>
+              <Verb>Write</Verb> what endures
+            </Clause>
+          </>
+        ) : (
+          <>
+            <Clause>
+              <Verb>“知”</Verb>大千世界
+            </Clause>
+            <Clause>
+              <Verb>“立”</Verb>不朽篇章
+            </Clause>
+          </>
+        )}
+      </h1>
+      {/*
+        Four lines, and the typography is the argument.
+        The first is 信息繁杂, so it is set in the sans — the voice of
+        undifferentiated information — and recessed. The last two are 妙笔生花,
+        so they are 宋体 at reading size: composed prose, the form arriving
+        where the sentence does. Between them the hinge, which belongs to the
+        lines it introduces rather than to the one it follows — hence generous
+        space above it and tight space below.
+      */}
+      <div className="site-lede">
+        {en ? (
+          <>
+            <p className="site-lede-problem">
+              What you read piles up and stirs a hundred thoughts; the feeling arrives, the
+              words do not.
+            </p>
+            <p className="site-lede-turn">立言阁 helps you:</p>
+            <p className="site-lede-promise">
+              First <Verb>know</Verb> what was said — keep the essence, discard the dross;
+            </p>
+            <p className="site-lede-promise">
+              then <Verb>write</Verb> words of your own — the thoughts well up, and the pen
+              flowers.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="site-lede-problem">信息繁杂，时常感慨万千；有感而发，不知如何表达</p>
+            <p className="site-lede-turn">立言阁帮你：</p>
+            <p className="site-lede-promise">
               <Clause>
-                <Verb>Know</Verb> the vast world;
-              </Clause>{" "}
-              <Clause>
-                <Verb>write</Verb> what endures.
+                先<Verb>“知”</Verb>其言
               </Clause>
-            </>
-          ) : (
-            <>
+              ，<Clause>取其精华</Clause>，<Clause>去其糟粕</Clause>；
+            </p>
+            <p className="site-lede-promise">
               <Clause>
-                <Verb>“知”</Verb>大千世界，
+                再<Verb>“立”</Verb>其言
               </Clause>
-              <Clause>
-                <Verb>“立”</Verb>不朽篇章
-              </Clause>
-            </>
-          )}
-        </h1>
-        {/*
-          Three lines, and the typography is the argument.
-          The first line is 信息繁杂, so it is set in the sans — the voice of
-          undifferentiated information — and recessed. The third is 妙笔生花, so
-          it is set in 宋体, larger and more generously led: composed prose. The
-          second is the hinge that turns one into the other, and it belongs to
-          the line it introduces rather than to the one it follows, which is why
-          the space above it is generous and the space below it is tight.
-        */}
-        <div className="site-lede">
-          {en ? (
-            <>
-              <p className="site-lede-problem">
-                What you read piles up and stirs a hundred thoughts; the feeling arrives, the
-                words do not.
-              </p>
-              <p className="site-lede-turn">立言阁 helps you:</p>
-              <p className="site-lede-promise">
-                First <Verb>know</Verb> what was said — keep the essence, discard the dross;
-                then <Verb>write</Verb> words of your own — the thoughts well up, and the pen
-                flowers.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="site-lede-problem">信息繁杂，时常感慨万千；有感而发，不知如何表达</p>
-              <p className="site-lede-turn">立言阁帮你：</p>
-              <p className="site-lede-promise">
-                <Clause>
-                  先<Verb>“知”</Verb>其言
-                </Clause>
-                ，<Clause>取其精华</Clause>，<Clause>去其糟粕</Clause>；
-                <Clause>
-                  再<Verb>“立”</Verb>其言
-                </Clause>
-                ，<Clause>文思泉涌</Clause>，<Clause>妙笔生花</Clause>。
-              </p>
-            </>
-          )}
-        </div>
-        <div className="site-actions">{action}<a className="site-text-link" href="#workflow">{en ? "Explore the workflow" : "了解使用流程"}<ArrowRight size={16} aria-hidden="true" /></a></div>
+              ，<Clause>文思泉涌</Clause>，<Clause>妙笔生花</Clause>。
+            </p>
+          </>
+        )}
       </div>
-      <ol className="site-journey" aria-label={en ? "Workflow overview" : "流程概览"}>
-        {[en ? "Sources · Topic" : "来源 · 主题", en ? "Zhiyan" : "知言", en ? "Liyan" : "立言", en ? "Publications" : "发布"].map((name, index) => <li key={name}><span className="site-journey-number">0{index + 1}</span><strong>{name}</strong><div className="site-journey-glyph" aria-hidden="true">{index === 3 ? <span className="site-mini-branches"><i /><i /><i /></span> : <FileText size={36} strokeWidth={1} />}</div></li>)}
-      </ol>
+      <div className="site-actions">{action}<a className="site-text-link" href="#workflow">{en ? "Explore the workflow" : "了解使用流程"}<ArrowRight size={16} aria-hidden="true" /></a></div>
     </section>
 
     <section id="workflow" className="site-workflow" aria-labelledby="workflow-heading">
       <h2 id="workflow-heading" className="site-section-title">{en ? "How it works" : "使用流程"}</h2>
       <section className="site-stage" aria-labelledby="inputs-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">01</span><h3 id="inputs-heading">{en ? "Sources · Topic" : "来源 · 主题"}</h3><p>[{en ? "What you provide and how to begin" : "你提供什么，以及如何开始的说明"}]</p></div>
-        <div className="site-inputs">{[en ? "Source" : "来源", en ? "Topic" : "主题"].map(title => <article key={title}><header><h4>{title}</h4><span>{en ? "You provide" : "你提供"}</span></header><p>[{en ? `${title} explanation` : `${title}说明`}]</p><ExampleDocument title={`${en ? "Example A" : "示例 A"} · ${title}`} /></article>)}</div>
+        <div className="site-stage-heading"><span className="site-stage-number">01</span><h3 id="inputs-heading">{en ? "Sources · Theme" : "来源 · 主题"}</h3><p>[{en ? "What you provide and how to begin" : "你提供什么，以及如何开始的说明"}]</p></div>
+        <div className="site-inputs">{[en ? "Source" : "来源", en ? "Theme" : "主题"].map(title => <article key={title}><header><h4>{title}</h4><span>{en ? "You provide" : "你提供"}</span></header><p>[{en ? `${title} explanation` : `${title}说明`}]</p><ExampleDocument title={`${en ? "Example A" : "示例 A"} · ${title}`} /></article>)}</div>
       </section>
       <section className="site-stage" aria-labelledby="reports-heading">
         <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "Zhiyan" : "知言"}</h3><p>[{en ? "How Liyan analyses your sources and topic" : "立言阁如何分析来源与主题的说明"}]</p></div>

@@ -51,8 +51,20 @@
 .site-cta[aria-busy] { opacity: .65; }
 .site-header .site-cta { min-height: 42px; padding: 10px 16px; gap: 8px; }
 .site-main, .site-footer { max-width: var(--site-width); margin: auto; width: calc(100% - 80px); }
-.site-hero { padding: 98px 0 100px; display: grid; grid-template-columns: 1fr 1.1fr; gap: 64px; align-items: center; }
-.site-hero h1 { font-size: clamp(36px, 4.3vw, 64px); line-height: 1.3; letter-spacing: -.025em; }
+/*
+ * One column, and the space to its right left empty on purpose.
+ *
+ * The four-step strip that used to sit there said the same thing 使用流程 says
+ * directly below it, at a size nobody reads. With it gone the couplet can be
+ * set at the scale a couplet wants, and 留白 does what a second column was
+ * doing badly.
+ */
+.site-hero { padding: 116px 0 104px; }
+.site-hero h1 { font-size: clamp(34px, 5.6vw, 88px); line-height: 1.24; letter-spacing: -.03em; }
+/* Each half on its own line at every width. The couplet's form is not a
+   wrapping accident, and there is no punctuation left between the halves for
+   wrapping to find. */
+.site-hero h1 .site-clause { display: block; }
 /*
  * 知 and 立 wherever they appear.
  *
@@ -86,43 +98,39 @@
  * rule is 1px and the width of two characters, which is the lead-in a classical
  * setting would give it.
  */
-.public-site .site-lede { margin-top: 30px; max-width: 33em; }
-.public-site .site-lede-problem { font-size: 17px; line-height: 1.85; color: var(--ink-muted); }
+.public-site .site-lede { margin-top: 56px; max-width: 40em; }
+:lang(en) .public-site .site-lede { max-width: 47em; }
+.public-site .site-lede-problem { font-size: 18px; line-height: 1.85; color: var(--ink-muted); }
+/*
+ * The hinge, which is the most present line here rather than the quietest.
+ *
+ * It was 14px of tracked brass behind a rule, which made it a label — and a
+ * label is the one thing it is not: it is the sentence that turns the block.
+ * Now it is set at the promise's size and face and carries the weight, so it
+ * reads as the line those two answer to. Losing the brass is the point as well
+ * as the effect: the accent belongs to 知 and 立 alone, and spending it here
+ * too was spending it twice.
+ */
 .public-site .site-lede-turn {
-  margin-top: 26px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  margin-top: 30px;
   font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
-  font-size: 14px;
-  letter-spacing: 0.16em;
-  color: var(--accent);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
 }
-.public-site .site-lede-turn::before { content: ""; flex: none; width: 22px; height: 1px; background: currentColor; }
-/* Wide tracking at 13–14px is a CJK device: it separates glyphs that are dense
-   and square. Latin lowercase at the same value just reads loose, so it gets
-   the amount a small label actually wants. */
-:lang(en) .public-site .site-lede-turn { letter-spacing: 0.06em; }
 .public-site .site-lede-promise {
   margin-top: 12px;
   font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
-  font-size: 20px;
-  line-height: 1.95;
+  font-size: 22px;
+  line-height: 1.85;
   color: var(--ink);
 }
-.site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 36px; }
+/* 先… and 再… are one couplet, so they sit closer to each other than to the
+   line that introduces them. */
+.public-site .site-lede-promise + .site-lede-promise { margin-top: 2px; }
+.site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 44px; }
 .site-text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 14px; text-decoration: none; min-height: 44px; }
 .site-text-link:hover { text-decoration: underline; }
-.site-journey { display: grid; grid-template-columns: repeat(4, 1fr); list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
-.site-journey li { min-width: 0; padding: 24px 12px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; position: relative; }
-.site-journey li + li { border-left: 1px solid var(--rule); }
-.site-journey-number { align-self: flex-start; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.site-journey strong { font: 18px "Songti SC", "Noto Serif SC", Georgia, serif; color: var(--accent-ink); }
-.site-journey-glyph { height: 60px; display: grid; place-items: center; color: var(--accent); }
-.site-mini-branches { width: 38px; height: 44px; position: relative; display: grid; align-content: space-between; }
-.site-mini-branches i { width: 26px; height: 10px; border-bottom: 1px solid var(--accent); border-left: 1px solid var(--accent); border-radius: 0 0 0 6px; }
-.site-mini-branches i::after { content: ""; display: block; width: 7px; height: 7px; margin-left: 24px; border: 1px solid var(--accent); border-radius: 50%; background: var(--surface); }
-.site-mini-branches i:nth-child(2) { margin-left: 7px; }
 .site-section-title { font-size: clamp(30px, 3vw, 40px); line-height: 1.3; }
 .site-workflow > h2 { padding: 48px 0 30px; border-top: 1px solid var(--rule); }
 .site-stage { display: grid; grid-template-columns: 240px minmax(0, 1fr); column-gap: 56px; padding: 48px 0 56px; border-bottom: 1px solid var(--rule); }
@@ -243,7 +251,6 @@
   .site-header { grid-template-columns: auto 1fr auto; gap: 20px; padding-inline: 24px; }
   .site-nav { justify-content: center; gap: 20px; }
   .site-mode > span { display: none; }
-  .site-hero { gap: 32px; }
   .site-stage, .site-faq { grid-template-columns: 190px 1fr; gap: 28px; }
   .site-reports, .site-inputs { gap: 20px; }
   .site-report h4 { font-size: 21px; }
@@ -260,9 +267,7 @@
   .site-brand span { font-size: 22px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }
-  .site-hero { grid-template-columns: 1fr; padding: 60px 0; gap: 44px; }
-  .site-hero h1 { font-size: clamp(36px, 7vw, 52px); }
-  .site-journey li { padding-block: 16px; }
+  .site-hero { padding: 64px 0 68px; }
   .site-stage, .site-faq { grid-template-columns: 1fr; }
   .site-stage-heading { display: grid; grid-template-columns: auto 1fr; column-gap: 20px; align-items: center; margin-bottom: 8px; }
   .site-stage-number { font-size: 36px; margin: 0; }
@@ -283,11 +288,10 @@
   .site-main, .site-footer { width: calc(100% - 32px); }
   .site-hero { padding-top: 44px; }
   .site-actions { gap: 18px; }
+  .public-site .site-lede { margin-top: 34px; }
   .public-site .site-lede-problem { font-size: 16px; }
-  .public-site .site-lede-promise { font-size: 18px; }
-  .public-site .site-lede-turn { margin-top: 22px; font-size: 13px; }
-  .site-journey li { padding-inline: 6px; }
-  .site-journey strong { font-size: 15px; }
+  .public-site .site-lede-promise { font-size: 19px; }
+  .public-site .site-lede-turn { margin-top: 26px; font-size: 19px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }
   .site-report-intro { min-height: 0; }
   .site-document { padding: 20px; }
@@ -303,14 +307,22 @@
   .site-auth { margin-block: 40px; }
   .site-auth .auth-card { padding: 24px; }
 }
+/*
+ * The page's one authored moment, inherited rather than invented.
+ *
+ * The same left-to-right wipe used to reveal the four-step strip; on the
+ * couplet it reads as the line being written, which is the claim the couplet
+ * makes. The second half follows the first by a beat. The default state is the
+ * finished one, so a browser that never runs this shows the headline outright.
+ */
 @media (prefers-reduced-motion: no-preference) {
-  .site-journey { animation: site-reveal 700ms cubic-bezier(.22,1,.36,1); }
+  .site-hero h1 .site-clause { animation: site-reveal 820ms cubic-bezier(.22, 1, .36, 1) both; }
+  .site-hero h1 .site-clause:nth-child(2) { animation-delay: 160ms; }
   @keyframes site-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
 }
 /* The legacy auth surface used two columns; a dedicated entry page stacks its
    introduction and form so neither becomes a narrow strip. */
 .site-auth .auth-card { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-.site-journey strong { white-space: nowrap; }
 .site-example-ref { display: inline-block; margin-right: 8px; padding: 3px 6px; background: var(--accent-soft); color: var(--accent-ink); border-radius: 4px; font-weight: 600; }
 .site-example-link { display: flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 12px; margin-top: 12px; min-height: 44px; }
 #example-instruction { scroll-margin-top: 24px; }

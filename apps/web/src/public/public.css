@@ -5,7 +5,7 @@
  * happened to end, which on the sign-in page meant below the fold with nothing
  * but whitespace above it.
  */
-.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; display: flex; flex-direction: column; overflow-x: clip; }
+.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; display: flex; flex-direction: column; }
 .public-site > main { flex: 1 0 auto; }
 
 /*
@@ -54,63 +54,43 @@
 /*
  * The couplet on one side of a line, everything it introduces on the other.
  *
- * One structural device: a single hairline, the 界行 that divides a classical
- * page. The left column is a field rather than a block — it takes the section's
- * full height, so the couplet has ground under it instead of dead space, and it
- * reads as the 匾额 that hangs in a 阁, which is what 立言阁 names. The tint is
- * two percent off the page; anything louder would make it a card.
+ * Built out of the page's own figure rather than a device invented here: a
+ * hairline in `--rule` with a 7px brass node sitting on it, which is exactly
+ * what `.site-stage-heading` puts beside each stage of 使用流程 below, at the
+ * same `left: -4px`. The hero is that figure at hero scale. An earlier version
+ * gave the left column a tinted field, and the tint was the problem: nothing
+ * else on this page uses `--surface-sunk` as a ground — it appears only as
+ * small inset panels — so a large one read as imported from another design.
  *
- * The couplet keeps the container's own left edge — no left padding — so it
- * starts exactly where 使用流程 starts below it, and the two sections read as
- * one page rather than two decisions. The right column hangs off the seam.
+ * The column gap is the stages' 56px. The couplet keeps the container's own
+ * left edge, so it starts exactly where 使用流程 starts below it.
  *
- * The ratio is language-shaped: seven characters plus two quote marks is 8em of
- * couplet, and English says the same thing in about twenty proportional
- * letters, so each locale gets the size that keeps its couplet on two lines.
+ * Both columns align to the top, as the stages do. The left one ends before the
+ * right one does, and that is the same asymmetry the stages already accept: the
+ * rule and its node are what hold the pair together, not equal length.
  */
-.site-hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: stretch; }
-/*
- * The section's air lives inside its columns, not on the section.
- *
- * On the section it left the field with ivory above and below it, which is what
- * a card looks like. Inside the columns the field runs the section's whole
- * height — header hairline to the rule under it — and reads as a column of the
- * page, which is what it is.
- */
-/*
- * The field runs off the left edge of the screen.
- *
- * Bounded by the page's gutter it was a rectangle with an ivory sliver beside
- * it, which reads as a mistake rather than as a margin. Off the edge it is
- * ground, and the seam is then the only line in the composition.
- *
- * The margin/padding pair is the standard bleed: out to the viewport, then back
- * in by the same amount, so the couplet still sits on the container's own left
- * edge — the same edge 使用流程 uses below. `overflow-x: clip` on `.public-site`
- * absorbs it; measured, that leaves zero horizontal overflow even with a
- * scrollbar taking 11px out of `100vw`, and the sticky header still sticks,
- * because `clip` does not make an ancestor into a scroll container.
- */
-.site-hero-plaque {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-left: calc(50% - 50vw);
-  padding: 124px 64px 116px calc(50vw - 50%);
-  background: var(--surface-sunk);
-  border-right: 1px solid var(--rule);
-}
+.site-hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); column-gap: 56px; padding: 116px 0 108px; }
+.site-hero-couplet { min-width: 0; }
 .site-hero-page {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 124px 0 116px 56px;
+  min-width: 0;
+  padding-left: 34px;
+  border-left: 1px solid var(--rule);
 }
-/* 8em of couplet in a 604px field: the cap is what fills it rather than what
-   fits in it. */
-.site-hero h1 { font-size: clamp(34px, 5.6vw, 84px); line-height: 1.2; letter-spacing: -.03em; }
-:lang(en) .site-hero h1 { font-size: clamp(30px, 4.4vw, 66px); }
+/* The node sits on the first line of prose, the way the stages' sits on the
+   first line of theirs. */
+.site-hero-page::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.site-hero h1 { font-size: clamp(34px, 5.3vw, 76px); line-height: 1.2; letter-spacing: -.03em; }
+:lang(en) .site-hero h1 { font-size: clamp(30px, 4.2vw, 62px); }
 /* Each half on its own line at every width. The couplet's form is not a
    wrapping accident, and there is no punctuation left between the halves for
    wrapping to find. */
@@ -330,19 +310,13 @@
   .site-brand span { font-size: 22px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }
-  /* One column: there is no width here to divide. The field becomes a band the
-     couplet sits in and the page follows underneath — the same seam rotated
-     from a vertical rule into a horizontal one. */
-  .site-hero { grid-template-columns: 1fr; }
-  /* Both edges here, so the band spans the screen and the seam becomes the
-     horizontal rule under it. */
-  .site-hero-plaque {
-    margin-inline: calc(50% - 50vw);
-    padding: 48px calc(50vw - 50%) 44px;
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-  }
-  .site-hero-page { padding: 38px 0 64px; }
+  /* One column, and the rule stays. `.site-stage-heading` keeps its own left
+     rule and node at this width too, so the prose keeps hanging off the same
+     figure — now under the couplet instead of beside it, at the stages' own
+     26px inset. */
+  .site-hero { grid-template-columns: 1fr; padding: 56px 0 64px; }
+  .site-hero-page { margin-top: 36px; padding-left: 26px; }
+  .site-hero-page::before { top: 10px; }
   .site-stage, .site-faq { grid-template-columns: 1fr; }
   .site-stage-heading { display: grid; grid-template-columns: auto 1fr; column-gap: 20px; align-items: center; margin-bottom: 8px; }
   .site-stage-number { font-size: 36px; margin: 0; }

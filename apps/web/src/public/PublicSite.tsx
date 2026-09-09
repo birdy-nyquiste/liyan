@@ -91,13 +91,12 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
   return <main id="main-content" className="site-main">
     <section className="site-hero" aria-labelledby="site-headline">
       {/*
-        Two columns meeting at one hairline — the 界行 of a classical page.
-        Left is a field, not a block: it runs the section's full height and
-        carries the couplet the way a 匾额 carries an inscription, which is what
-        hangs in a 阁. Right is the page. The couplet keeps the container's own
-        left edge, so it starts where 使用流程 starts below it.
+        Two columns divided by the page's own figure: a hairline with a brass
+        node on it, which is what `.site-stage-heading` puts beside every stage
+        of 使用流程 below. The hero is that figure at hero scale rather than a
+        device invented for one section.
       */}
-      <div className="site-hero-plaque">
+      <div className="site-hero-couplet">
       {/* A couplet: two lines by construction, not by wrapping. Both halves
           begin with the marked verb, so 知 sits directly above 立 — and the
           same is true of the two promise lines opposite, which are the same

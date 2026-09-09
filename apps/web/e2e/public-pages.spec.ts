@@ -23,9 +23,18 @@ test("public pages preserve the entry flow, section navigation and display prefe
   await page.getByRole("link", { name: "使用条款", exact: true }).click();
   await expect(page.getByRole("heading", { name: "使用条款", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText("页面建设中，内容待补充。")).toBeVisible();
-  await page.getByRole("link", { name: "隐私政策", exact: true }).click();
+  // The reload is the point: a direct load of a routed path has to serve the
+  // document, not the shell. Asserted on a chapter heading rather than on the
+  // placeholder that used to stand here.
+  await expect(page.getByRole("heading", { name: "四、你的内容", exact: true })).toBeVisible();
+  // The footer's link: both documents cross-reference each other now, so the
+  // page holds more than one route to 隐私政策 and only this one is navigation.
+  await page.getByRole("navigation", { name: "法律与联系" })
+    .getByRole("link", { name: "隐私政策", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "隐私政策", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "三、浏览器插件", exact: true })).toBeVisible();
+  await expect(page.getByText(/Limited Use 要求/)).toBeVisible();
   await expect(page.getByRole("link", { name: "联系我们" })).toHaveAttribute("href", "mailto:birdyyao@nyquiste.com");
   await page.getByRole("link", { name: "立即体验", exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in$/);

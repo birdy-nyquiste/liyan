@@ -490,7 +490,7 @@ function TermsOfUse() {
           本条款是你与 {ENTITY}（下称“我们”）之间关于使用立言阁的协议。
           <strong>
             注册账号或使用本服务，即表示你已阅读、理解并同意本条款及
-            <a href="/privacy">隐私政策</a>。
+            <a href="/privacy">《隐私政策》</a>。
           </strong>
           若你代表某一组织接受本条款，你声明你已获得该组织的授权。
         </p>

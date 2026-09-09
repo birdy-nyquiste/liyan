@@ -40,8 +40,8 @@ for the same resource:
   (`cleanup.py`). Pointed at a shared bucket, Staging's sweep would collect
   Production's uploads: every one of them is an orphan as far as Staging's
   database is concerned. This is the sharpest reason on this page.
-- **The Supabase project.** Auth identities and the allowlist are per
-  environment.
+- **The Supabase project.** Auth identities — and the allowlist, where one is
+  set — are per environment.
 - **The Blog ingest credential.** `LIYAN_BLOG_INGEST_TOKEN` and
   `LIYAN_PUBLICATION_TARGETS`. A Preview is a real Blog item; ADR-0001 means
   立言阁 cannot retract one, and v0.11 offers no lookup to find it again. Staging

@@ -211,6 +211,8 @@ envVarGroups:
         sync: false
       - key: LIYAN_BLOG_INGEST_TOKEN
         sync: false
+      # Empty means open: every verified Supabase account may sign up. Set it
+      # only to close an environment down to a named few.
       - key: LIYAN_ALLOWED_EMAILS
         sync: false
       # Stripe. All three together or none: a secret key without a signing

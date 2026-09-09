@@ -5,9 +5,9 @@ it has to happen. `apps/extension/README.md` says how to build and run the
 extension; this says how to release it.
 
 Two decisions are already made and everything below assumes them:
-**Unlisted** distribution, because 立言阁 is invite-only and a public listing
-would mostly reach people who cannot use it; and **zh-CN only**, so there is no
-`_locales` and one listing to fill in.
+**Unlisted** distribution, because the extension's 来源 collection needs a paid
+立言阁 account and a public listing would mostly reach people who have none; and
+**zh-CN only**, so there is no `_locales` and one listing to fill in.
 
 ---
 
@@ -233,7 +233,7 @@ lending — are all true and can be checked.
 - **Visibility: Unlisted.** Reviewed like any other item, absent from search and
   from category browsing, installable by anyone with the link.
 - **Regions** — all, or 中国大陆 plus wherever your users are. This is not a
-  gate on who can use 立言阁; the email allowlist is.
+  gate on who can use 立言阁; sign-up is open, and 额度 are the only gate.
 - **Paid?** No. 额度 are bought in 工作台, and the extension only links there.
   Do not declare a payment here.
 
@@ -241,17 +241,16 @@ lending — are all true and can be checked.
 
 ## 8. Test instructions — do not leave this blank
 
-The reviewer cannot use the extension. 立言阁 admits only allowlisted addresses
-(`LIYAN_ALLOWED_EMAILS`), URL 来源 require a 付费用户, and sign-in is a code sent
-to a mailbox. Installed cold, every path ends at 此账号暂无访问权限 or
-尚未购买额度. An extension whose function cannot be verified is a common
-rejection, so say so plainly rather than letting them discover it:
+Sign-up is open — a reviewer can create an account with a code sent to their
+own mailbox — but URL 来源 require a 付费用户, so a cold install still ends at
+尚未购买额度 partway through. An extension whose function cannot be verified is a
+common rejection, so say what is reachable and what is not:
 
-> 立言阁 is invite-only and this extension requires a paid account, so the
-> extension cannot be exercised without an account we provision. The attached
-> recording shows the complete flow — sign-in, opening a basket, collecting
-> three pages, and creating the task. We are glad to provision a reviewer
-> account on request.
+> Anyone can sign up for 立言阁 with an email code; collecting URL 来源 requires
+> a paid account, so the extension cannot be exercised end to end without
+> credits. The attached recording shows the complete flow — sign-in, opening a
+> basket, collecting three pages, and creating the task. We are glad to credit
+> a reviewer account on request.
 
 Attach a screen recording of the whole flow. It is what most often gets a
 login-gated extension through without a round trip.
@@ -283,8 +282,8 @@ form; use it instead of resubmitting unchanged, which reads as circumvention.
 
 The two most likely rejections here, and what to do:
 
-- **Functionality could not be verified.** Provision the reviewer account and
-  put the credentials in Test instructions.
+- **Functionality could not be verified.** Credit a reviewer account and put
+  the credentials in Test instructions.
 - **Data disclosure does not match the privacy policy.** The two have to agree.
   `/privacy` and section 6 above are written to say the same thing; if you
   change one, change the other.

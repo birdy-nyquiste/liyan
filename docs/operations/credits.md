@@ -621,8 +621,8 @@ measurement.
    the rate-card version, and the resulting cost — and charge nobody.
 4. **Calibrate.** `scripts/calibrate_costs.py` drives 知言 and 立言 over a corpus
    you choose and fits the assumptions above against what actually happened.
-   Not shadow mode against real traffic: behind an allowlist there is barely
-   any, and what there is would be whatever a few testers happened to paste. A
+   Not shadow mode against real traffic: this early there is barely any, and
+   what there is would be whatever a few testers happened to paste. A
    corpus spread across lengths gives the same answers in an afternoon. Then set
    the 赠送额度 amount and the caps, and replace the assumptions table with
    measurements.

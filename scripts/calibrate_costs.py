@@ -7,8 +7,8 @@ preamble is, how much text DeepSeek injects when it searches, how long a
 rests on them, and none of them has been measured. This is how they stop being
 assumptions.
 
-It does not wait for real traffic. Behind an allowlist there is barely any, and
-what there is would be whatever a handful of testers happened to paste — a
+It does not wait for real traffic. This early there is barely any, and what
+there is would be whatever a handful of testers happened to paste — a
 biased sample, slowly. Driving a corpus you chose gives the same answer in an
 afternoon, over a spread you control.
 

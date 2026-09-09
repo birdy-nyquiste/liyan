@@ -11,8 +11,25 @@
 export type ManifestEnvironment = {
   apiBaseUrl: string;
   supabaseUrl: string;
+  /** 工作台's address, which is also the 插件's homepage. */
+  webBaseUrl: string;
   version: string;
 };
+
+/**
+ * The oldest Chrome this build actually works in.
+ *
+ * Not a guess and not a floor picked for comfort: the workbench's stylesheet —
+ * which the panel imports whole — uses `color-mix()` unguarded for focus rings
+ * and surfaces, and that is Chrome 111. `build.target` in `vite.config.ts` is
+ * pinned to the same number so the JavaScript cannot quietly need more than
+ * the CSS does.
+ *
+ * Declaring it is what stops an older Chrome installing this and rendering a
+ * panel with no focus rings and missing backgrounds. Chrome will not offer the
+ * extension at all instead, which is the honest outcome.
+ */
+const MINIMUM_CHROME_VERSION = "111";
 
 /** The origin of a URL, as a match pattern covering every path under it. */
 function originPattern(value: string): string {
@@ -26,6 +43,11 @@ export function buildManifest(environment: ManifestEnvironment) {
     name: "立言阁浏览器插件",
     version: environment.version,
     description: "把正在读的页面收集为来源，创建一个立言任务。",
+    minimum_chrome_version: MINIMUM_CHROME_VERSION,
+    // 工作台 itself. The Web Store shows this as the item's website, and it is
+    // where a user who wants to know what 立言阁 is has to be able to get to —
+    // including the 隐私政策 the listing has to point at.
+    homepage_url: new URL("/", environment.webBaseUrl).toString(),
     action: {
       default_title: "立言阁",
       default_popup: "popup.html",

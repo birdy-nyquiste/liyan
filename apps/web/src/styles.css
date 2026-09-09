@@ -1927,6 +1927,25 @@ h1 {
   color: var(--ink-muted);
 }
 
+/*
+ * The line saying what continuing agrees to.
+ *
+ * Here rather than in `public/public.css` because the 插件 renders the same
+ * `AuthPanel` from a 360px popup and imports this stylesheet — a rule scoped to
+ * `.public-site` would leave it unstyled there, which is the one client where
+ * unstyled small print has no room to be wrong in.
+ */
+.auth-card__legal {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+
+.auth-card__legal a {
+  color: var(--ink-muted);
+  text-underline-offset: 3px;
+}
+
 .auth-form {
   display: grid;
   gap: var(--space-2xs);

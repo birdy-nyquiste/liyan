@@ -109,7 +109,7 @@ export async function seedLocalSession(page: Page): Promise<void> {
     },
     [LOCAL_PROJECT_REF, LOCAL_ACCESS_TOKEN],
   );
-  await page.goto("/");
+  await page.goto("/task");
   await expect(railLink(page, "新建任务")).toBeVisible();
 }
 
@@ -122,7 +122,7 @@ export async function seedLocalSession(page: Page): Promise<void> {
 export async function signInWithOtp(page: Page): Promise<void> {
   expect(email, "Set LIYAN_E2E_EMAIL to an allowlisted Staging address.").not.toEqual("");
   expect(otp, "Set LIYAN_E2E_OTP to a code Supabase issued that address.").not.toEqual("");
-  await page.goto("/");
+  await page.goto("/task");
   await page.getByLabel("邮箱").fill(email);
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByLabel("验证码").fill(otp);
@@ -200,7 +200,7 @@ export const FIXED_OTP = process.env.LIYAN_E2E_FIXED_OTP === "1";
  * than three assertions later.
  */
 export async function openWorkbench(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/task");
   const newTask = railLink(page, "新建任务");
   if ((page.viewportSize()?.width ?? 1280) <= 800) {
     await page.getByRole("button", { name: "打开导航" }).click();

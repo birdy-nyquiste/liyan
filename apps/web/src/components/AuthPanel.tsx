@@ -11,6 +11,16 @@ type AuthPanelProps = {
   onRequestOtp(email: string): Promise<void>;
   onVerifyOtp(email: string, otp: string): Promise<void>;
   onRestartEmail(): void;
+  /**
+   * Where 使用条款 and 隐私政策 answer, for clients that are not 工作台.
+   *
+   * The workbench serves both itself, so it passes nothing and the links stay
+   * relative. The 插件 has to pass its 工作台's address: a relative `/terms`
+   * inside a popup resolves to `chrome-extension://<id>/terms`, which is a page
+   * that does not exist — and the one place a user is agreeing to those
+   * documents is the worst place to hand them a broken link.
+   */
+  legalBaseUrl?: string;
 };
 
 export function AuthPanel({
@@ -20,6 +30,7 @@ export function AuthPanel({
   onRequestOtp,
   onVerifyOtp,
   onRestartEmail,
+  legalBaseUrl,
 }: AuthPanelProps) {
   const { locale, t } = useInterfaceLocale();
   // A resend is the same request as the first send; only the reassurance differs,
@@ -48,6 +59,9 @@ export function AuthPanel({
     });
   }
 
+  /** A legal document's address, absolute only where it has to be. */
+  const legal = (path: string) => (legalBaseUrl ? new URL(path, legalBaseUrl).toString() : path);
+
   const describedBy = [state.screen === "otp" ? "auth-sent" : null, state.message ? "auth-error" : null]
     .filter(Boolean)
     .join(" ");
@@ -55,9 +69,10 @@ export function AuthPanel({
   return (
     <section className="workspace auth-card" aria-labelledby="auth-heading">
       <div>
-        <p className="section-kicker">{t("仅限受邀用户")}</p>
-        <h2 id="auth-heading">{t("登录立言阁")}</h2>
-        <p className="auth-card__lede">{t("使用邮箱接收一次性验证码，无需密码。")}</p>
+        <h2 id="auth-heading">{t("登入立言阁")}</h2>
+        <p className="auth-card__lede">
+          {t("使用邮箱接收一次性验证码，无需密码。首次登入自动创建账号。")}
+        </p>
       </div>
 
       {state.screen === "email" ? (
@@ -130,6 +145,38 @@ export function AuthPanel({
           {t(state.message)}
         </p>
       ) : null}
+      {/* Both screens, and at the foot of the card rather than under the button,
+          so that a refusal is never pushed below a line of small print. Opened
+          in a tab of their own: reading the 条款 must not cost the address
+          already typed into the field above — and in the 插件, where the popup
+          is destroyed by any navigation, that is not a nicety. */}
+      <p className="auth-card__legal">
+        {locale === "en" ? (
+          <>
+            By continuing, you agree to our{" "}
+            <a href={legal("/terms")} target="_blank" rel="noreferrer">
+              Terms of Use
+            </a>{" "}
+            and{" "}
+            <a href={legal("/privacy")} target="_blank" rel="noreferrer">
+              Privacy Policy
+            </a>
+            .
+          </>
+        ) : (
+          <>
+            继续即表示你同意我们的
+            <a href={legal("/terms")} target="_blank" rel="noreferrer">
+              《使用条款》
+            </a>
+            与
+            <a href={legal("/privacy")} target="_blank" rel="noreferrer">
+              《隐私政策》
+            </a>
+            。
+          </>
+        )}
+      </p>
     </section>
   );
 }

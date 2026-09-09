@@ -9,7 +9,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "strict": true,
-    "types": ["node"]
+    "types": ["node"],
+    "resolveJsonModule": true
   },
-  "include": ["vite.config.ts"]
+  // The build tooling and its tests. They live beside `vite.config.ts` rather
+  // than in `src` because that is what they are: the manifest and the
+  // addresses it carries are decided while building, not while running.
+  "include": ["vite.config.ts", "manifest.ts", "releaseTarget.ts", "*.test.ts"]
 }

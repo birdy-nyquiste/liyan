@@ -13,13 +13,29 @@ body {
   background: var(--canvas);
 }
 
+/*
+ * The ceiling Chrome will not draw past, named here so the panel decides what
+ * gets cut off rather than Chrome.
+ *
+ * Left alone, the popup grows to its content and Chrome scrolls the whole
+ * document once it passes this — which takes 添加当前页面 and 确认创建任务 with
+ * it, and those are the two things the design says never move. Measured in the
+ * harness: three 来源 come to 552px, one of them failing adds its reason and
+ * its blocker, and the oldest nearing cleanup adds a warning — 660px, with the
+ * buttons below the fold and nothing saying so.
+ *
+ * So the list scrolls and the two ends stay put. Under the ceiling nothing
+ * changes: a popup with one 来源 in it is still as tall as its content.
+ */
 .panel {
   display: flex;
   flex-direction: column;
   min-height: 180px;
+  max-height: 600px;
 }
 
 .panel__head {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
@@ -45,6 +61,12 @@ body {
   flex-direction: column;
   gap: var(--space-xs);
   padding: var(--space-sm);
+  /* The only part that scrolls. `min-height: 0` is what lets it: a flex item
+     will not shrink below its content without it, and the panel would grow
+     past its own ceiling instead. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /*
@@ -78,6 +100,7 @@ body {
  * again every time.
  */
 .panel__foot {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);

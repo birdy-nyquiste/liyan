@@ -21,7 +21,7 @@ import {
   readSignInProgress,
   rememberSignInProgress,
 } from "./signInProgress";
-import { openWorkbench } from "./workbench";
+import { openWorkbench, workbenchUrl } from "./workbench";
 
 /**
  * What the panel is showing.
@@ -35,8 +35,14 @@ type PanelState =
   | SignedOutState
   /** Signed in, but URL 来源 are what a 付费用户 buys and this user has not. */
   | { screen: "locked" }
-  /** Signed in and able to collect, with no basket open. */
-  | { screen: "home" }
+  /**
+   * Signed in and able to collect, with no basket open.
+   *
+   * The message is for a 新建任务 that could not be opened. Without somewhere
+   * to say so, that button fails by doing nothing at all, which tells the user
+   * less than any sentence would.
+   */
+  | { screen: "home"; message?: string }
   /** A basket is open, holding nothing or up to three 来源. */
   | { screen: "basket"; basketId: string; recovered: boolean }
   /** A 立言任务 exists. 知言 is already queued for every 来源 in it. */
@@ -45,6 +51,14 @@ type PanelState =
 const SESSION_EXPIRED = "登录已过期，请重新登录。";
 const ACCESS_DENIED = "此账号暂无访问权限。";
 const UNAVAILABLE = "暂时无法连接立言阁，请稍后重试。";
+/**
+ * Reading or writing `chrome.storage` failed, which nothing else can explain.
+ *
+ * Separate from UNAVAILABLE because it is not the network: the panel is asking
+ * the browser for what it wrote itself. The user cannot repair it, but they can
+ * be told that retrying is the move rather than waiting.
+ */
+const STORAGE_FAILED = "读取本地数据失败，请重新打开插件。";
 
 function signedOut(message: string | null = null): SignedOutState {
   return { screen: "email", email: "", busy: false, message };
@@ -131,7 +145,13 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
         setState(signedOut());
       }
     }
-    void resume();
+    // Every await in `resume` touches `chrome.storage`, and an unhandled
+    // rejection there leaves the panel on its opening frame permanently — a
+    // popup showing 读取中… with no reload button and no way out. Landing on
+    // the address form is wrong about the cause and right about what to do.
+    void resume().catch(() => {
+      if (active) setState(signedOut(STORAGE_FAILED));
+    });
     return () => {
       active = false;
     };
@@ -183,9 +203,13 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
       <Body
         state={state}
         accessToken={accessToken}
-        onOpenBasket={async () =>
-          setState({ screen: "basket", basketId: await openBasket(), recovered: false })
-        }
+        onOpenBasket={async () => {
+          try {
+            setState({ screen: "basket", basketId: await openBasket(), recovered: false });
+          } catch {
+            setState({ screen: "home", message: STORAGE_FAILED });
+          }
+        }}
         onCreated={(task) => setState({ screen: "created", task })}
         onCollected={() => setState({ screen: "home" })}
         onEmailChange={(email) =>
@@ -257,6 +281,11 @@ function Body({
     return (
       <div className="panel__body">
         <p className="form-hint">把浏览中读到的页面收集成来源，最多三条，一起建成一个立言任务。</p>
+        {state.message ? (
+          <p className="form-error" role="alert">
+            {state.message}
+          </p>
+        ) : null}
         <button className="button" type="button" onClick={() => void onOpenBasket()}>
           新建任务
         </button>
@@ -307,7 +336,10 @@ function Body({
 
   return (
     <div className="panel__body">
-      <AuthPanel state={state} {...handlers} />
+      {/* 工作台's address, because the panel has no /terms of its own: a
+          relative link inside a popup resolves to `chrome-extension://<id>/`
+          and lands nowhere. */}
+      <AuthPanel state={state} legalBaseUrl={workbenchUrl("/")} {...handlers} />
     </div>
   );
 }

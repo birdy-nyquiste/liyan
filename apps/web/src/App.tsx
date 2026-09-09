@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Languages, MonitorCog, MoonStar, Sun } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import {
@@ -17,15 +16,12 @@ import { AuthPanel } from "./components/AuthPanel";
 import { AppShell } from "./components/AppShell";
 import { InterfaceLocaleProvider, type InterfaceLocale } from "./interfaceLocale";
 import { installHistoryGuard } from "./navigationGuard";
+import { PublicSite } from "./public/PublicSite";
 import "./styles.css";
 
 type HealthState = "checking" | "available" | "unavailable";
 type Theme = "light" | "dark" | "system";
 
-const THEME_LABEL = {
-  zh: { name: "主题", light: "浅色", dark: "深色", system: "跟随系统" },
-  en: { name: "Theme", light: "Light", dark: "Dark", system: "System" },
-} as const;
 type AppProps = { authProvider?: AuthProvider };
 /** How often the workbench re-probes a server that did not answer. */
 const HEALTH_RECHECK_MS = 5_000;
@@ -49,6 +45,8 @@ const signedOut = (message: string | null = null): SignedOutState => ({
 const SESSION_EXPIRED = "登录已过期，请重新登录。";
 
 function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
+  const location = useLocation();
+  const publicPage = ["/", "/terms", "/privacy"].includes(location.pathname);
   const [health, setHealth] = useState<HealthState>("checking");
   const [auth, setAuth] = useState<AuthViewState>({ screen: "checking" });
   /** Set while the writer's own sign-out is in flight. See the expiry effect. */
@@ -199,6 +197,19 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
     };
   }, [auth.screen, authProvider]);
 
+  // A session created in another tab must also update the public-page CTA.
+  // Defer API work outside the auth provider's notification callback.
+  useEffect(() => {
+    if (!publicPage) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = authProvider.onAuthStateChange((token) => {
+      if (timer) clearTimeout(timer);
+      if (token) timer = setTimeout(() => void openWorkspace(), 0);
+      else setAuth(signedOut());
+    });
+    return () => { stop(); if (timer) clearTimeout(timer); };
+  }, [authProvider, openWorkspace, publicPage]);
+
   async function requestOtp(email: string) {
     // A resend is this same call from the 验证码 screen, and it must not throw the
     // writer back to the address form while it is in flight.
@@ -248,18 +259,33 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
   });
 
   useEffect(() => {
-    if (auth.screen === "workspace") return;
+    if (auth.screen === "workspace" && !publicPage) return;
     window.localStorage.setItem("liyan.locale", signedOutLocale);
     document.documentElement.lang = signedOutLocale === "zh" ? "zh-CN" : "en";
-  }, [auth.screen, signedOutLocale]);
+  }, [auth.screen, signedOutLocale, publicPage]);
 
   useEffect(() => {
-    if (auth.screen === "workspace") return;
+    if (auth.screen === "workspace" && !publicPage) return;
     window.localStorage.setItem("liyan.theme", signedOutTheme);
     document.documentElement.dataset.theme = signedOutTheme;
-  }, [auth.screen, signedOutTheme]);
+  }, [auth.screen, signedOutTheme, publicPage]);
 
-  const content = auth.screen === "workspace" ? (
+  // Hash navigation also works from the legal and sign-in pages. Native anchor
+  // scrolling alone does not handle a target mounted by client-side routing.
+  useEffect(() => {
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    else window.scrollTo?.(0, 0);
+  }, [location.pathname, location.hash]);
+
+  const publicProps = {
+    locale: signedOutLocale,
+    mode: signedOutTheme,
+    onLocaleChange: () => setSignedOutLocale(signedOutLocale === "en" ? "zh" : "en"),
+    onModeChange: () => setSignedOutTheme(signedOutTheme === "light" ? "dark" : signedOutTheme === "dark" ? "system" : "light"),
+    signedIn: auth.screen === "workspace",
+    checking: auth.screen === "checking",
+  };
+  const content = publicPage ? <PublicSite {...publicProps} /> : auth.screen === "workspace" ? (
     <AppShell
       identity={auth.identity}
       accessToken={auth.accessToken}
@@ -276,48 +302,9 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
         }
       }}
     />
-  ) : auth.screen === "checking" ? null : (
-    <main className={`signed-out-shell${health === "unavailable" ? " signed-out-shell--degraded" : ""}`}>
-      <div className="signed-out-topbar">
-        {health === "unavailable" ? <div className="service-banner" role="alert">{signedOutLocale === "en" ? "The service is temporarily unavailable. Some actions may fail." : "服务暂不可用，部分操作可能失败。"}</div> : null}
-        {/* Both pills name their setting's current value, the way the workbench's
-            own preference rows do. */}
-        <div className="signed-out-preferences">
-          <button
-            className="signed-out-pill"
-            type="button"
-            aria-label={`${THEME_LABEL[signedOutLocale].name}: ${THEME_LABEL[signedOutLocale][signedOutTheme]}`}
-            onClick={() =>
-              setSignedOutTheme(
-                signedOutTheme === "light" ? "dark" : signedOutTheme === "dark" ? "system" : "light",
-              )
-            }
-          >
-            {signedOutTheme === "light" ? <Sun size={16} aria-hidden="true" />
-              : signedOutTheme === "dark" ? <MoonStar size={16} aria-hidden="true" />
-              : <MonitorCog size={16} aria-hidden="true" />}
-            <span>{THEME_LABEL[signedOutLocale][signedOutTheme]}</span>
-          </button>
-          <button
-            className="signed-out-pill"
-            type="button"
-            aria-label={`${signedOutLocale === "en" ? "Language" : "语言"}: ${signedOutLocale === "en" ? "English" : "中文"}`}
-            onClick={() => setSignedOutLocale(signedOutLocale === "en" ? "zh" : "en")}
-          >
-            <Languages size={16} aria-hidden="true" />
-            <span>{signedOutLocale === "en" ? "English" : "中文"}</span>
-          </button>
-        </div>
-      </div>
-      <header className="signed-out-hero">
-        <div className="masthead__brand">
-          <img className="masthead__mark" src="/liyan-mark.svg" alt="" />
-          <div>
-            <h1>立言阁</h1>
-            <p className="subtitle">{signedOutLocale === "en" ? "Write from insight, stand through understanding" : "有感而发，知言而立"}</p>
-          </div>
-        </div>
-      </header>
+  ) : auth.screen === "checking" ? <PublicSite {...publicProps}><p role="status">{signedOutLocale === "en" ? "Loading…" : "读取中…"}</p></PublicSite> : (
+    <PublicSite {...publicProps}>
+      {health === "unavailable" ? <div className="service-banner" role="alert">{signedOutLocale === "en" ? "The service is temporarily unavailable. Some actions may fail." : "服务暂不可用，部分操作可能失败。"}</div> : null}
       <AuthPanel
         state={auth}
         onEmailChange={(email) => setAuth({ ...auth, email })}
@@ -329,7 +316,7 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
           setAuth({ screen: "email", email: auth.email, busy: false, message: null })
         }
       />
-    </main>
+    </PublicSite>
   );
 
   return <InterfaceLocaleProvider locale={signedOutLocale}>{content}</InterfaceLocaleProvider>;

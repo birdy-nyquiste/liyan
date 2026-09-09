@@ -180,20 +180,33 @@
 .site-stage-number { display: block; font: 48px Georgia, serif; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; margin-bottom: 20px; }
 .site-stage h3 { font-size: 30px; }
 .site-stage-heading > p { margin-top: 20px; font-size: 14px; max-width: 26ch; }
+/*
+ * 知言's subtitle is a passage of 孟子, and a citation in the margin of a page
+ * is 注疏 — which is what this column is. So it is set as classical text
+ * rather than as interface copy: 宋体, a step up in size and leading from the
+ * instructions in the other stages' margins, and the attribution on its own
+ * line, quiet and not italic, because Chinese does not italicise.
+ */
+.site-stage-heading > .site-stage-quote {
+  font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+  font-size: 15px;
+  line-height: 1.95;
+  color: var(--ink);
+}
+.site-stage-quote cite {
+  display: block;
+  margin-top: 12px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: normal;
+}
 .site-inputs, .site-reports { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
 /* Icon then title, the same header 知言报告 uses below — the 你提供 label that
    used to sit opposite is gone, so the row is one group rather than two ends. */
 .site-inputs article > header { display: flex; align-items: center; gap: 10px; }
 .site-inputs article > header svg { flex-shrink: 0; color: var(--accent); }
 .site-inputs h4, .site-direction h4 { font-size: 21px; }
-/* The two explanations are one line and two, so without a floor the example
-   cards below them start 25px apart. `min-height` is what `.site-report-intro`
-   already does for the same problem two stages down, and it is released at the
-   width where the grid becomes one column and there is nothing to align to. */
-.site-inputs article > p { margin: 12px 0 24px; min-height: 50px; font-size: 14px; }
-/* English says the 主题 explanation in three lines where Chinese says it in
-   two, so the floor that aligns the pair is a line taller. */
-:lang(en) .site-inputs article > p { min-height: 76px; }
+.site-inputs article > p { margin: 12px 0 24px; font-size: 14px; }
 .site-document { border: 1px solid var(--rule); border-radius: 12px; padding: 24px; background: var(--surface-sunk); min-width: 0; }
 .site-document > svg { vertical-align: middle; color: var(--accent); margin-right: 10px; }
 .site-document > strong { font: 17px "Songti SC", "Noto Serif SC", Georgia, serif; }
@@ -349,7 +362,7 @@
   .public-site .site-lede-promise { font-size: 19px; }
   .public-site .site-lede-turn { margin-top: 26px; font-size: 19px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }
-  .site-report-intro, .site-inputs article > p { min-height: 0; }
+  .site-report-intro { min-height: 0; }
   .site-document { padding: 20px; }
   .site-publication { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
   .site-publication .site-document { padding: 14px; }

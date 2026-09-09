@@ -32,11 +32,23 @@ function SampleLines() {
   return <div className="site-sample-lines" aria-hidden="true"><i /><i /><i /></div>;
 }
 
+/** What each 知言报告 does, which is different enough to be said separately. */
+const reportIntros = {
+  source: {
+    zh: "对每一个来源，抽丝剥茧，核查事实，分析观点，理清逻辑。",
+    en: "Every source, unravelled thread by thread: facts checked, arguments weighed, logic laid bare.",
+  },
+  theme: {
+    zh: "对来源的共同主题，深度检索，打破信息茧房，取其精华，去其糟粕。",
+    en: "The theme your sources share, searched in depth: the information cocoon broken, the essence kept, the dross discarded.",
+  },
+} as const;
+
 function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
   const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Theme Zhiyan report" : "主题知言报告");
   return <article className="site-report" aria-label={title}>
     <header><FileText size={22} aria-hidden="true" /><h4>{title}</h4></header>
-    <p className="site-report-intro">[{en ? `${title}: purpose and what you learn` : `${title}：作用与收获说明`}]</p>
+    <p className="site-report-intro">{reportIntros[kind][en ? "en" : "zh"]}</p>
     <div className="site-report-sections">
       {reportSections[kind].map((heading, index) => <div className="site-report-section" key={heading}>
         <h5>{en ? englishSections[heading] : heading}</h5>
@@ -194,9 +206,7 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
             {
               title: en ? "Theme" : "主题",
               icon: Compass,
-              body: en
-                ? "The theme your sources share. The Zhiyan agent searches it in depth, breaking the information cocoon — keeping the essence, discarding the dross."
-                : "来源的共同主题，知言 Agent 将深度检索该主题的相关内容，打破信息茧房，取其精华，去其糟粕。",
+              body: en ? "The theme your sources share." : "来源的共同主题",
             },
           ].map(({ title, icon: Icon, body }) => (
             <article key={title}>
@@ -211,7 +221,28 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
         </div>
       </section>
       <section className="site-stage" aria-labelledby="reports-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "Zhiyan" : "知言"}</h3><p>[{en ? "How Liyan analyses your sources and topic" : "立言阁如何分析来源与主题的说明"}]</p></div>
+        <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "Zhiyan" : "知言"}</h3>
+          {/* A citation rather than a sentence, so it is set as one: the
+              classical text in 宋体, the attribution on its own line. Mencius'
+              four clauses are parallel six-character units — breaking one in
+              half would ruin the figure — so each is a Clause. */}
+          <p className="site-stage-quote">
+            {en ? (
+              <>
+                Asked: “What is it to know words?” Mencius said: “In one-sided words, know what
+                they hide; in extravagant words, know where they have fallen; in deviant words,
+                know what they have strayed from; in evasive words, know where they run out.”
+              </>
+            ) : (
+              <>
+                <Clause>问：“何谓知言？”</Clause>。<Clause>孟子曰</Clause>：“
+                <Clause>诐辞知其所蔽</Clause>，<Clause>淫辞知其所陷</Clause>，
+                <Clause>邪辞知其所离</Clause>，<Clause>遁辞知其所穷</Clause>”。
+              </>
+            )}
+            <cite>{en ? "Mencius · Gongsun Chou I" : "出自《孟子 · 公孙丑上》"}</cite>
+          </p>
+        </div>
         <div className="site-reports"><Report kind="source" en={en} /><Report kind="theme" en={en} /></div>
       </section>
       <section className="site-stage" aria-labelledby="writing-heading">

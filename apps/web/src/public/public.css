@@ -193,6 +193,8 @@
   line-height: 1.95;
   color: var(--ink);
 }
+/* One line each, so the four clauses stack and align. */
+.site-quote-line { display: block; }
 .site-stage-quote cite {
   display: block;
   margin-top: 12px;
@@ -215,7 +217,20 @@
 .site-sample-lines i:nth-child(2) { width: 91%; }
 .site-sample-lines i:nth-child(3) { width: 68%; }
 .site-report { min-width: 0; }
-.site-report > header { display: flex; gap: 10px; align-items: center; color: var(--accent-ink); }
+/*
+ * The report's own disclosure.
+ *
+ * Its title and intro sit in the summary, so a collapsed report still says
+ * what it is and only its sections fold. The chevron is the summary's one
+ * direct `svg`, which is what `details[open] > summary > svg` rotates — the
+ * report's own icon is inside `.site-report-title` so it stays upright.
+ */
+.site-report > details > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
+.site-report > details > summary > svg { color: var(--ink-faint); transition: transform 200ms ease-out; }
+.site-report > details > summary:hover > svg { color: var(--accent-ink); }
+.site-report-title { display: flex; gap: 10px; align-items: center; min-width: 0; color: var(--accent-ink); }
+.site-report-title svg { flex-shrink: 0; }
+.site-report > details > summary > .site-report-intro { grid-column: 1 / -1; }
 .site-report h4 { font-size: 24px; }
 .site-report-intro { margin: 18px 0 26px !important; min-height: 56px; font-size: 14px; }
 .site-report-sections { border-top: 1px solid var(--rule); }

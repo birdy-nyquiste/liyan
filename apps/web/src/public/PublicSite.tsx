@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, Compass, FileStack, FileText, Languages, MonitorCog, MoonStar, Sun } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, FileSearch, FileStack, FileText, Languages, MonitorCog, MoonStar, Sun, Telescope } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -32,13 +32,22 @@ function SampleLines() {
   return <div className="site-sample-lines" aria-hidden="true"><i /><i /><i /></div>;
 }
 
-/** What each 知言报告 does, which is different enough to be said separately. */
-const reportIntros = {
+/**
+ * What each 知言报告 does, and the instrument it does it with.
+ *
+ * The icons carry a small system rather than being picked one at a time:
+ * 来源 things are document-shaped — a stack of formats, then a document being
+ * examined — and 主题 things are instruments — a compass to point, a telescope
+ * to see past 信息茧房.
+ */
+const reports = {
   source: {
+    icon: FileSearch,
     zh: "对每一个来源，抽丝剥茧，核查事实，分析观点，理清逻辑。",
     en: "Every source, unravelled thread by thread: facts checked, arguments weighed, logic laid bare.",
   },
   theme: {
+    icon: Telescope,
     zh: "对来源的共同主题，深度检索，打破信息茧房，取其精华，去其糟粕。",
     en: "The theme your sources share, searched in depth: the information cocoon broken, the essence kept, the dross discarded.",
   },
@@ -46,9 +55,19 @@ const reportIntros = {
 
 function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
   const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Theme Zhiyan report" : "主题知言报告");
+  const { icon: Icon } = reports[kind];
   return <article className="site-report" aria-label={title}>
-    <header><FileText size={22} aria-hidden="true" /><h4>{title}</h4></header>
-    <p className="site-report-intro">{reportIntros[kind][en ? "en" : "zh"]}</p>
+    {/* Open by default: this is the substance of 知言 and hiding it behind a
+        click would be hiding the argument. The disclosure is there so a reader
+        can put one report away — the two are long and sit side by side.
+        The title and the intro live in the summary so a collapsed report still
+        says what it is; only the sections fold. */}
+    <details open>
+      <summary>
+        <span className="site-report-title"><Icon size={22} aria-hidden="true" /><h4>{title}</h4></span>
+        <ChevronDown size={16} aria-hidden="true" />
+        <p className="site-report-intro">{reports[kind][en ? "en" : "zh"]}</p>
+      </summary>
     <div className="site-report-sections">
       {reportSections[kind].map((heading, index) => <div className="site-report-section" key={heading}>
         <h5>{en ? englishSections[heading] : heading}</h5>
@@ -65,6 +84,7 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
         </details>
       </div>)}
     </div>
+    </details>
   </article>;
 }
 
@@ -228,16 +248,27 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
               half would ruin the figure — so each is a Clause. */}
           <p className="site-stage-quote">
             {en ? (
+              /* English has no six-character parallel to hold, and its clauses
+                 are long enough that forcing one per line would wrap each of
+                 them anyway. It stays prose. */
               <>
                 Asked: “What is it to know words?” Mencius said: “In one-sided words, know what
                 they hide; in extravagant words, know where they have fallen; in deviant words,
                 know what they have strayed from; in evasive words, know where they run out.”
               </>
             ) : (
+              /* One line each, structurally rather than by wrapping, so the
+                 four clauses line up under one another and the parallel is
+                 visible as a shape. The opening quote stays on 孟子曰's line;
+                 leading the first clause it would indent that one clause and
+                 the column would come apart. */
               <>
-                <Clause>问：“何谓知言？”</Clause>。<Clause>孟子曰</Clause>：“
-                <Clause>诐辞知其所蔽</Clause>，<Clause>淫辞知其所陷</Clause>，
-                <Clause>邪辞知其所离</Clause>，<Clause>遁辞知其所穷</Clause>”。
+                <span className="site-quote-line">问：“何谓知言？”</span>
+                <span className="site-quote-line">孟子曰：“</span>
+                <span className="site-quote-line">诐辞知其所蔽，</span>
+                <span className="site-quote-line">淫辞知其所陷，</span>
+                <span className="site-quote-line">邪辞知其所离，</span>
+                <span className="site-quote-line">遁辞知其所穷”</span>
               </>
             )}
             <cite>{en ? "Mencius · Gongsun Chou I" : "出自《孟子 · 公孙丑上》"}</cite>

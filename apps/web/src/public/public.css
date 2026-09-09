@@ -53,8 +53,33 @@
 .site-main, .site-footer { max-width: var(--site-width); margin: auto; width: calc(100% - 80px); }
 .site-hero { padding: 98px 0 100px; display: grid; grid-template-columns: 1fr 1.1fr; gap: 64px; align-items: center; }
 .site-hero h1 { font-size: clamp(36px, 4.3vw, 64px); line-height: 1.3; letter-spacing: -.025em; }
-.site-hero h1 span { color: var(--ink-muted); }
-.site-hero-copy > p { margin-top: 24px; font-size: 18px; }
+/*
+ * 知 and 立 wherever they appear.
+ *
+ * 楷体 against the headline's 宋体, which is the traditional pairing for a word
+ * lifted out of a line rather than shouted. The accent and the change of face
+ * are the emphasis — the size is not, and growing it would make the headline
+ * lurch. `1.08em` is not emphasis either: a CJK glyph fills the same em box in
+ * every face, but 楷体 draws less ink inside it, so at a matched font-size the
+ * character reads *smaller* than its neighbours. Most visible in the 18px lede,
+ * where 知 sat noticeably below the sans-serif around it.
+ */
+.site-verb { font-family: "Kaiti SC", STKaiti, KaiTi, "Songti SC", serif; font-size: 1.08em; color: var(--accent); font-weight: 600; }
+/* Each half of the couplet is one unbreakable unit; the line may only turn
+   between them. `inline-block` rather than `nowrap` alone so a half that
+   genuinely cannot fit still wraps instead of overflowing the page. */
+.site-clause { display: inline-block; white-space: nowrap; max-width: 100%; }
+
+/*
+ * The lede is three lines and the middle one turns.
+ *
+ * Read as one paragraph the parallelism collapses, so the lines stay separate
+ * and the turn is a smaller, quieter line between the reader's problem and what
+ * 立言阁 does about it.
+ */
+.site-lede { margin-top: 28px; display: grid; gap: 10px; max-width: 34em; }
+.site-lede p { font-size: 18px; line-height: 1.85; }
+.site-lede-turn { font-family: "Songti SC", "Noto Serif SC", Georgia, serif; color: var(--ink); font-size: 17px; }
 .site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 36px; }
 .site-text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 14px; text-decoration: none; min-height: 44px; }
 .site-text-link:hover { text-decoration: underline; }
@@ -63,7 +88,6 @@
 .site-journey li + li { border-left: 1px solid var(--rule); }
 .site-journey-number { align-self: flex-start; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .site-journey strong { font: 18px "Songti SC", "Noto Serif SC", Georgia, serif; color: var(--accent-ink); }
-.site-journey li > span:last-child { font-size: 12px; color: var(--ink-muted); }
 .site-journey-glyph { height: 60px; display: grid; place-items: center; color: var(--accent); }
 .site-mini-branches { width: 38px; height: 44px; position: relative; display: grid; align-content: space-between; }
 .site-mini-branches i { width: 26px; height: 10px; border-bottom: 1px solid var(--accent); border-left: 1px solid var(--accent); border-radius: 0 0 0 6px; }
@@ -229,10 +253,10 @@
   .site-main, .site-footer { width: calc(100% - 32px); }
   .site-hero { padding-top: 44px; }
   .site-actions { gap: 18px; }
-  .site-hero-copy > p { font-size: 16px; }
+  .site-lede p { font-size: 16px; }
+  .site-lede-turn { font-size: 15px; }
   .site-journey li { padding-inline: 6px; }
   .site-journey strong { font-size: 15px; }
-  .site-journey li > span:last-child { font-size: 11px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }
   .site-report-intro { min-height: 0; }
   .site-document { padding: 20px; }

@@ -59,16 +59,46 @@ function ExampleDocument({ title }: { title: string }) {
   return <div className="site-document"><FileText size={20} aria-hidden="true" /><strong>{title}</strong><SampleLines /></div>;
 }
 
+/**
+ * 知 or 立, set apart.
+ *
+ * The two verbs 立言阁 is named for, and the whole claim is the order they come
+ * in — so they are marked wherever they appear in the headline and the lede
+ * rather than left to read as ordinary characters. 楷体 against the headline's
+ * 宋体 is the distinction; the accent is what makes it visible at a glance.
+ */
+function Verb({ children }: { children: ReactNode }) {
+  return <span className="site-verb">{children}</span>;
+}
+
 function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
   return <main id="main-content" className="site-main">
     <section className="site-hero" aria-labelledby="site-headline">
       <div className="site-hero-copy">
-        <h1 id="site-headline">[{en ? "Your headline" : "主标题"}]<br /><span>[{en ? "Second line" : "主标题第二行"}]</span></h1>
-        <p>[{en ? "A short introduction to Liyan" : "一句介绍立言阁"}]</p>
+        {/* A couplet, so the only place it may break is the comma between its
+            halves. Chinese wraps between any two characters by default, which
+            at some widths would split 大千世界 down the middle. */}
+        <h1 id="site-headline">{en ? <>[Your headline]</> : <><span className="site-clause"><Verb>“知”</Verb>大千世界，</span><span className="site-clause"><Verb>“立”</Verb>不朽篇章</span></>}</h1>
+        {/* Three lines rather than one sentence: the first is the reader's
+            problem, the second turns, the third is what 立言阁 does about it —
+            and the turn only works if the reader can see all three at once. */}
+        <div className="site-lede">
+          {en ? (
+            <p>[A short introduction to Liyan]</p>
+          ) : (
+            <>
+              <p>信息繁杂，时常感慨万千；有感而发，不知如何表达</p>
+              <p className="site-lede-turn">立言阁帮你：</p>
+              <p>
+                先<Verb>“知”</Verb>其言，取其精华，去其糟粕；再<Verb>“立”</Verb>其言，文思泉涌，妙笔生花。
+              </p>
+            </>
+          )}
+        </div>
         <div className="site-actions">{action}<a className="site-text-link" href="#workflow">{en ? "Explore the workflow" : "了解使用流程"}<ArrowRight size={16} aria-hidden="true" /></a></div>
       </div>
       <ol className="site-journey" aria-label={en ? "Workflow overview" : "流程概览"}>
-        {[en ? "Sources · Topic" : "来源 · 主题", en ? "Zhiyan" : "知言", en ? "Liyan" : "立言", en ? "Publications" : "发布"].map((name, index) => <li key={name}><span className="site-journey-number">0{index + 1}</span><strong>{name}</strong><div className="site-journey-glyph" aria-hidden="true">{index === 3 ? <span className="site-mini-branches"><i /><i /><i /></span> : <FileText size={36} strokeWidth={1} />}</div><span>[{en ? "Stage description" : "阶段说明"}]</span></li>)}
+        {[en ? "Sources · Topic" : "来源 · 主题", en ? "Zhiyan" : "知言", en ? "Liyan" : "立言", en ? "Publications" : "发布"].map((name, index) => <li key={name}><span className="site-journey-number">0{index + 1}</span><strong>{name}</strong><div className="site-journey-glyph" aria-hidden="true">{index === 3 ? <span className="site-mini-branches"><i /><i /><i /></span> : <FileText size={36} strokeWidth={1} />}</div></li>)}
       </ol>
     </section>
 

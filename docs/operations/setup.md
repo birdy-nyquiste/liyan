@@ -130,7 +130,6 @@ Nobody can sign in until this is done, so do it first.
 
 ```bash
 LIYAN_SUPABASE_ISSUER=https://<ref>.supabase.co/auth/v1   # note the /auth/v1
-LIYAN_ALLOWED_EMAILS=you@example.com
 VITE_SUPABASE_URL=https://<ref>.supabase.co               # note: no /auth/v1
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
@@ -140,9 +139,11 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 > must *not* have that suffix. And use the `sb_publishable_` key — never the
 > `sb_secret_` one, which every browser would receive.
 
-> **`LIYAN_ALLOWED_EMAILS` is a separate gate.** A valid Supabase account whose
-> address is not on this list is refused. It is also separate from the `emails`
-> on a publication target: an address can be allowed to sign in and still see no
+> **`LIYAN_ALLOWED_EMAILS` is empty, and empty means open.** Anyone Supabase
+> verifies may sign up. Set it to a comma-separated list only to close an
+> environment down to a named few, in which case a valid Supabase account whose
+> address is not on the list is refused. Either way it is separate from the
+> `emails` on a publication target: an address that can sign in may still see no
 > destination to publish to.
 
 **Verify:** restart the API and the Vite dev server (Vite bakes `VITE_*` in at
@@ -209,9 +210,11 @@ LIYAN_PUBLICATION_TARGETS=[{"key":"lsforum","display_name":"LSForum Blog","site_
 ```
 
 > **`emails` must include an address that can sign in.** The publication target
-> and `LIYAN_ALLOWED_EMAILS` are unrelated settings; a target naming only
-> addresses that cannot sign in leaves publishing quietly unavailable. The
-> server warns about this at startup rather than letting you discover it later.
+> and `LIYAN_ALLOWED_EMAILS` are unrelated settings; where the allowlist is set,
+> a target naming only addresses that cannot sign in leaves publishing quietly
+> unavailable. The server warns about that at startup rather than letting you
+> discover it later. With the allowlist empty it cannot warn — anyone may sign
+> in, so no target is unreachable on that account.
 
 > **A Preview is a real Blog item.** 立言阁 cannot retract one and the Blog API
 > offers no way to look one up (ADR-0001). Point Staging at a Blog that does not
@@ -335,7 +338,8 @@ Each is a separate **resource**, not a separate credential for the same one:
   other's Executions. The message carries only an id, so the worker would look
   it up in its own database and find nothing, or something worse.
 - **The R2 bucket** — see the warning above. This is the sharpest one.
-- **The Supabase project** — identities and the allowlist are per environment.
+- **The Supabase project** — identities, and the allowlist if one is set, are
+  per environment.
 - **The Blog credential** — a Preview cannot be retracted.
 - **The DeepSeek key** — so Staging's spend is legible and revocable alone.
 
@@ -451,7 +455,7 @@ In order. Each step depends on the one before.
 1. `curl https://<api>/health/live` → `{"status":"alive"}`
 2. `curl https://<api>/health/ready` → `status: ready`, with `database` and
    `queue` both `available`
-3. Open the workbench and sign in with an allowlisted address
+3. Open the workbench and sign in
 4. Create a 立言任务 from pasted text → 知言 runs and produces a report
    (proves the worker and DeepSeek)
 5. Re-check `/health/ready` → `worker` is now `beating`

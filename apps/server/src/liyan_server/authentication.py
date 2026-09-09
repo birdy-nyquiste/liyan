@@ -47,7 +47,11 @@ class Authenticator:
             ) from error
 
         normalized_email = identity.email.strip().casefold()
-        if normalized_email not in self._allowed_emails:
+        # An empty allowlist is not an empty guest list: it is an open door.
+        # 立言阁 admits anyone Supabase has verified, and the setting stays for
+        # the environments — a rehearsal deployment, a private staging — that
+        # still want to name their few.
+        if self._allowed_emails and normalized_email not in self._allowed_emails:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access is not available for this account.",

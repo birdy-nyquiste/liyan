@@ -127,6 +127,12 @@ class Settings(BaseSettings):
 
     @cached_property
     def normalized_allowed_emails(self) -> frozenset[str]:
+        """The addresses allowed to sign in, or empty for everyone.
+
+        Empty is the default and the production setting: 立言阁 is open to
+        anyone with a verified Supabase identity. Naming addresses closes it
+        again, which is what a staging environment wants.
+        """
         return frozenset(
             email.strip().casefold() for email in self.allowed_emails.split(",") if email.strip()
         )

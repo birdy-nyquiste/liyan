@@ -45,6 +45,21 @@ def test_allowlisted_identity_maps_to_one_local_user_and_its_empty_task_list(
     assert task_list.json() == {"items": [], "next_cursor": None}
 
 
+def test_an_empty_allowlist_admits_any_verified_identity(tmp_path: Path) -> None:
+    identity = VerifiedIdentity(subject="supabase-user-3", email="Newcomer@Example.com")
+    verifier = DeterministicJwtVerifier({"newcomer-token": identity})
+    settings = Settings(database_url=migrated_database(tmp_path))
+    client = TestClient(create_app(settings, jwt_verifier=verifier))
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": "Bearer newcomer-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "newcomer@example.com"
+
+
 def test_non_allowlisted_identity_is_rejected_without_disclosing_configuration(
     tmp_path: Path,
 ) -> None:

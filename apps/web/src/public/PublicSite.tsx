@@ -90,9 +90,17 @@ function Clause({ children }: { children: ReactNode }) {
 function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
   return <main id="main-content" className="site-main">
     <section className="site-hero" aria-labelledby="site-headline">
+      {/*
+        Two columns meeting at one hairline — the 界行 of a classical page.
+        Left is a field, not a block: it runs the section's full height and
+        carries the couplet the way a 匾额 carries an inscription, which is what
+        hangs in a 阁. Right is the page. The couplet keeps the container's own
+        left edge, so it starts where 使用流程 starts below it.
+      */}
+      <div className="site-hero-plaque">
       {/* A couplet: two lines by construction, not by wrapping. Both halves
           begin with the marked verb, so 知 sits directly above 立 — and the
-          same is true of the two promise lines below, which are the same
+          same is true of the two promise lines opposite, which are the same
           couplet again at reading size. Nothing may indent or centre these or
           that column of verbs comes apart. */}
       <h1 id="site-headline">
@@ -116,6 +124,8 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
           </>
         )}
       </h1>
+      </div>
+      <div className="site-hero-page">
       {/*
         Four lines, and the typography is the argument.
         The first is 信息繁杂, so it is set in the sans — the voice of
@@ -161,6 +171,7 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
         )}
       </div>
       <div className="site-actions">{action}<a className="site-text-link" href="#workflow">{en ? "Explore the workflow" : "了解使用流程"}<ArrowRight size={16} aria-hidden="true" /></a></div>
+      </div>
     </section>
 
     <section id="workflow" className="site-workflow" aria-labelledby="workflow-heading">

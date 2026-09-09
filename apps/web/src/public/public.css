@@ -5,7 +5,7 @@
  * happened to end, which on the sign-in page meant below the fold with nothing
  * but whitespace above it.
  */
-.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; display: flex; flex-direction: column; }
+.public-site { background: var(--surface); min-height: 100dvh; color: var(--ink); --site-width: 1248px; --site-header-height: 88px; display: flex; flex-direction: column; overflow-x: clip; }
 .public-site > main { flex: 1 0 auto; }
 
 /*
@@ -52,23 +52,65 @@
 .site-header .site-cta { min-height: 42px; padding: 10px 16px; gap: 8px; }
 .site-main, .site-footer { max-width: var(--site-width); margin: auto; width: calc(100% - 80px); }
 /*
- * A title page, and it is centred because the content is a couplet.
+ * The couplet on one side of a line, everything it introduces on the other.
  *
- * Left-aligned, this filled about 500px of a 1248px container and left the rest
- * empty — which is not a composition, it is a column with dead space beside it.
- * 对联 are hung symmetrically, and both halves here are seven characters wide,
- * so centring is not a default reached for: it puts the couplet's own spine —
- * 知 over 立, 大 over 不, 千 over 朽, 世 over 篇, 界 over 章 — down the middle of
- * the page, and distributes the air to both sides instead of dumping it on one.
- * The two promise lines are the same width as each other, so their column of
- * verbs survives centring too.
+ * One structural device: a single hairline, the 界行 that divides a classical
+ * page. The left column is a field rather than a block — it takes the section's
+ * full height, so the couplet has ground under it instead of dead space, and it
+ * reads as the 匾额 that hangs in a 阁, which is what 立言阁 names. The tint is
+ * two percent off the page; anything louder would make it a card.
  *
- * Narrow viewports go back to flush left. Centring answers a wide-viewport
- * problem, and a 390px screen does not have that problem — it has wrapped lines
- * instead, which centre badly.
+ * The couplet keeps the container's own left edge — no left padding — so it
+ * starts exactly where 使用流程 starts below it, and the two sections read as
+ * one page rather than two decisions. The right column hangs off the seam.
+ *
+ * The ratio is language-shaped: seven characters plus two quote marks is 8em of
+ * couplet, and English says the same thing in about twenty proportional
+ * letters, so each locale gets the size that keeps its couplet on two lines.
  */
-.site-hero { max-width: 800px; margin-inline: auto; padding: 128px 0 112px; text-align: center; }
-.site-hero h1 { font-size: clamp(34px, 6vw, 92px); line-height: 1.18; letter-spacing: -.03em; }
+.site-hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: stretch; }
+/*
+ * The section's air lives inside its columns, not on the section.
+ *
+ * On the section it left the field with ivory above and below it, which is what
+ * a card looks like. Inside the columns the field runs the section's whole
+ * height — header hairline to the rule under it — and reads as a column of the
+ * page, which is what it is.
+ */
+/*
+ * The field runs off the left edge of the screen.
+ *
+ * Bounded by the page's gutter it was a rectangle with an ivory sliver beside
+ * it, which reads as a mistake rather than as a margin. Off the edge it is
+ * ground, and the seam is then the only line in the composition.
+ *
+ * The margin/padding pair is the standard bleed: out to the viewport, then back
+ * in by the same amount, so the couplet still sits on the container's own left
+ * edge — the same edge 使用流程 uses below. `overflow-x: clip` on `.public-site`
+ * absorbs it; measured, that leaves zero horizontal overflow even with a
+ * scrollbar taking 11px out of `100vw`, and the sticky header still sticks,
+ * because `clip` does not make an ancestor into a scroll container.
+ */
+.site-hero-plaque {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: calc(50% - 50vw);
+  padding: 124px 64px 116px calc(50vw - 50%);
+  background: var(--surface-sunk);
+  border-right: 1px solid var(--rule);
+}
+.site-hero-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 124px 0 116px 56px;
+}
+/* 8em of couplet in a 604px field: the cap is what fills it rather than what
+   fits in it. */
+.site-hero h1 { font-size: clamp(34px, 5.6vw, 84px); line-height: 1.2; letter-spacing: -.03em; }
+:lang(en) .site-hero h1 { font-size: clamp(30px, 4.4vw, 66px); }
 /* Each half on its own line at every width. The couplet's form is not a
    wrapping accident, and there is no punctuation left between the halves for
    wrapping to find. */
@@ -115,8 +157,12 @@
  * its pair unbroken, and its couplet is wider to match. Either way the block
  * reads as one column rather than a wide paragraph under a narrow headline.
  */
-.public-site .site-lede { margin: 58px auto 0; max-width: 30em; }
-:lang(en) .public-site .site-lede { max-width: 47em; }
+.public-site .site-lede { margin: 0; max-width: 30em; }
+/* English says each of these in more characters than Chinese does, and at 22px
+   that would put its couplet pair on four lines. */
+:lang(en) .public-site .site-lede { max-width: 34em; }
+:lang(en) .public-site .site-lede-turn,
+:lang(en) .public-site .site-lede-promise { font-size: 19px; }
 .public-site .site-lede-problem { font-size: 18px; line-height: 1.85; color: var(--ink-muted); }
 /*
  * The hinge, which is the most present line here rather than the quietest.
@@ -145,7 +191,7 @@
 /* 先… and 再… are one couplet, so they sit closer to each other than to the
    line that introduces them. */
 .public-site .site-lede-promise + .site-lede-promise { margin-top: 2px; }
-.site-actions { display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 48px; }
+.site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 40px; }
 .site-text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 14px; text-decoration: none; min-height: 44px; }
 .site-text-link:hover { text-decoration: underline; }
 .site-section-title { font-size: clamp(30px, 3vw, 40px); line-height: 1.3; }
@@ -284,11 +330,19 @@
   .site-brand span { font-size: 22px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }
-  /* Flush left again: there is no width here to compose with, and a wrapped
-     line reads worse centred than it does ragged-right. */
-  .site-hero { padding: 64px 0 68px; text-align: left; }
-  .site-hero .site-actions { justify-content: flex-start; }
-  .public-site .site-hero .site-lede { margin-inline: 0; }
+  /* One column: there is no width here to divide. The field becomes a band the
+     couplet sits in and the page follows underneath — the same seam rotated
+     from a vertical rule into a horizontal one. */
+  .site-hero { grid-template-columns: 1fr; }
+  /* Both edges here, so the band spans the screen and the seam becomes the
+     horizontal rule under it. */
+  .site-hero-plaque {
+    margin-inline: calc(50% - 50vw);
+    padding: 48px calc(50vw - 50%) 44px;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .site-hero-page { padding: 38px 0 64px; }
   .site-stage, .site-faq { grid-template-columns: 1fr; }
   .site-stage-heading { display: grid; grid-template-columns: auto 1fr; column-gap: 20px; align-items: center; margin-bottom: 8px; }
   .site-stage-number { font-size: 36px; margin: 0; }

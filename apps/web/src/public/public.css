@@ -52,15 +52,23 @@
 .site-header .site-cta { min-height: 42px; padding: 10px 16px; gap: 8px; }
 .site-main, .site-footer { max-width: var(--site-width); margin: auto; width: calc(100% - 80px); }
 /*
- * One column, and the space to its right left empty on purpose.
+ * A title page, and it is centred because the content is a couplet.
  *
- * The four-step strip that used to sit there said the same thing 使用流程 says
- * directly below it, at a size nobody reads. With it gone the couplet can be
- * set at the scale a couplet wants, and 留白 does what a second column was
- * doing badly.
+ * Left-aligned, this filled about 500px of a 1248px container and left the rest
+ * empty — which is not a composition, it is a column with dead space beside it.
+ * 对联 are hung symmetrically, and both halves here are seven characters wide,
+ * so centring is not a default reached for: it puts the couplet's own spine —
+ * 知 over 立, 大 over 不, 千 over 朽, 世 over 篇, 界 over 章 — down the middle of
+ * the page, and distributes the air to both sides instead of dumping it on one.
+ * The two promise lines are the same width as each other, so their column of
+ * verbs survives centring too.
+ *
+ * Narrow viewports go back to flush left. Centring answers a wide-viewport
+ * problem, and a 390px screen does not have that problem — it has wrapped lines
+ * instead, which centre badly.
  */
-.site-hero { padding: 116px 0 104px; }
-.site-hero h1 { font-size: clamp(34px, 5.6vw, 88px); line-height: 1.24; letter-spacing: -.03em; }
+.site-hero { max-width: 800px; margin-inline: auto; padding: 128px 0 112px; text-align: center; }
+.site-hero h1 { font-size: clamp(34px, 6vw, 92px); line-height: 1.18; letter-spacing: -.03em; }
 /* Each half on its own line at every width. The couplet's form is not a
    wrapping accident, and there is no punctuation left between the halves for
    wrapping to find. */
@@ -98,7 +106,16 @@
  * rule is 1px and the width of two characters, which is the lead-in a classical
  * setting would give it.
  */
-.public-site .site-lede { margin-top: 56px; max-width: 40em; }
+/*
+ * The lede is measured to the couplet above it, not to the page.
+ *
+ * In Chinese every line here is one line at 30em — the 22-character problem and
+ * the two 17-unit promise lines alike — which lands it within a few pixels of
+ * the couplet's own width. English runs longer per idea and needs 47em to keep
+ * its pair unbroken, and its couplet is wider to match. Either way the block
+ * reads as one column rather than a wide paragraph under a narrow headline.
+ */
+.public-site .site-lede { margin: 58px auto 0; max-width: 30em; }
 :lang(en) .public-site .site-lede { max-width: 47em; }
 .public-site .site-lede-problem { font-size: 18px; line-height: 1.85; color: var(--ink-muted); }
 /*
@@ -128,7 +145,7 @@
 /* 先… and 再… are one couplet, so they sit closer to each other than to the
    line that introduces them. */
 .public-site .site-lede-promise + .site-lede-promise { margin-top: 2px; }
-.site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 44px; }
+.site-actions { display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; margin-top: 48px; }
 .site-text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 14px; text-decoration: none; min-height: 44px; }
 .site-text-link:hover { text-decoration: underline; }
 .site-section-title { font-size: clamp(30px, 3vw, 40px); line-height: 1.3; }
@@ -267,7 +284,11 @@
   .site-brand span { font-size: 22px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }
-  .site-hero { padding: 64px 0 68px; }
+  /* Flush left again: there is no width here to compose with, and a wrapped
+     line reads worse centred than it does ragged-right. */
+  .site-hero { padding: 64px 0 68px; text-align: left; }
+  .site-hero .site-actions { justify-content: flex-start; }
+  .public-site .site-hero .site-lede { margin-inline: 0; }
   .site-stage, .site-faq { grid-template-columns: 1fr; }
   .site-stage-heading { display: grid; grid-template-columns: auto 1fr; column-gap: 20px; align-items: center; margin-bottom: 8px; }
   .site-stage-number { font-size: 36px; margin: 0; }

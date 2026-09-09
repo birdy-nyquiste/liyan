@@ -64,33 +64,91 @@ function ExampleDocument({ title }: { title: string }) {
  *
  * The two verbs 立言阁 is named for, and the whole claim is the order they come
  * in — so they are marked wherever they appear in the headline and the lede
- * rather than left to read as ordinary characters. 楷体 against the headline's
- * 宋体 is the distinction; the accent is what makes it visible at a glance.
+ * rather than left to read as ordinary characters. 楷体 against 宋体 is the
+ * distinction, the accent makes it visible at a glance, and the size makes it
+ * lead. English has no 楷体, so it takes the equivalent device: the serif in
+ * italic, which is what the Latin tradition does with a word lifted out of a
+ * line. `:lang()` picks between them — `App.tsx` keeps `<html lang>` in step
+ * with the locale.
  */
 function Verb({ children }: { children: ReactNode }) {
   return <span className="site-verb">{children}</span>;
+}
+
+/**
+ * A run that may not break across lines.
+ *
+ * Chinese breaks between any two characters, so an unprotected 妙笔生花 can
+ * lose its last character to the next line and a four-character idiom read as
+ * two halves of nothing. Wrapping each idiom and each clause leaves the line
+ * able to turn only where the punctuation already says it may.
+ */
+function Clause({ children }: { children: ReactNode }) {
+  return <span className="site-clause">{children}</span>;
 }
 
 function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
   return <main id="main-content" className="site-main">
     <section className="site-hero" aria-labelledby="site-headline">
       <div className="site-hero-copy">
-        {/* A couplet, so the only place it may break is the comma between its
-            halves. Chinese wraps between any two characters by default, which
-            at some widths would split 大千世界 down the middle. */}
-        <h1 id="site-headline">{en ? <>[Your headline]</> : <><span className="site-clause"><Verb>“知”</Verb>大千世界，</span><span className="site-clause"><Verb>“立”</Verb>不朽篇章</span></>}</h1>
-        {/* Three lines rather than one sentence: the first is the reader's
-            problem, the second turns, the third is what 立言阁 does about it —
-            and the turn only works if the reader can see all three at once. */}
-        <div className="site-lede">
+        {/* A couplet, so the only place it may turn is between its halves. */}
+        <h1 id="site-headline">
           {en ? (
-            <p>[A short introduction to Liyan]</p>
+            <>
+              <Clause>
+                <Verb>Know</Verb> the vast world;
+              </Clause>{" "}
+              <Clause>
+                <Verb>write</Verb> what endures.
+              </Clause>
+            </>
           ) : (
             <>
-              <p>信息繁杂，时常感慨万千；有感而发，不知如何表达</p>
+              <Clause>
+                <Verb>“知”</Verb>大千世界，
+              </Clause>
+              <Clause>
+                <Verb>“立”</Verb>不朽篇章
+              </Clause>
+            </>
+          )}
+        </h1>
+        {/*
+          Three lines, and the typography is the argument.
+          The first line is 信息繁杂, so it is set in the sans — the voice of
+          undifferentiated information — and recessed. The third is 妙笔生花, so
+          it is set in 宋体, larger and more generously led: composed prose. The
+          second is the hinge that turns one into the other, and it belongs to
+          the line it introduces rather than to the one it follows, which is why
+          the space above it is generous and the space below it is tight.
+        */}
+        <div className="site-lede">
+          {en ? (
+            <>
+              <p className="site-lede-problem">
+                What you read piles up and stirs a hundred thoughts; the feeling arrives, the
+                words do not.
+              </p>
+              <p className="site-lede-turn">立言阁 helps you:</p>
+              <p className="site-lede-promise">
+                First <Verb>know</Verb> what was said — keep the essence, discard the dross;
+                then <Verb>write</Verb> words of your own — the thoughts well up, and the pen
+                flowers.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="site-lede-problem">信息繁杂，时常感慨万千；有感而发，不知如何表达</p>
               <p className="site-lede-turn">立言阁帮你：</p>
-              <p>
-                先<Verb>“知”</Verb>其言，取其精华，去其糟粕；再<Verb>“立”</Verb>其言，文思泉涌，妙笔生花。
+              <p className="site-lede-promise">
+                <Clause>
+                  先<Verb>“知”</Verb>其言
+                </Clause>
+                ，<Clause>取其精华</Clause>，<Clause>去其糟粕</Clause>；
+                <Clause>
+                  再<Verb>“立”</Verb>其言
+                </Clause>
+                ，<Clause>文思泉涌</Clause>，<Clause>妙笔生花</Clause>。
               </p>
             </>
           )}

@@ -56,30 +56,60 @@
 /*
  * 知 and 立 wherever they appear.
  *
- * 楷体 against the headline's 宋体, which is the traditional pairing for a word
- * lifted out of a line rather than shouted. The accent and the change of face
- * are the emphasis — the size is not, and growing it would make the headline
- * lurch. `1.08em` is not emphasis either: a CJK glyph fills the same em box in
- * every face, but 楷体 draws less ink inside it, so at a matched font-size the
- * character reads *smaller* than its neighbours. Most visible in the 18px lede,
- * where 知 sat noticeably below the sans-serif around it.
+ * 楷体 against 宋体 is the traditional pairing for a word lifted out of a line
+ * rather than shouted, and the accent is what makes it visible at a glance.
+ *
+ * The size is doing two jobs at once. A CJK glyph fills the same em box in
+ * every face, but 楷体 draws less ink inside it — so at a matched font-size the
+ * character reads *smaller* than its neighbours, and about 1.08em is where it
+ * merely draws level. 1.22em is that correction plus the lead the two verbs
+ * are owed: they are the claim, not an aside inside it.
  */
-.site-verb { font-family: "Kaiti SC", STKaiti, KaiTi, "Songti SC", serif; font-size: 1.08em; color: var(--accent); font-weight: 600; }
-/* Each half of the couplet is one unbreakable unit; the line may only turn
-   between them. `inline-block` rather than `nowrap` alone so a half that
-   genuinely cannot fit still wraps instead of overflowing the page. */
-.site-clause { display: inline-block; white-space: nowrap; max-width: 100%; }
+.site-verb { font-family: "Kaiti SC", STKaiti, KaiTi, "Songti SC", serif; font-size: 1.22em; color: var(--accent); font-weight: 600; }
+/* Latin needs neither the optical correction nor 楷体. Italic is what this
+   tradition does with a word lifted out of a line; the accent carries the rest,
+   and the size stays put so the measure does not lurch. */
+:lang(en) .site-verb { font-family: "Songti SC", "Noto Serif SC", Georgia, serif; font-size: 1em; font-style: italic; }
+
+/* Only Chinese needs this: Latin already breaks at spaces, which are always
+   acceptable places to turn, and forcing `nowrap` on an English phrase would
+   push a long one out of its column instead. */
+:lang(zh) .site-clause { white-space: nowrap; }
 
 /*
- * The lede is three lines and the middle one turns.
+ * The lede's three roles, which the copy itself asks for.
  *
- * Read as one paragraph the parallelism collapses, so the lines stay separate
- * and the turn is a smaller, quieter line between the reader's problem and what
- * 立言阁 does about it.
+ * Sans and recessed for the reader's problem; 宋体, larger and led wider for
+ * what 立言阁 does about it — the form arriving at composed prose along with
+ * the sentence. Between them the hinge: the smallest thing here and the only
+ * one in brass, so it reads as a pivot rather than as a third statement. Its
+ * rule is 1px and the width of two characters, which is the lead-in a classical
+ * setting would give it.
  */
-.site-lede { margin-top: 28px; display: grid; gap: 10px; max-width: 34em; }
-.site-lede p { font-size: 18px; line-height: 1.85; }
-.site-lede-turn { font-family: "Songti SC", "Noto Serif SC", Georgia, serif; color: var(--ink); font-size: 17px; }
+.public-site .site-lede { margin-top: 30px; max-width: 33em; }
+.public-site .site-lede-problem { font-size: 17px; line-height: 1.85; color: var(--ink-muted); }
+.public-site .site-lede-turn {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+.public-site .site-lede-turn::before { content: ""; flex: none; width: 22px; height: 1px; background: currentColor; }
+/* Wide tracking at 13–14px is a CJK device: it separates glyphs that are dense
+   and square. Latin lowercase at the same value just reads loose, so it gets
+   the amount a small label actually wants. */
+:lang(en) .public-site .site-lede-turn { letter-spacing: 0.06em; }
+.public-site .site-lede-promise {
+  margin-top: 12px;
+  font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+  font-size: 20px;
+  line-height: 1.95;
+  color: var(--ink);
+}
 .site-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 36px; }
 .site-text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--accent-ink); font-size: 14px; text-decoration: none; min-height: 44px; }
 .site-text-link:hover { text-decoration: underline; }
@@ -253,8 +283,9 @@
   .site-main, .site-footer { width: calc(100% - 32px); }
   .site-hero { padding-top: 44px; }
   .site-actions { gap: 18px; }
-  .site-lede p { font-size: 16px; }
-  .site-lede-turn { font-size: 15px; }
+  .public-site .site-lede-problem { font-size: 16px; }
+  .public-site .site-lede-promise { font-size: 18px; }
+  .public-site .site-lede-turn { margin-top: 22px; font-size: 13px; }
   .site-journey li { padding-inline: 6px; }
   .site-journey strong { font-size: 15px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }

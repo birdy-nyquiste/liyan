@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, Compass, Feather, FileSearch, FileStack, FileText, Languages, MonitorCog, MoonStar, ScrollText, Sun, Telescope } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, Feather, FileSearch, FileStack, Languages, MonitorCog, MoonStar, ScrollText, Sun, Telescope } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -99,7 +99,8 @@ function SampleArticle() {
   );
 }
 
-function ExampleDocument({ title, icon: Icon = FileText }: { title: string; icon?: LucideIcon }) {
+/* Every caller names its own icon, so there is no default to fall back to. */
+function ExampleDocument({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
   return <div className="site-document"><Icon size={20} aria-hidden="true" /><strong>{title}</strong><SampleLines /></div>;
 }
 
@@ -353,14 +354,6 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
             </div>
             <p className="site-small">[{en ? "How to cite report items in your instruction" : "通过立言指令引用报告内容的说明"}]</p>
           </div>
-        </div>
-      </section>
-      <section className="site-stage" aria-labelledby="publication-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">04</span><h3 id="publication-heading">{en ? "Publications" : "发布"}</h3><p>[{en ? "The intended publication experience" : "面向发布目标的体验说明"}]</p></div>
-        <div className="site-publication" role="img" aria-label={en ? "Example A article branches toward three illustrative publication destinations" : "示例 A 文章连接至三个示意发布目标"}>
-          <ExampleDocument title={en ? "Example A · Article" : "示例 A · 立言文章"} />
-          <svg viewBox="0 0 120 240" preserveAspectRatio="none" aria-hidden="true"><path d="M0 120 C60 120 50 35 120 35 M0 120 H120 M0 120 C60 120 50 205 120 205" /><circle cx="3" cy="120" r="3" /></svg>
-          <div className="site-destinations">{["A", "B", "C"].map(destination => <div key={destination}><FileText size={19} aria-hidden="true" /><span>[{en ? "Destination" : "发布目标"} {destination}]</span></div>)}</div>
         </div>
       </section>
     </section>

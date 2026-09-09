@@ -193,8 +193,18 @@
   line-height: 1.95;
   color: var(--ink);
 }
-/* One line each, so the four clauses stack and align. */
+/* One line each, so the parallel clauses stack and align. */
 .site-quote-line { display: block; }
+/*
+ * A line that opens with a quote mark starts a glyph further in than the ones
+ * below it, so the mark hangs into the margin and the characters keep one
+ * column. Positioned rather than a negative `text-indent`: the mark's advance
+ * differs by face, `hanging-punctuation` is Safari-only, and `right: 100%` is
+ * exact whatever renders — measured, 太 lands on 其 to within a tenth of a
+ * pixel instead of the 1.7px a tuned em value left over.
+ */
+.site-quote-line--hang { position: relative; }
+.site-quote-mark { position: absolute; right: 100%; top: 0; }
 .site-stage-quote cite {
   display: block;
   margin-top: 12px;
@@ -233,18 +243,18 @@
  * `overscroll-behavior` and `scrollbar-gutter` are the workbench's own scroll
  * idiom, and the scrollbar itself is already themed globally in `styles.css`.
  */
-.site-report-scroll { position: relative; border-top: 1px solid var(--rule); }
-.site-report-sections {
+.site-scroll { position: relative; border-top: 1px solid var(--rule); }
+.site-scroll-body {
   max-height: min(500px, 58vh);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.site-report-sections:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.site-scroll-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 /* The bottom edge says there is more without a label saying it. Behind the
    scrollbar, which the browser paints above content, and never in the way of a
    pointer. */
-.site-report-scroll::after {
+.site-scroll::after {
   content: "";
   position: absolute;
   inset: auto 0 0;
@@ -266,11 +276,29 @@
 .site-report-example > div + div { margin-top: 20px; }
 .site-report-example .site-sample-lines { margin-top: 10px; gap: 6px; }
 .site-report-example .site-sample-lines i { height: 4px; }
-.site-writing { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.site-writing > .site-document { padding-top: 28px; }
-.site-writing > .site-document .site-sample-lines { margin-top: 36px; gap: 20px; }
-.site-direction { padding: 24px 0; }
-.site-direction > p { margin-top: 16px; font-size: 14px; }
+.site-writing { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+/* Bars, spaced as paragraphs rather than as lines, so the block reads as prose
+   at a glance and there is enough of it to scroll. */
+.site-article-body { display: grid; gap: 26px; padding: 22px 0; }
+.site-article-body .site-sample-lines { margin-top: 0; }
+/*
+ * The field the instruction is written into.
+ *
+ * The same border, radius and ground the workbench's own inputs use, so it
+ * reads as this product's input rather than as a drawing of one. It is not a
+ * control: there is nothing on a marketing page for it to send anywhere, and a
+ * box that takes typing and does nothing with it is worse than a still one.
+ */
+.site-instruction {
+  margin-top: 20px;
+  padding: 16px 18px;
+  min-height: 232px;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.site-instruction > p { font-size: 14px; }
+.site-direction > .site-small { margin-top: 14px; }
 .site-citation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--accent-ink); background: var(--accent-soft); padding: 12px; margin-top: 24px; border-radius: 8px; font-size: 12px; }
 .site-citation > span:first-child { font-variant-numeric: tabular-nums; font-weight: 600; }
 .site-direction .site-small { font-size: 12px; }
@@ -403,8 +431,8 @@
      touch than a long section: `overscroll-behavior: contain` means the page
      will not move until the finger lifts. The bound and the edge that hinted
      at it both go. */
-  .site-report-sections { max-height: none; overflow: visible; }
-  .site-report-scroll::after { content: none; }
+  .site-scroll-body { max-height: none; overflow: visible; }
+  .site-scroll::after { content: none; }
   .site-document { padding: 20px; }
   .site-publication { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
   .site-publication .site-document { padding: 14px; }

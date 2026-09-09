@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, Compass, FileSearch, FileStack, FileText, Languages, MonitorCog, MoonStar, Sun, Telescope } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, Feather, FileSearch, FileStack, FileText, Languages, MonitorCog, MoonStar, ScrollText, Sun, Telescope } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -64,9 +64,9 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
         take the same bound, which is what keeps the two columns level. The
         region is focusable and named because a scroll container that only a
         mouse can reach is not reachable. */}
-    <div className="site-report-scroll">
+    <div className="site-scroll">
       <div
-        className="site-report-sections"
+        className="site-scroll-body"
         role="group"
         aria-label={en ? `${title} sections` : `${title}各节`}
         tabIndex={0}
@@ -88,6 +88,15 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
       </div>
     </div>
   </article>;
+}
+
+/** The article, as much of it as a placeholder can be. */
+function SampleArticle() {
+  return (
+    <div className="site-article-body">
+      {Array.from({ length: 12 }, (_, index) => <SampleLines key={index} />)}
+    </div>
+  );
 }
 
 function ExampleDocument({ title, icon: Icon = FileText }: { title: string; icon?: LucideIcon }) {
@@ -279,10 +288,71 @@ function Homepage({ en, action }: { en: boolean; action: ReactNode }) {
         <div className="site-reports"><Report kind="source" en={en} /><Report kind="theme" en={en} /></div>
       </section>
       <section className="site-stage" aria-labelledby="writing-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">03</span><h3 id="writing-heading">{en ? "Liyan" : "立言"}</h3><p>[{en ? "How your direction shapes the article" : "如何由你决定文章表达的说明"}]</p></div>
+        <div className="site-stage-heading">
+          <span className="site-stage-number">03</span>
+          <h3 id="writing-heading">{en ? "Liyan" : "立言"}</h3>
+          {/* Where the product's own name comes from: 立言 is one of the 三不朽,
+              and 不朽篇章 in the headline is this passage. Set as a citation,
+              like 知言's. */}
+          <p className="site-stage-quote">
+            {en ? (
+              <>
+                “Highest is to establish virtue; next, to establish merit; next, to establish
+                words. Long past and still not fallen away — this is what is called
+                imperishable.”
+              </>
+            ) : (
+              <>
+                {/* The opening quote hangs into the margin so that 太 sits above
+                    其 and 其 — three parallel clauses, one column. */}
+                <span className="site-quote-line site-quote-line--hang">
+                  <span className="site-quote-mark">“</span>太上有立德，
+                </span>
+                <span className="site-quote-line">其次有立功，</span>
+                <span className="site-quote-line">其次有立言。</span>
+                <span className="site-quote-line">虽久不废，此之谓不朽”</span>
+              </>
+            )}
+            <cite>{en ? "Zuo Zhuan · Duke Xiang, year 24" : "出自《左传 · 襄公二十四年》"}</cite>
+          </p>
+        </div>
         <div className="site-writing">
-          <ExampleDocument title={en ? "Example A · Liyan article" : "示例 A · 立言文章"} />
-          <div className="site-direction" id="example-instruction"><h4>{en ? "Your Liyan instruction" : "你的立言指令"}</h4><p>[{en ? "Your editorial direction" : "你的表达方向"}]</p><div className="site-citation"><span>TB-01</span><span>[{en ? "Selected topic-report item" : "你选择引用的主题报告内容"}]</span></div><p className="site-small">[{en ? "How to cite report items in your instruction" : "通过立言指令引用报告内容的说明"}]</p></div>
+          {/* The article is bounded and scrolls, exactly as the 知言报告 do —
+              the same two classes, so the two cannot drift apart. */}
+          <article className="site-article" aria-label={en ? "Example A · Liyan article" : "示例 A · 立言文章"}>
+            <header>
+              <span className="site-report-title">
+                <ScrollText size={22} aria-hidden="true" />
+                <h4>{en ? "Example A · Liyan article" : "示例 A · 立言文章"}</h4>
+              </span>
+            </header>
+            <div className="site-scroll">
+              <div
+                className="site-scroll-body"
+                role="group"
+                aria-label={en ? "Liyan article body" : "立言文章正文"}
+                tabIndex={0}
+              >
+                <SampleArticle />
+              </div>
+            </div>
+          </article>
+          <div className="site-direction" id="example-instruction">
+            <header>
+              <span className="site-report-title">
+                <Feather size={22} aria-hidden="true" />
+                <h4>{en ? "Your Liyan instruction" : "你的立言指令"}</h4>
+              </span>
+            </header>
+            {/* The field you write the instruction into, drawn with the same
+                border, radius and ground the workbench's own inputs use. Not a
+                real control: nothing here would have anywhere to send it. */}
+            <div className="site-instruction">
+              <p>[{en ? "Your editorial direction" : "你的表达方向"}]</p>
+              <div className="site-citation"><span>TB-01</span><span>[{en ? "Selected topic-report item" : "你选择引用的主题报告内容"}]</span></div>
+            </div>
+            <p className="site-small">[{en ? "How to cite report items in your instruction" : "通过立言指令引用报告内容的说明"}]</p>
+          </div>
         </div>
       </section>
       <section className="site-stage" aria-labelledby="publication-heading">

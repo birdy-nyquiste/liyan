@@ -57,18 +57,20 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
   const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Theme Zhiyan report" : "主题知言报告");
   const { icon: Icon } = reports[kind];
   return <article className="site-report" aria-label={title}>
-    {/* Open by default: this is the substance of 知言 and hiding it behind a
-        click would be hiding the argument. The disclosure is there so a reader
-        can put one report away — the two are long and sit side by side.
-        The title and the intro live in the summary so a collapsed report still
-        says what it is; only the sections fold. */}
-    <details open>
-      <summary>
-        <span className="site-report-title"><Icon size={22} aria-hidden="true" /><h4>{title}</h4></span>
-        <ChevronDown size={16} aria-hidden="true" />
-        <p className="site-report-intro">{reports[kind][en ? "en" : "zh"]}</p>
-      </summary>
-    <div className="site-report-sections">
+    <header><span className="site-report-title"><Icon size={22} aria-hidden="true" /><h4>{title}</h4></span></header>
+    <p className="site-report-intro">{reports[kind][en ? "en" : "zh"]}</p>
+    {/* The sections are bounded and scroll inside that bound, so a report of
+        seven of them does not set the height of the whole stage. Both reports
+        take the same bound, which is what keeps the two columns level. The
+        region is focusable and named because a scroll container that only a
+        mouse can reach is not reachable. */}
+    <div className="site-report-scroll">
+      <div
+        className="site-report-sections"
+        role="group"
+        aria-label={en ? `${title} sections` : `${title}各节`}
+        tabIndex={0}
+      >
       {reportSections[kind].map((heading, index) => <div className="site-report-section" key={heading}>
         <h5>{en ? englishSections[heading] : heading}</h5>
         <p>[{en ? `${englishSections[heading]} explanation` : `${heading}说明`}]</p>
@@ -83,8 +85,8 @@ function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
           </div>
         </details>
       </div>)}
+      </div>
     </div>
-    </details>
   </article>;
 }
 

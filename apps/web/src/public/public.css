@@ -217,23 +217,43 @@
 .site-sample-lines i:nth-child(2) { width: 91%; }
 .site-sample-lines i:nth-child(3) { width: 68%; }
 .site-report { min-width: 0; }
-/*
- * The report's own disclosure.
- *
- * Its title and intro sit in the summary, so a collapsed report still says
- * what it is and only its sections fold. The chevron is the summary's one
- * direct `svg`, which is what `details[open] > summary > svg` rotates — the
- * report's own icon is inside `.site-report-title` so it stays upright.
- */
-.site-report > details > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
-.site-report > details > summary > svg { color: var(--ink-faint); transition: transform 200ms ease-out; }
-.site-report > details > summary:hover > svg { color: var(--accent-ink); }
 .site-report-title { display: flex; gap: 10px; align-items: center; min-width: 0; color: var(--accent-ink); }
 .site-report-title svg { flex-shrink: 0; }
-.site-report > details > summary > .site-report-intro { grid-column: 1 / -1; }
+/*
+ * The sections are bounded, and scroll inside that bound.
+ *
+ * Seven sections come to 1286px, which made one report set the height of the
+ * whole stage. Bounded, the stage keeps a size a reader can hold, and the two
+ * reports stay level because both take the same bound rather than each taking
+ * its own content's height. The window is sized to show the first section whole
+ * and the next one beginning — 370px and 152px measured — so what is below is
+ * evident rather than announced. `min()` lets a short viewport have a shorter
+ * window instead of forcing the page to scroll to reach a scroll.
+ *
+ * `overscroll-behavior` and `scrollbar-gutter` are the workbench's own scroll
+ * idiom, and the scrollbar itself is already themed globally in `styles.css`.
+ */
+.site-report-scroll { position: relative; border-top: 1px solid var(--rule); }
+.site-report-sections {
+  max-height: min(500px, 58vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.site-report-sections:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* The bottom edge says there is more without a label saying it. Behind the
+   scrollbar, which the browser paints above content, and never in the way of a
+   pointer. */
+.site-report-scroll::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 48px;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--surface), transparent);
+}
 .site-report h4 { font-size: 24px; }
 .site-report-intro { margin: 18px 0 26px !important; min-height: 56px; font-size: 14px; }
-.site-report-sections { border-top: 1px solid var(--rule); }
 .site-report-section { padding: 20px 0; border-bottom: 1px solid var(--rule); }
 .site-report-section h5 { font-size: 16px; font-weight: 600; }
 .site-report-section > p { font-size: 13px; margin: 8px 0 12px; }
@@ -378,6 +398,13 @@
   .public-site .site-lede-turn { margin-top: 26px; font-size: 19px; }
   .site-reports, .site-inputs, .site-writing { grid-template-columns: 1fr; gap: 36px; }
   .site-report-intro { min-height: 0; }
+  /* One column here, so nothing is being kept level and the page's own scroll
+     is the natural one. A 500px scroller inside a scrolling page is worse on
+     touch than a long section: `overscroll-behavior: contain` means the page
+     will not move until the finger lifts. The bound and the edge that hinted
+     at it both go. */
+  .site-report-sections { max-height: none; overflow: visible; }
+  .site-report-scroll::after { content: none; }
   .site-document { padding: 20px; }
   .site-publication { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); }
   .site-publication .site-document { padding: 14px; }

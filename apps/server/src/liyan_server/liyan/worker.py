@@ -14,7 +14,11 @@ from liyan_server.database import (
 )
 from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message, surrendered
-from liyan_server.liyan.acceptance import GeneratedArticle, accept_article_text
+from liyan_server.liyan.acceptance import (
+    GeneratedArticle,
+    accept_article_text,
+    context_identifiers,
+)
 from liyan_server.liyan.failures import LiyanRunFailure
 from liyan_server.liyan.orchestration import dispatch_or_fail, queue_run
 from liyan_server.liyan.prompt import liyan_request
@@ -55,7 +59,10 @@ def process_liyan_run(
                     prompt_version=snapshot.prompt_version,
                 )
             )
-            article = accept_article_text(result.article_text)
+            article = accept_article_text(
+                result.article_text,
+                context_identifiers=context_identifiers(snapshot.input_text),
+            )
         except LiyanRunFailure as failure:
             # Set when the call returned and its article was refused: the
             # provider invoiced that just the same, so it is still a cost.

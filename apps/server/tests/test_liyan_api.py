@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from zhiyan_support import DeterministicLiyanProvider, confirm_sources, zhiyan_client
 
 from liyan_server.database import Database, Execution, Task, ZhiyanReport
-from liyan_server.liyan.acceptance import accept_article_text, unsupported_markdown_reason
+from liyan_server.liyan.acceptance import (
+    accept_article_text,
+    context_identifiers,
+    unsupported_markdown_reason,
+)
 from liyan_server.liyan.failures import LiyanRunFailure
 from liyan_server.liyan.prompt import LIYAN_PROMPT
 from liyan_server.liyan.provider import (
@@ -122,12 +126,83 @@ def test_duplicate_capsule_identity_is_rejected_even_for_a_direct_client(tmp_pat
     assert response.json()["detail"] == "立言指令包含重复的知言引用。"
 
 
+def _context_with(*identifiers: str) -> str:
+    """One run's input, holding a 知言报告 whose items carry these ids."""
+    report = {"facts": {"items": [{"id": name, "claim": "…"} for name in identifiers]}}
+    payload = json.dumps(
+        [{"source": {"title": "来源", "body": "正文"}, "zhiyan_report": report}],
+        ensure_ascii=False,
+    )
+    return (
+        f"<CURRENT_SOURCES_AND_REPORTS>\n{payload}\n</CURRENT_SOURCES_AND_REPORTS>\n"
+        '<USER_INSTRUCTION>\n{"content":[]}\n</USER_INSTRUCTION>'
+    )
+
+
 @pytest.mark.parametrize("identifier", ["E-01", "capsule: 1"])
 def test_generated_article_rejects_internal_identifiers(identifier: str) -> None:
     with pytest.raises(LiyanRunFailure):
         accept_article_text(
-            f'{{"title":"初稿","body_markdown":"依据 {identifier} 展开论述。"}}'
+            f'{{"title":"初稿","body_markdown":"依据 {identifier} 展开论述。"}}',
+            context_identifiers=context_identifiers(_context_with("E-01")),
         )
+
+
+def test_an_identifier_is_forbidden_because_this_run_holds_it() -> None:
+    """Which strings are internal is a fact about the run, not a shape.
+
+    `F-16` and `F-01` are the same pattern and nothing else about them is
+    alike. Refusing the pattern refused fighter jets, spinal discs and
+    interstate highways along with report identifiers, and an article is
+    discarded whole — so the question is answered by what this run was shown.
+    """
+    forbidden = context_identifiers(_context_with("F-01"))
+
+    with pytest.raises(LiyanRunFailure) as rejected:
+        accept_article_text(
+            json.dumps(
+                {"title": "初稿", "body_markdown": "依据 F-01 展开论述。"},
+                ensure_ascii=False,
+            ),
+            context_identifiers=forbidden,
+        )
+    assert "F-01" in (rejected.value.internal_error or "")
+
+    flown = accept_article_text(
+        json.dumps(
+            {"title": "演习", "body_markdown": "美军出动了 F-16 与 F-35。"},
+            ensure_ascii=False,
+        ),
+        context_identifiers=forbidden,
+    )
+    assert "F-16" in flown.body_markdown
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("nested lists", "争论集中在三处：\n\n- 员工体验\n    - 通勤时间\n- 企业营收\n"),
+        ("a list continuation", "步骤：\n\n1. 先做这个\n    继续说明这一步。\n2. 再做那个\n"),
+        ("an inequality", "当产能 n<k 时，边际成本 c>0，结论不成立。"),
+        ("an attribution", "他写道：\n\n> 工时不是全部。\n\n作者：张三\n"),
+        ("an opening summary", "摘要：本文讨论四天工作制的适用边界。\n\n正文从这里开始。"),
+        ("a quoted date line", "会议纪要节选：\n\nDate: 2024 年 4 月\n\n以上。"),
+        ("an AI practitioner", "作为AI行业的从业者，他对这项政策有不同看法。"),
+        ("court materials", "根据提供的材料，法院认定该公司存在过错。"),
+        ("a named data source", "数据来源 Wind，统计口径见附注。"),
+    ],
+)
+def test_ordinary_writing_is_not_refused(name: str, body: str) -> None:
+    """Every one of these was rejected, and each rejection discards the article.
+
+    The same check also gates a save, so these did not merely waste a
+    generation — they stopped a writer from storing what they had typed.
+    """
+    article = accept_article_text(
+        json.dumps({"title": "四天工作制的真问题", "body_markdown": body}, ensure_ascii=False)
+    )
+
+    assert article.body_markdown == body.strip()
 
 
 def test_generation_waits_for_every_current_zhiyan_report(tmp_path: Path) -> None:

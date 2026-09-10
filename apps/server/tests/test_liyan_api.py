@@ -306,9 +306,40 @@ def test_empty_instruction_stays_empty_and_the_same_operation_is_idempotent(
     assert "<CURRENT_WORKING_COPY>" not in request.input_text
 
 
-def test_the_initial_operation_recovers_once_and_rejects_forbidden_output(
+
+def _liyan_execution_count(database_url: str) -> int:
+    """How many generations this task actually ran, repairs not counted."""
+    from sqlalchemy import func, select
+
+    from liyan_server.liyan.runs import LIYAN_OPERATION
+
+    database = Database(database_url)
+    assert database.engine is not None
+    try:
+        with Session(database.engine) as session:
+            return int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(Execution)
+                    .where(Execution.operation == LIYAN_OPERATION)
+                )
+                or 0
+            )
+    finally:
+        database.dispose()
+
+
+def test_a_refused_article_is_repaired_inside_the_run_that_wrote_it(
     tmp_path: Path,
 ) -> None:
+    """A rejection used to throw the whole article away.
+
+    The retry that followed regenerated it from nothing — a second article's
+    worth of tokens, and the main line, the kept paragraph and the length the
+    writer asked for all back at risk, to remove one forbidden name. The run
+    now asks for the same article with that one fault fixed, and only starts
+    over if the fix does not come.
+    """
     client, headers, dispatcher = zhiyan_client(tmp_path)
     task_id, _ = confirm_sources(client, headers, SOURCES[:1])
     dispatcher.run_all()
@@ -322,14 +353,79 @@ def test_the_initial_operation_recovers_once_and_rejects_forbidden_output(
     client.post(
         f"/tasks/{task_id}/liyan-runs",
         headers=headers,
-        json={"idempotency_key": "recover-once", "instruction": "直接表达。"},
+        json={"idempotency_key": "repair-once", "instruction": "直接表达。"},
     )
     dispatcher.run_all()
 
     state = client.get(f"/tasks/{task_id}/liyan", headers=headers).json()
-    assert len(dispatcher.liyan_provider.requests) == 2
     assert state["status"] == "succeeded"
     assert "胶囊" not in state["result"]["body_markdown"]
+
+    first, repair = dispatcher.liyan_provider.requests
+    assert "<REJECTED_DRAFT>" not in first.input_text
+    # The repair carries the draft back, and names the construct rather than
+    # saying only that something was forbidden.
+    assert "采用胶囊 1，结论如下。" in repair.input_text
+    assert "胶囊编号" in repair.input_text
+    assert repair.input_text.startswith(first.input_text)
+    # One run, not two: the article was mended, not regenerated.
+    assert _liyan_execution_count(dispatcher.database_url) == 1
+
+
+def test_an_article_that_cannot_be_repaired_falls_back_to_starting_over(
+    tmp_path: Path,
+) -> None:
+    """Once only.
+
+    A model that will not drop a named construct when told exactly which one it
+    is has not misread the rule, and a third telling is not what changes that.
+    The ordinary retry — which regenerates — is the right instrument from
+    there, so the run fails and leaves it to that.
+    """
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    task_id, _ = confirm_sources(client, headers, SOURCES[:1])
+    dispatcher.run_all()
+    unusable = LiyanProviderResult(
+        article_text='{"title":"初稿","body_markdown":"仍然采用胶囊 1。"}',
+        model="deepseek-v4-flash",
+    )
+    dispatcher.liyan_provider.outcomes.extend([unusable, unusable])
+
+    client.post(
+        f"/tasks/{task_id}/liyan-runs",
+        headers=headers,
+        json={"idempotency_key": "repair-fails", "instruction": "直接表达。"},
+    )
+    dispatcher.run_all()
+
+    # Two calls in the first run — the draft and its repair — then the ordinary
+    # retry, which starts from nothing and succeeds.
+    assert len(dispatcher.liyan_provider.requests) == 3
+    assert "<REJECTED_DRAFT>" not in dispatcher.liyan_provider.requests[2].input_text
+    state = client.get(f"/tasks/{task_id}/liyan", headers=headers).json()
+    assert state["status"] == "succeeded"
+
+
+def test_a_repair_is_only_offered_where_there_is_something_to_repair(
+    tmp_path: Path,
+) -> None:
+    """A provider that could not be reached has no article to mend."""
+    client, headers, dispatcher = zhiyan_client(tmp_path)
+    task_id, _ = confirm_sources(client, headers, SOURCES[:1])
+    dispatcher.run_all()
+    dispatcher.liyan_provider.outcomes.append(
+        LiyanProviderFailure("provider_unavailable", "暂时不可用")
+    )
+
+    client.post(
+        f"/tasks/{task_id}/liyan-runs",
+        headers=headers,
+        json={"idempotency_key": "no-repair", "instruction": "直接表达。"},
+    )
+    dispatcher.run_all()
+
+    for request in dispatcher.liyan_provider.requests:
+        assert "<REJECTED_DRAFT>" not in request.input_text
 
 
 def test_output_arriving_after_cancellation_never_becomes_a_working_copy(

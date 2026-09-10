@@ -236,3 +236,60 @@ def liyan_request(
         input_text=input_text,
         article_schema=ARTICLE_SCHEMA,
     )
+
+
+#: What a run is told when its article broke one rule. Prompt text, so it lives
+#: beside the Prompt rather than in the worker that happens to send it.
+#:
+#: A repair is not a regeneration. The article in hand already carries whatever
+#: the writer asked for — the main line they chose, the paragraph they said to
+#: keep, the length they set — and rerolling from scratch puts all of that back
+#: at risk to fix one table. So this asks for one thing to change and
+#: everything else to stay, and says the 立言指令 still stands.
+ARTICLE_REPAIR_INSTRUCTION = """\
+<REJECTED_DRAFT> 是你刚才返回的文章。它没有通过校验：
+
+{guidance}
+
+现在返回这篇文章的修正版本：
+
+- 只修掉上面指出的这一处。其余内容一字不改——标题、主线、结构、措辞、篇幅全部保持原样。
+- 用户立言指令的每一条要求继续有效，不要因为这次修正而丢掉其中任何一条。
+- 仍然只输出符合 JSON Schema 的 title 和 body_markdown，不要附加解释或修改说明。
+"""
+
+
+def liyan_repair_input_text(*, input_text: str, draft: str, guidance: str) -> str:
+    """The original request, the article it produced, and what to fix in it.
+
+    The prefix is the original input unchanged, so the repair reads as one more
+    turn of the same conversation — and almost all of it is a cache hit. The
+    repair instruction goes last because that is where this run's most specific
+    instruction belongs, the same reason the 立言指令 sits last in a first pass.
+    """
+    return "\n".join(
+        (
+            input_text,
+            "<REJECTED_DRAFT>",
+            draft,
+            "</REJECTED_DRAFT>",
+            "<REPAIR_INSTRUCTION>",
+            ARTICLE_REPAIR_INSTRUCTION.format(guidance=guidance),
+            "</REPAIR_INSTRUCTION>",
+        )
+    )
+
+
+def liyan_repair_request(
+    *,
+    model: str,
+    input_text: str,
+    draft: str,
+    guidance: str,
+    prompt_version: str = LIYAN_PROMPT_VERSION,
+) -> LiyanRequest:
+    return liyan_request(
+        model=model,
+        input_text=liyan_repair_input_text(input_text=input_text, draft=draft, guidance=guidance),
+        prompt_version=prompt_version,
+    )

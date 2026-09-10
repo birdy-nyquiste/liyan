@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -19,9 +20,9 @@ from liyan_server.liyan.acceptance import (
     accept_article_text,
     context_identifiers,
 )
-from liyan_server.liyan.failures import LiyanRunFailure
+from liyan_server.liyan.failures import ArticleRejected, LiyanRunFailure
 from liyan_server.liyan.orchestration import dispatch_or_fail, queue_run
-from liyan_server.liyan.prompt import liyan_request
+from liyan_server.liyan.prompt import liyan_repair_request, liyan_request
 from liyan_server.liyan.provider import LiyanProvider, LiyanProviderResult
 from liyan_server.liyan.recovery import automatic_attempt_permitted, retry_allowed_at
 from liyan_server.liyan.runs import (
@@ -31,6 +32,7 @@ from liyan_server.liyan.runs import (
 )
 from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
+from liyan_server.provider_usage import combined_usage
 from liyan_server.task_activity import record_task_activity
 
 CANCELLED_MESSAGE = cancelled_message(LIYAN_OPERATION)
@@ -59,10 +61,16 @@ def process_liyan_run(
                     prompt_version=snapshot.prompt_version,
                 )
             )
-            article = accept_article_text(
-                result.article_text,
-                context_identifiers=context_identifiers(snapshot.input_text),
-            )
+            forbidden = context_identifiers(snapshot.input_text)
+            try:
+                article = accept_article_text(
+                    result.article_text, context_identifiers=forbidden
+                )
+            except ArticleRejected as refusal:
+                result = _repaired(provider, snapshot, result, refusal)
+                article = accept_article_text(
+                    result.article_text, context_identifiers=forbidden
+                )
         except LiyanRunFailure as failure:
             # Set when the call returned and its article was refused: the
             # provider invoiced that just the same, so it is still a cost.
@@ -71,6 +79,40 @@ def process_liyan_run(
         _finish_succeeded(database, execution_id, snapshot, result, article)
     finally:
         database.dispose()
+
+
+def _repaired(
+    provider: LiyanProvider,
+    snapshot: LiyanRunSnapshot,
+    rejected: LiyanProviderResult,
+    refusal: ArticleRejected,
+) -> LiyanProviderResult:
+    """One more call, asking for the same article with the one fault fixed.
+
+    A refused article was thrown away whole, and the retry that followed
+    regenerated it from nothing — paying for a second article and putting the
+    main line, the kept paragraph and the length the writer asked for back at
+    risk, all to remove one table. Repairing costs a fraction of that and keeps
+    the rest of the article intact.
+
+    Once only. A model that cannot remove a named construct when told exactly
+    which one it is has not misread the rule, and asking a third time is not
+    what will change that — the run fails and the ordinary retry, which starts
+    over, is the right instrument from there.
+
+    The result carries both calls' usage, because both were invoiced whether or
+    not the second one produced an acceptable article.
+    """
+    repair = provider.generate(
+        liyan_repair_request(
+            model=snapshot.model,
+            input_text=snapshot.input_text,
+            draft=rejected.article_text,
+            guidance=refusal.repair,
+            prompt_version=snapshot.prompt_version,
+        )
+    )
+    return replace(repair, usage=combined_usage([rejected.usage, repair.usage]))
 
 
 def _claim(database: Database, execution_id: UUID) -> LiyanRunSnapshot | None:

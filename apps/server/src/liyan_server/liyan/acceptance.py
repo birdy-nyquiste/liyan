@@ -4,7 +4,7 @@ from collections.abc import Collection
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
-from liyan_server.liyan.failures import LiyanRunFailure
+from liyan_server.liyan.failures import ArticleRejected, LiyanRunFailure
 
 UNUSABLE_MESSAGE = "立言服务返回了无法使用的文章，请重试。"
 
@@ -201,6 +201,45 @@ def _has_publication_front_matter(body: str) -> bool:
     return False
 
 
+#: What to say about each rule so a run can fix its article instead of losing
+#: it. In the Prompt's own language, and naming the construct: "a forbidden
+#: Markdown construct" is not something anyone can act on, and neither is a
+#: rule number.
+_REPAIR_BY_REASON: dict[str, str] = {
+    "raw HTML in the title": "标题里有 HTML。标题只能是纯文本。",
+    "an image in the title": "标题里有图片。标题只能是纯文本。",
+    "Markdown in the title": "标题里有 Markdown 标记（# * _ ` [] 等）。标题只能是纯文本单行。",
+    "a line break in the title": "标题里有换行。标题必须是单行。",
+    "raw HTML": "正文里有 HTML 标签或注释。删掉它们，需要时改写成允许的 Markdown 或纯文本。",
+    "a table": "正文里有表格。把表格承载的内容改写成段落或列表。",
+    "an image": "正文里有图片。删掉它，必要时用文字说明它原本要表达的内容。",
+    "a code span or fence": "正文里有行内代码或代码块（反引号）。去掉反引号，写成正常文字。",
+    "an H1 or an H4 and deeper": "正文里有一级标题，或四级及以下标题。只使用二级和三级标题。",
+    "a setext H1": "正文里有下划线式标题（文字下面一行等号）。改成二级标题。",
+    "a footnote": "正文里有脚注。把脚注的内容并进正文。",
+    "a task list": "正文里有任务列表（- [ ]）。改成普通的无序列表。",
+    "a definition list": "正文里有定义列表（以冒号开头的一行）。改写成段落。",
+    "indented code": "正文里有四个空格或制表符缩进的代码块。去掉缩进，写成正常段落。",
+    "a link definition": "正文里有链接引用定义（形如 [标签]: 地址）。改成行内链接。",
+    "publication front matter": (
+        "正文开头是发布字段（形如「作者：」「status:」）。删掉它，让文章从正文第一句开始。"
+    ),
+    "YAML front matter": "正文开头有 YAML front matter（--- 包起来的字段）。整段删掉。",
+    "a link that is not https": "正文里有非 http/https 的链接。删掉它，或改写成正常文字。",
+    "strikethrough": "正文里有删除线（~~）。去掉删除线标记。",
+}
+
+_INTERNAL_NAME_REPAIR = (
+    "文章里出现了内部名称（来源编号、知言报告、REF 或胶囊编号）。"
+    "把它去掉，直接陈述它说的那件事，不提它的出处。"
+)
+
+_NARRATION_REPAIR = (
+    "文章里有生成过程的痕迹（例如「作为 AI……」「立言指令」）。"
+    "删掉这一句，或改写成文章自己的表述。"
+)
+
+
 def unsupported_markdown_reason(title: str, body: str) -> str | None:
     """Which rule the pair breaks, or None if it breaks none.
 
@@ -241,30 +280,37 @@ def accept_article_text(
         raise LiyanRunFailure("invalid_article_schema", UNUSABLE_MESSAGE, str(error)) from error
     body = article.body_markdown
     if reason := unsupported_markdown_reason(article.title, body):
-        raise LiyanRunFailure(
+        raise ArticleRejected(
             "unsupported_article_markdown",
             UNUSABLE_MESSAGE,
             f"The article uses {reason}, which the canonical subset forbids.",
+            repair=_REPAIR_BY_REASON[reason],
         )
     if _INTERNAL_REFERENCE.search(article.title) or _INTERNAL_REFERENCE.search(body):
-        raise LiyanRunFailure(
+        raise ArticleRejected(
             "internal_article_reference",
             UNUSABLE_MESSAGE,
             "The article exposes an internal source or report identifier.",
+            repair=_INTERNAL_NAME_REPAIR,
         )
     quoted = _cited_identifier(article.title, context_identifiers) or _cited_identifier(
         body, context_identifiers
     )
     if quoted is not None:
-        raise LiyanRunFailure(
+        raise ArticleRejected(
             "internal_article_reference",
             UNUSABLE_MESSAGE,
             f"The article quotes {quoted}, an identifier from its own 知言 context.",
+            repair=(
+                f"文章里出现了本次知言上下文的编号 {quoted}。"
+                "把它删掉，直接陈述那一条说的内容。"
+            ),
         )
     if _GENERATION_NARRATION.search(article.title) or _GENERATION_NARRATION.search(body):
-        raise LiyanRunFailure(
+        raise ArticleRejected(
             "article_generation_narration",
             UNUSABLE_MESSAGE,
             "The article narrates its generation context.",
+            repair=_NARRATION_REPAIR,
         )
     return article

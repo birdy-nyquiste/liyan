@@ -34,6 +34,10 @@ describe("public entry routes", () => {
     const user = userEvent.setup();
     render(<App authProvider={provider} />);
     const links = await screen.findAllByRole("link", { name: "立即体验" });
+    // What the hero's button costs, said under the button itself. Queried by
+    // class rather than by text: the same words appear in 价格, and the rule
+    // being fixed here is which of the two states shows this one.
+    expect(document.querySelector(".site-actions-note")).toHaveTextContent("注册即赠送额度");
     expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "注册" })).not.toBeInTheDocument();
     await user.click(links[0]);
@@ -52,6 +56,9 @@ describe("public entry routes", () => {
     const user = userEvent.setup();
     render(<App authProvider={provider} />);
     const links = await screen.findAllByRole("link", { name: "前往工作台" });
+    // Nothing is granted to a user who signed up long ago, so the hero does
+    // not offer it to them.
+    expect(document.querySelector(".site-actions-note")).toBeNull();
     expect(window.location.pathname).toBe("/");
     expect(screen.queryByRole("link", { name: "立即体验" })).not.toBeInTheDocument();
     for (const link of links) expect(link).toHaveAttribute("href", "/task");
@@ -101,17 +108,19 @@ describe("public entry routes", () => {
     expect(screen.getByRole("link", { name: "联系我们" })).toHaveAttribute("href", "mailto:birdyyao@nyquiste.com");
   });
 
-  it("retains report structure and explanations independently of example disclosure", async () => {
+  it("keeps every report section named and its worked example folded away", async () => {
     const user = userEvent.setup();
     render(<App authProvider={provider} />);
     const source = screen.getByRole("article", { name: "来源知言报告" });
     const theme = screen.getByRole("article", { name: "主题知言报告" });
     expect(within(source).getAllByRole("heading", { level: 5 }).map(h => h.textContent)).toEqual(["概要", "“知”来源", "“知”事实", "“知”观点", "“知”逻辑", "“知”意图", "“知”依据"]);
     expect(within(theme).getAllByRole("heading", { level: 5 }).map(h => h.textContent)).toEqual(["概要", "“知”盲点", "“知”事实", "“知”观点", "“知”分歧", "“知”依据"]);
-    expect(within(theme).getByText("[“知”盲点说明]")).toBeVisible();
-    await user.click(within(source).getAllByText("示例 A · 查看示例")[0]);
-    expect(within(source).getByText("[概要说明]")).toBeVisible();
+    // What a section is for stays on the page; the worked example folds away.
+    // Every example starts folded: what this stage shows is the sections a
+    // 知言报告 has, and the example is there for whoever wants one.
     expect(within(source).getByText("内容概要")).not.toBeVisible();
+    await user.click(within(source).getAllByText("查看示例")[0]);
+    expect(within(source).getByText("内容概要")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "语言: 中文" }));
     expect(screen.getByRole("link", { name: "How it works" })).toBeVisible();
     expect(document.documentElement.lang).toBe("en");

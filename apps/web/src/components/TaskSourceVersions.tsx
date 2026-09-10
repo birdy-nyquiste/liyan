@@ -426,7 +426,7 @@ export function TaskSourceVersions({
       <>
         <div className="source-kind-tabs" aria-label={t("来源类型")}>
           <button type="button" className={`button ${newMode === "pasted" ? "" : "button--quiet"}`} onClick={() => setNewMode("pasted")}>{t("粘贴文本")}</button>
-          <button type="button" className={`button ${newMode === "url" ? "" : "button--quiet"}`} onClick={() => setNewMode("url")}>{t("公共文章链接")}</button>
+          <button type="button" className={`button ${newMode === "url" ? "" : "button--quiet"}`} onClick={() => setNewMode("url")}>{t("网页文字抓取")}</button>
           <button type="button" className={`button ${newMode === "file" ? "" : "button--quiet"}`} onClick={() => setNewMode("file")}>{t("上传文件")}</button>
         </div>
         {newMode === "pasted" ? (

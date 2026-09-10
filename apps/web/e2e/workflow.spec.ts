@@ -174,7 +174,7 @@ test("a URL 来源 that cannot be reached fails with a reason, not a spinner", a
 
   await railLink(page, "新建任务").click();
   await page.getByRole("button", { name: "添加来源" }).click();
-  await page.getByRole("button", { name: "公共文章链接" }).click();
+  await page.getByRole("button", { name: "网页文字抓取" }).click();
   await page.getByLabel("来源网址").fill("https://example.invalid/does-not-resolve");
   await page.getByRole("button", { name: "添加来源" }).click();
 

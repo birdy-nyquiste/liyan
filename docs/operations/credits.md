@@ -86,6 +86,30 @@ is nearly flat — and small:
 Length is paid for in ②, where it genuinely scales, and charging for it twice
 would be charging for it once wrongly.
 
+The fee is taken at **intake**, in the transaction that accepts the 来源, because
+its price is known before the work runs and the balance has to be checked
+against something. That makes capture the one charge in this system that can
+outlive the work it paid for: a fetch that times out would leave a user with no
+来源 and three 额度 gone, while every other operation reaches zero through a 结算
+correcting its 预扣.
+
+So a capture's charge is **reconciled against what it produced**, by
+`credits.reconcile_capture`, in the same transaction that ends the run:
+
+    来源 has content   →  position is −3
+    来源 has none      →  position is 0
+
+and the difference is written as a row. A failed fetch gives the fee back; a
+retry that then succeeds takes it again. Both directions are needed — a one-way
+refund would hand the fee back on the failure and never take it again on the
+retry, which is a captured article nobody paid for. `credit_reconciliation.py`
+does the same for the terminal paths the worker never reaches, exactly as it
+does for 预扣, and the two indexes in the migration are what let both write it
+without paying twice.
+
+This is 使用条款 3.1 — *抓取失败、未产出任何结果的来源不消耗额度* — which the
+ledger did not honour until 2026-09-10.
+
 The fee is set to cover **the tail rather than the average**: three 额度 nearly
 covers the largest file this system accepts, so the biggest uploads are
 subsidised by a fraction of a cent instead of by a second term in the equation.

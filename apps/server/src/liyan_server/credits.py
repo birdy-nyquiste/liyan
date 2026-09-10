@@ -175,6 +175,75 @@ def charge_capture(
     )
 
 
+def capture_position(session: Session, preparation_id: UUID) -> int:
+    """What this 来源 has been charged for capture, net of everything given back."""
+    return int(
+        session.scalar(
+            select(func.coalesce(func.sum(CreditEntry.amount), 0)).where(
+                CreditEntry.target_type == SOURCE_PREPARATION,
+                CreditEntry.target_id == preparation_id,
+                CreditEntry.kind.in_(("capture", "capture_refund")),
+            )
+        )
+        or 0
+    )
+
+
+def reconcile_capture(
+    session: Session,
+    owner_id: UUID,
+    *,
+    preparation_id: UUID,
+    execution_id: UUID,
+    succeeded: bool,
+    credits: int,
+    now: datetime | None = None,
+) -> CreditEntry | None:
+    """Bring a 来源's capture charge to what its capture actually produced.
+
+    The rule this enforces is one sentence: **a 来源 is charged the flat fee for
+    as long as it has content, and charged nothing when it does not.** The fee
+    is taken at intake, before Chromium or the parser has run, which is what
+    makes capture the one act in this system whose charge can outlive the work
+    it paid for — a fetch that times out leaves the user with no 来源 and three
+    额度 less. 使用条款 3.1 says they keep neither.
+
+    Every other operation reaches the same place through 结算, correcting a 预扣
+    to zero. Capture has no 预扣 to correct, so its position is reconciled
+    instead: this writes the difference between what the ledger holds for this
+    来源 and what the run that just ended says it should hold. A failed fetch
+    gives the fee back; a retry that then succeeds takes it again, which is the
+    half a one-way refund would miss — and the reason this is a difference
+    rather than a refund.
+
+    Idempotent per Execution, so the worker that ends a run and the sweep that
+    reconciles what the worker missed can both call it. Returns nothing when
+    the position is already right, which is the ordinary case for a 来源 whose
+    first capture succeeded.
+    """
+    target = -abs(credits) if succeeded else 0
+    delta = target - capture_position(session, preparation_id)
+    if delta == 0:
+        return None
+    if session.scalar(
+        select(CreditEntry).where(
+            CreditEntry.kind.in_(("capture", "capture_refund")),
+            CreditEntry.execution_id == execution_id,
+        )
+    ):
+        return None
+    return _add(
+        session,
+        owner_id,
+        kind="capture" if delta < 0 else "capture_refund",
+        amount=delta,
+        now=now,
+        target_type=SOURCE_PREPARATION,
+        target_id=preparation_id,
+        execution_id=execution_id,
+    )
+
+
 def hold(
     session: Session,
     owner_id: UUID,

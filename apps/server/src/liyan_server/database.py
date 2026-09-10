@@ -636,14 +636,32 @@ class CreditEntry(Base):
             postgresql_where=text("kind IN ('hold', 'settle')"),
             sqlite_where=text("kind IN ('hold', 'settle')"),
         ),
-        #: One capture charge per 来源, however many times intake is replayed.
+        #: One capture charge per 来源 at intake, however many times intake is
+        #: replayed. Restricted to the rows intake writes — the ones with no
+        #: Execution behind them — because a capture that fails and is retried
+        #: is corrected afterwards by rows that do carry one.
         Index(
             "uq_credit_entries_capture",
             "target_type",
             "target_id",
             unique=True,
-            postgresql_where=text("kind = 'capture'"),
-            sqlite_where=text("kind = 'capture'"),
+            postgresql_where=text("kind = 'capture' AND execution_id IS NULL"),
+            sqlite_where=text("kind = 'capture' AND execution_id IS NULL"),
+        ),
+        #: One correction per capture run, whichever way it goes: the fee given
+        #: back when a fetch produced nothing, or taken again when a retry
+        #: finally produced something. This is what lets the worker that ends a
+        #: run and the sweep that reconciles what it missed both write it.
+        Index(
+            "uq_credit_entries_capture_adjustment",
+            "execution_id",
+            unique=True,
+            postgresql_where=text(
+                "kind IN ('capture', 'capture_refund') AND execution_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "kind IN ('capture', 'capture_refund') AND execution_id IS NOT NULL"
+            ),
         ),
         #: A redelivered Stripe webhook collides here rather than crediting twice.
         Index(

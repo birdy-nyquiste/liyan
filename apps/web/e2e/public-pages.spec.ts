@@ -18,8 +18,10 @@ test("public pages preserve the entry flow, section navigation and display prefe
   await expect(page).toHaveURL(/#pricing$/);
   await expect(page.getByRole("heading", { name: "价格", exact: true })).toBeInViewport();
   await page.getByRole("link", { name: "常见问题", exact: true }).click();
-  await page.getByText("[问题 1]", { exact: true }).click();
-  await expect(page.getByText("[回答 1]", { exact: true })).toBeVisible();
+  const question = "支持哪些来源？一个任务能放几个？";
+  await expect(page.getByText(/一个任务最多 3 个来源/)).toBeHidden();
+  await page.getByText(question, { exact: true }).click();
+  await expect(page.getByText(/一个任务最多 3 个来源/)).toBeVisible();
   await page.getByRole("link", { name: "使用条款", exact: true }).click();
   await expect(page.getByRole("heading", { name: "使用条款", exact: true })).toBeVisible();
   await page.reload();

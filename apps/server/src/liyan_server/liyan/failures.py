@@ -28,3 +28,26 @@ class LiyanRunFailure(Exception):
         #: far enough to be told. `None` means nothing billable happened.
         self.usage = usage
         self.model = model
+
+
+class ArticleRejected(LiyanRunFailure):
+    """An article the rules refused, carrying what would make it acceptable.
+
+    The distinction from a plain `LiyanRunFailure` is whether anything can be
+    done about it in the same run. A provider that could not be reached has
+    nothing to fix; an article with a table in it has one table, and the run
+    already holds everything else the writer asked for. `repair` is that
+    sentence, in the language the Prompt is written in.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        internal_error: str | None = None,
+        *,
+        repair: str,
+    ) -> None:
+        super().__init__(code, message, internal_error)
+        #: What to tell the model so it can fix this article rather than lose it.
+        self.repair = repair

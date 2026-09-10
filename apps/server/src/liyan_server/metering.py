@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from liyan_server.credits import settle
+from liyan_server.credits import reconcile_capture, settle
 from liyan_server.database import Execution, ExecutionCost, aware_utc
 from liyan_server.provider_usage import ProviderUsage
 from liyan_server.rate_card import (
@@ -140,6 +140,23 @@ def record_execution_cost(
             cost_micros += storage_cost_micros(stored_bytes) if stored_bytes else 0
 
         charge = _charge(execution.operation, cost_micros, chargeable)
+        if execution.operation in FLAT_CHARGED_OPERATIONS:
+            # The flat fee was taken at intake, before this run existed, so
+            # there is no 预扣 for a 结算 to correct. What this 来源 should hold
+            # is decided by what the run just produced, and the difference is
+            # written: given back when it produced nothing, taken again when a
+            # retry finally produced something. The sweep in
+            # `credit_reconciliation.py` covers the terminal paths that never
+            # reach this line, exactly as it does for 预扣.
+            reconcile_capture(
+                session,
+                execution.owner_id,
+                preparation_id=execution.target_id,
+                execution_id=execution.id,
+                succeeded=chargeable,
+                credits=CAPTURE_CREDITS,
+                now=moment,
+            )
         if execution.operation in TOKEN_METERED_OPERATIONS:
             # The 预扣 was taken against the target, not the Execution, because
             # a 知言 run's is taken before its Execution exists. Settling here

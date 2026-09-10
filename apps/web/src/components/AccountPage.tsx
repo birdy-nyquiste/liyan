@@ -38,7 +38,7 @@ const copy = {
     pageOf: (page: number, pages: number, total: number) =>
       `第 ${page} / ${pages} 页 · 共 ${total} 条`,
     failed: "账户信息加载失败，请稍后重试。",
-    locked: "购买额度后可使用公共文章链接与上传文件作为来源。",
+    locked: "购买额度后可使用网页文字抓取与上传文件作为来源。",
     spends: "来源抓取，知言报告生成，立言文章生成会消耗额度，按量计算。",
     running: "进行中",
     done: "已完成",
@@ -64,7 +64,7 @@ const copy = {
     pageOf: (page: number, pages: number, total: number) =>
       `Page ${page} of ${pages} · ${total} entries`,
     failed: "The account could not be loaded. Try again shortly.",
-    locked: "Buying credits unlocks article links and uploaded files as sources.",
+    locked: "Buying credits unlocks web page capture and uploaded files as sources.",
     spends: "Capturing a 来源, generating a 知言报告, and generating a 立言文章 spend credits, metered by usage.",
     running: "Running",
     done: "Done",

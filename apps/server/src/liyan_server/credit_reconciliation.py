@@ -1,4 +1,4 @@
-"""Settling 预扣 that nothing else settled.
+"""Settling 预扣 that nothing else settled, and giving back captures that failed.
 
 A 结算 is written where the number is known — inside the transaction that ends a
 run, beside the cost row. That covers every terminal branch of both workers, and
@@ -15,19 +15,26 @@ error, no failed run, just a smaller number than they expected. That is the
 quiet failure `limits.md` is written against, and it is why this is reconciled
 rather than remembered — a terminal path nobody wires up leaks nothing.
 
+The capture fee is here for the same reason and by a different route. It is
+charged at intake rather than held, so nothing about it is a 预扣 — but a fetch
+that fails still leaves a user three 额度 short for a 来源 they never got, and
+the terminal paths that skip the eager 结算 skip the eager correction too.
+
 Idempotent by the same index the eager path relies on, so both running is the
 ordinary case rather than a race.
 """
 
 import logging
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
-from liyan_server.credits import settle
+from liyan_server.credits import SOURCE_PREPARATION, capture_position, reconcile_capture, settle
 from liyan_server.database import CreditEntry, Database, Execution, ExecutionCost, aware_utc
 from liyan_server.execution_states import TERMINAL_EXECUTION_STATUSES
+from liyan_server.rate_card import CAPTURE_CREDITS
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +82,29 @@ def _execution_for(session: Session, held: CreditEntry) -> Execution | None:
             Execution.attempt == held.attempt,
         )
     )
+
+
+def _captures_to_reconcile(session: Session) -> list[Execution]:
+    """The last capture run of every 来源 whose capture is over.
+
+    Over means no attempt is still in flight: a first attempt that failed while
+    its automatic retry is queued has not yet produced nothing, and paying the
+    fee back mid-retry would only take it again a minute later. A 来源 with no
+    Execution at all was pasted — charged at intake for a 来源 the user does
+    have — so it is not here.
+    """
+    latest: dict[UUID, Execution] = {}
+    active: set[UUID] = set()
+    for execution in session.scalars(
+        select(Execution)
+        .where(Execution.target_type == SOURCE_PREPARATION)
+        .order_by(Execution.input_version, Execution.attempt)
+    ):
+        if execution.status in TERMINAL_EXECUTION_STATUSES:
+            latest[execution.target_id] = execution
+        else:
+            active.add(execution.target_id)
+    return [e for target_id, e in latest.items() if target_id not in active]
 
 
 def reconcile_settlements(database_url: str, *, now: datetime | None = None) -> int:
@@ -132,6 +162,28 @@ def reconcile_settlements(database_url: str, *, now: datetime | None = None) -> 
                     now=moment,
                 )
                 if entry is not None:
+                    written += 1
+            for execution in _captures_to_reconcile(session):
+                # Nothing was charged at intake for this 来源 — it predates the
+                # fee, or its charge was cleaned away — so there is no position
+                # to correct and inventing one would charge for work nobody
+                # holds a record of.
+                if capture_position(session, execution.target_id) == 0 and (
+                    execution.status != "succeeded"
+                ):
+                    continue
+                if (
+                    reconcile_capture(
+                        session,
+                        execution.owner_id,
+                        preparation_id=execution.target_id,
+                        execution_id=execution.id,
+                        succeeded=execution.status == "succeeded",
+                        credits=CAPTURE_CREDITS,
+                        now=moment,
+                    )
+                    is not None
+                ):
                     written += 1
             session.commit()
     except Exception:

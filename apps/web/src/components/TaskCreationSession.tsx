@@ -35,7 +35,7 @@ import { getAccount } from "../api/client";
 type DraftSource = { title: string; body: string; provenance: string };
 const CREATION_SESSION_KEY = "liyan.creationSession";
 const emptyDraft: DraftSource = { title: "", body: "", provenance: "" };
-const sourceKindLabels = { pasted: "粘贴文本", url: "公共文章链接", file: "上传文件" };
+const sourceKindLabels = { pasted: "粘贴文本", url: "网页文字抓取", file: "上传文件" };
 // A fetched or parsed body is not something the writer wrote, and saying so is
 // the difference between "check your text" and "check what we read".
 const bodyLabels = { pasted: "来源正文", url: "抓取正文", file: "解析正文" };
@@ -457,7 +457,7 @@ export function TaskCreationSession({
               type="button"
               onClick={() => { if (!locked) setMode("url"); }}
             >
-              {locked ? <Lock size={14} aria-hidden="true" /> : null}{t("公共文章链接")}
+              {locked ? <Lock size={14} aria-hidden="true" /> : null}{t("网页文字抓取")}
             </button>
             <button
               aria-disabled={locked || undefined}
@@ -471,7 +471,7 @@ export function TaskCreationSession({
           </div>
           {locked ? (
             <p className="source-kinds-locked" id="source-kinds-locked">
-              {t("公共文章链接与上传文件需购买额度后解锁。")}
+              {t("网页文字抓取与上传文件需购买额度后解锁。")}
               <Link className="button button--quiet" to="/account">{t("购买额度")}</Link>
             </p>
           ) : null}

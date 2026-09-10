@@ -236,10 +236,10 @@ describe("task creation session", () => {
     expect(screen.queryByRole("textbox", { name: "主题" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "添加来源" }));
-    await user.click(screen.getByRole("button", { name: "公共文章链接" }));
+    await user.click(screen.getByRole("button", { name: "网页文字抓取" }));
     await user.type(screen.getByLabelText("来源网址"), "https://example.com/article");
     await user.click(screen.getByRole("button", { name: "添加来源" }));
-    expect(await screen.findByText("公共文章链接 · Fetched article")).toBeInTheDocument();
+    expect(await screen.findByText("网页文字抓取 · Fetched article")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "添加来源" }));
     await user.click(screen.getByRole("button", { name: "上传文件" }));

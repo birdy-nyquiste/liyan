@@ -50,7 +50,7 @@ INSUFFICIENT_MESSAGE = "额度不足，购买后可继续。"
 #: URL and file 来源 are what a 付费用户 buys. The workbench shows both as locked
 #: rather than hiding them, so reaching this is a client going around the
 #: interface rather than a user meeting a wall.
-PAID_ONLY_MESSAGE = "公共文章链接与上传文件需购买额度后解锁。"
+PAID_ONLY_MESSAGE = "网页文字抓取与上传文件需购买额度后解锁。"
 
 
 def refuse_when_short(session: Session, owner_id: UUID, *, needed: int) -> None:

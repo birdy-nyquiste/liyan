@@ -18,11 +18,15 @@ type PublishTaskStatus = Literal["pending", "succeeded", "failed", "outcome_unkn
 #: What one movement of 额度 was. Stored literals, rendered in the workbench as
 #: 赠送, 购买, 预扣 and 结算; `CONTEXT.md` defines what each one means.
 #: `capture` is the flat fee a 来源 costs, which is charged outright rather than
-#: held, because it is known before the work runs.
+#: held, because it is known before the work runs — and `capture_refund` is that
+#: fee given back when the capture it paid for produced nothing. Capture is the
+#: one act taken outright, so it is also the one act that needs a reversal of
+#: its own: everything else is a 预扣 a 结算 can correct to zero.
 type CreditEntryKind = Literal[
     "grant",
     "purchase",
     "capture",
+    "capture_refund",
     "hold",
     "settle",
     "clawback",

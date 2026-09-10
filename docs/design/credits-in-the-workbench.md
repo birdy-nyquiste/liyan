@@ -66,9 +66,10 @@ Never a bare failure, and never a figure:
 with 购买额度 beside it, going to `/account`. A refusal a user cannot act on has
 told them off rather than told them something.
 
-## URL and file 来源 are visibly locked
+## 网页文字抓取 and 上传文件 are visibly locked
 
-Two of the three 来源 tabs need 额度 that has been bought. They are **not
+Two of the three 来源 tabs need 额度 that has been bought. They are named here as the
+workbench names them, so a reader looking for the tab finds the tab. They are **not
 clickable** for a user who has none, and they are **not hidden or silent**
 either.
 

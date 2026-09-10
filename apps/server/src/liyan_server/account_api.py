@@ -95,6 +95,7 @@ _LABELS = {
     "purchase": "购买额度",
     "clawback": "额度退回",
     "capture": "来源抓取",
+    "capture_refund": "抓取失败退回",
 }
 
 _TARGET_LABELS = {
@@ -113,6 +114,11 @@ def _label(entry: CreditEntry) -> str:
     named the thing twice over, once in words this product does not use, and the
     title it appended is better reached by going there.
     """
+    # A refund carries the same target as the charge it reverses, so the
+    # target alone would print 来源抓取 twice — once taking three 额度 and once
+    # giving them back, with nothing to say which was which.
+    if entry.kind == "capture_refund":
+        return _LABELS["capture_refund"]
     if entry.target_type:
         return _TARGET_LABELS.get(entry.target_type, "额度变动")
     return _LABELS.get(entry.kind, "额度变动")

@@ -369,3 +369,113 @@ def test_每次立言生成都记一笔(tmp_path: Path) -> None:
     # Each settled against its own run rather than reading the other's.
     assert {row["status"] for row in articles} == {"done"}
     assert all(row["amount"] < 0 for row in articles)
+
+
+def test_一次失败的网页文字抓取不消耗额度(tmp_path: Path) -> None:
+    """使用条款 3.1 in the ledger: 抓取失败、未产出任何结果的来源不消耗额度.
+
+    The fee is taken at intake, before Chromium has run, because its price is
+    known then and the balance has to be checked against something. That is
+    what makes capture the one charge that can outlive the work it paid for —
+    so when the work ends with nothing, the charge is corrected back to zero.
+    """
+    from test_url_source_api import authenticated_client
+
+    from liyan_server.url_fetch_worker import UrlFetchFailure
+
+    client, headers, dispatcher = authenticated_client(tmp_path)
+    before = balance(dispatcher.database_url)
+
+    source = client.post(
+        "/task-creation/url-sources",
+        headers=headers,
+        json={
+            "client_session_id": "session-1",
+            "client_source_id": "source-1",
+            "url": "https://example.com/unavailable",
+        },
+    ).json()
+    assert balance(dispatcher.database_url) == before - CAPTURE_CREDITS, "charged at intake"
+
+    dispatcher.deterministic_fetcher.outcomes.append(
+        UrlFetchFailure("inaccessible_url", "The article is not publicly accessible.")
+    )
+    dispatcher.run_next()
+
+    assert client.get(
+        f"/task-creation/url-sources/{source['id']}", headers=headers
+    ).json()["status"] == "failure"
+    assert balance(dispatcher.database_url) == before, "the fee came back with the failure"
+
+
+def test_重试成功后重新计费(tmp_path: Path) -> None:
+    """The half a one-way refund would miss.
+
+    A 来源 whose fetch failed and whose retry then succeeded is a 来源 with
+    content, and content is charged for. Giving the fee back on the failure and
+    never taking it again would leave the user holding a captured article
+    nobody paid for — so the position is reconciled in both directions rather
+    than refunded in one.
+    """
+    from test_url_source_api import authenticated_client
+
+    from liyan_server.url_fetch_worker import UrlFetchFailure
+
+    client, headers, dispatcher = authenticated_client(tmp_path)
+    before = balance(dispatcher.database_url)
+
+    source = client.post(
+        "/task-creation/url-sources",
+        headers=headers,
+        json={
+            "client_session_id": "session-1",
+            "client_source_id": "source-1",
+            "url": "https://example.com/flaky",
+        },
+    ).json()
+    dispatcher.deterministic_fetcher.outcomes.append(
+        UrlFetchFailure("fetch_timeout", "The article took too long to fetch.")
+    )
+    dispatcher.run_next()
+    assert balance(dispatcher.database_url) == before
+
+    client.post(f"/task-creation/url-sources/{source['id']}/retry", headers=headers)
+    dispatcher.run_next()
+
+    assert client.get(
+        f"/task-creation/url-sources/{source['id']}", headers=headers
+    ).json()["status"] in {"ready", "warning"}
+    assert balance(dispatcher.database_url) == before - CAPTURE_CREDITS, "charged once, in the end"
+
+
+def test_一个来源只被抓取费扣一次(tmp_path: Path) -> None:
+    """Two failures in a row are two corrections, not two refunds.
+
+    The second failure finds the position already at zero and writes nothing.
+    A refund keyed to the run rather than to the position would have paid the
+    fee back twice and left the user better off for having failed.
+    """
+    from test_url_source_api import authenticated_client
+
+    from liyan_server.url_fetch_worker import UrlFetchFailure
+
+    client, headers, dispatcher = authenticated_client(tmp_path)
+    before = balance(dispatcher.database_url)
+
+    source = client.post(
+        "/task-creation/url-sources",
+        headers=headers,
+        json={
+            "client_session_id": "session-1",
+            "client_source_id": "source-1",
+            "url": "https://example.com/never",
+        },
+    ).json()
+    for _ in range(2):
+        dispatcher.deterministic_fetcher.outcomes.append(
+            UrlFetchFailure("fetch_timeout", "The article took too long to fetch.")
+        )
+        dispatcher.run_next()
+        client.post(f"/task-creation/url-sources/{source['id']}/retry", headers=headers)
+
+    assert balance(dispatcher.database_url) == before

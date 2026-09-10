@@ -5,8 +5,18 @@ on:
   push:
     branches: [main]
 
+# A branch pushed three times in a minute ran three full builds and answered
+# with the first one's. Only the newest commit's answer was ever wanted.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  checks:
+  # Two jobs rather than one, because nothing the browser half does depends on
+  # anything the server half proves, and run one after the other they were the
+  # whole of the wait.
+  server:
+    name: Server
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -25,10 +35,51 @@ jobs:
 
     env:
       LIYAN_DATABASE_URL: postgresql+psycopg://liyan:liyan@localhost:5432/liyan_test
+      # The suite ran twice, once on SQLite and once here. Only this one is
+      # worth a build minute: 立言阁 deploys on PostgreSQL, SQLite is the local
+      # convenience, and everything the SQLite run could catch this run catches
+      # too — while the reverse is false, which is why the second run existed.
+      # Developers still get SQLite by default; nothing ships on it.
+      LIYAN_TEST_DATABASE_URL: postgresql+psycopg://liyan:liyan@localhost:5432/liyan_test
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # mypy re-checked 159 unchanged files from cold on every run.
+      - name: Cache type-check results
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
+          restore-keys: mypy-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
+
+      - name: Check the server
+        run: |
+          uv run ruff check apps/server scripts
+          uv run mypy
+          uv run pytest
+
+      - name: Check empty-database migrations
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both toolchains: the browser suite runs the real server
+      # (`scripts/e2e_server.py`), and the OpenAPI contract is generated from it.
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -44,27 +95,7 @@ jobs:
           uv sync --locked
           npm ci
 
-      - name: Check backend
-        run: |
-          uv run ruff check apps/server scripts
-          uv run mypy
-          uv run pytest
-
-      # The suite again, on the backend production actually uses. SQLite does
-      # not enforce foreign keys unless asked and this project never asks, so a
-      # delete that violates a constraint passes above and fails in production.
-      # Only this step can see that difference.
-      - name: Check backend against PostgreSQL
-        env:
-          LIYAN_TEST_DATABASE_URL: postgresql+psycopg://liyan:liyan@localhost:5432/liyan_test
-        run: uv run pytest
-
-      - name: Check empty-database migrations
-        run: |
-          uv run alembic upgrade head
-          uv run alembic check
-
-      - name: Check frontend
+      - name: Check the workbench
         run: |
           npm run lint:web
           npm run typecheck:web
@@ -72,15 +103,14 @@ jobs:
           npm run build --workspace @liyan/web
 
       # The 插件 is a shipped artifact — a package uploaded to the Chrome Web
-      # Store — and until now nothing here looked at it. Its build is run with
-      # `--mode e2e` because that is the only configuration a checkout has:
-      # `.env` and `.env.production` are both gitignored, so without a mode the
-      # manifest plugin has no Supabase host and refuses to build.
+      # Store. `--mode e2e` because that is the only configuration a checkout
+      # has: `.env` and `.env.production` are both gitignored, so without a mode
+      # the manifest plugin has no Supabase host and refuses to build.
       #
       # `--workspace` directly rather than through `build:extension`: npm does
       # not forward flags through two nested `npm run`s, and `-- --mode e2e`
-      # reaches vite as a bare `e2e` — which is not an error, it is a
-      # production build with a stray argument.
+      # reaches vite as a bare `e2e` — which is not an error, it is a production
+      # build with a stray argument.
       - name: Check the browser extension
         run: |
           npm run lint:extension
@@ -91,13 +121,30 @@ jobs:
       - name: Check generated OpenAPI contract
         run: npm run api:check
 
+      - name: Cache the browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       # The browser half of the release gate, in the run that proves the
       # workbench rather than a deployment: a real Chromium against the real
       # application on a disposable database, with identity and the paid
-      # providers substituted (`scripts/e2e_server.py`). The Staging run is
-      # what a release turns on, and it cannot happen here — this is what keeps
-      # the same specs from rotting between releases.
+      # providers substituted (`scripts/e2e_server.py`). The Staging run is what
+      # a release turns on, and it cannot happen here — this is what keeps the
+      # same specs from rotting between releases.
       - name: Check the workbench in a browser
         run: |
           npm exec --workspace @liyan/web -- playwright install --with-deps chromium
           npm run test:e2e --workspace @liyan/web
+
+      # Nothing was kept, so a browser failure could only be read from the log —
+      # and an intermittent one could not be diagnosed at all. Costs nothing on
+      # a run that passes.
+      - name: Keep the browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure
+          path: apps/web/test-results
+          retention-days: 7

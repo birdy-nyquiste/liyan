@@ -114,10 +114,14 @@ test("主题可以在编辑来源时改写与清空", async ({ page }) => {
   const title = unique();
   await openWorkbench(page);
   await addPastedSource(page, title);
-  await page.getByRole("textbox", { name: "主题", exact: true }).fill("四天工作制的实际代价");
+  // Unique for the same reason the spec above says: the card is found by the
+  // 主题 it was confirmed with, and both specs in this file start theirs the
+  // same way.
+  const theme = `四天工作制的实际代价 ${title}`;
+  await page.getByRole("textbox", { name: "主题", exact: true }).fill(theme);
   await page.getByRole("button", { name: "创建任务" }).click();
 
-  const card = openedTask(page, "四天工作制的实际代价");
+  const card = openedTask(page, theme);
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "知言 · 立言" }).click();
   await expect(card.getByRole("button", { name: "默认生成" })).toBeEnabled({
@@ -127,7 +131,7 @@ test("主题可以在编辑来源时改写与清空", async ({ page }) => {
   await card.getByRole("button", { name: "来源 · 主题" }).click();
   await card.getByRole("button", { name: "编辑", exact: true }).click();
   const themeField = card.getByLabel("主题", { exact: true });
-  await expect(themeField).toHaveValue("四天工作制的实际代价");
+  await expect(themeField).toHaveValue(theme);
 
   // Clearing it is a save like any other, and it takes the 主题 report with it.
   await themeField.fill("");

@@ -105,6 +105,9 @@ export function TaskSourceVersions({
   const selectedChangeRef = useRef(onVersionSelected);
   const currentChangeRef = useRef(onCurrentVersionChanged);
   const notifiedSelectionRef = useRef<string | null>(null);
+  // What this pane is showing, readable from a promise that started before the
+  // last render. `load` needs it to answer "is my list still the newest?".
+  const selectedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     editingChangeRef.current = onEditingChange;
@@ -123,9 +126,25 @@ export function TaskSourceVersions({
   const load = useCallback(async () => {
     try {
       const history = await listTaskVersions(accessToken, taskId);
+      /*
+        Announce the version this pane is on, not whichever was newest when the
+        request went out.
+
+        `setSelectedId` already refused to move a selection that exists; the
+        announcement did not, and the two disagreeing is a real thing a writer
+        saw. Clearing a 主题 and saving makes a new version, and `save` moves
+        both. A list request that left before that save and answered after it
+        then announced the version *it* had seen as newest — the old one — and
+        the rest of the workbench followed it back there, to a version marked
+        read-only still showing the 知言报告 the writer had just removed.
+      */
       setVersions(history.items);
-      setSelectedId((current) => current ?? history.items[0]?.id ?? null);
-      if (history.items[0]) announceSelection(history.items[0].id);
+      const showing = selectedIdRef.current ?? history.items[0]?.id ?? null;
+      if (showing !== null) {
+        selectedIdRef.current = showing;
+        setSelectedId(showing);
+        announceSelection(showing);
+      }
       setError(null);
     } catch {
       setError(LOAD_FAILED);
@@ -324,6 +343,7 @@ export function TaskSourceVersions({
       });
       const history = await listTaskVersions(accessToken, taskId);
       setVersions(history.items);
+      selectedIdRef.current = saved.id;
       setSelectedId(saved.id);
       setEditSessionId(null);
       setSaveIdempotencyKey(null);
@@ -404,6 +424,7 @@ export function TaskSourceVersions({
         crypto.randomUUID(),
       );
       await load();
+      selectedIdRef.current = restored.id;
       setSelectedId(restored.id);
       announceSelection(restored.id);
       currentChangeRef.current(restored);
@@ -472,6 +493,7 @@ export function TaskSourceVersions({
             value={selected.id}
             disabled={editSessionId !== null}
             onChange={(event) => {
+              selectedIdRef.current = event.target.value;
               setSelectedId(event.target.value);
               announceSelection(event.target.value);
             }}

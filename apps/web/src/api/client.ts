@@ -91,20 +91,38 @@ export function refusalWithoutTiming(thrown: unknown): string | null {
  */
 const LIVENESS_TIMEOUT_MS = 5_000;
 
-/** Whether the server answers. Rejects when it does not answer in time. */
+/**
+ * Whether the server answers. Rejects when it does not answer in time.
+ *
+ * The deadline is a timer and an `AbortController`, not `AbortSignal.timeout`.
+ * That call is newer than it looks — Chromium before 103, Safari before 16, and
+ * the embedded webviews still shipping those engines do not have it — and this
+ * probe is the only request in the workbench that was reaching for it. On such
+ * a browser it threw before the request was even made, the probe read that as
+ * a server that could not be reached, and the banner stayed up for the whole
+ * session over an API that was answering every other request fine. Neither a
+ * reload nor waiting could clear it, because nothing about it was transient.
+ * `AbortController` and `setTimeout` are as old as `fetch` itself.
+ */
 export async function serverIsAlive(): Promise<boolean> {
   const api = createClient<paths>({
     baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
   });
-  const { data, error } = await api.GET("/health/live", {
-    signal: AbortSignal.timeout(LIVENESS_TIMEOUT_MS),
-  });
+  const abort = new AbortController();
+  const deadline = setTimeout(() => abort.abort(), LIVENESS_TIMEOUT_MS);
 
-  if (error || data?.status !== "alive") {
-    return false;
+  try {
+    const { data, error } = await api.GET("/health/live", { signal: abort.signal });
+
+    if (error || data?.status !== "alive") {
+      return false;
+    }
+
+    return true;
+  } finally {
+    // 请求已经有答案了，计时器就没有理由再活着 —— 探测每 5 秒一次，留着会攒起来。
+    clearTimeout(deadline);
   }
-
-  return true;
 }
 
 export async function loadTaskWorkspace(accessToken: AccessToken) {

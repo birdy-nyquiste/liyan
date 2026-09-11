@@ -261,9 +261,17 @@ export function railLink(page: Page, name: string) {
   return page.getByRole("navigation", { name: "主导航" }).getByRole("link", { name });
 }
 
-/** The 任务详情 of one open 立言任务, which every later step works inside. */
+/**
+ * The 任务详情 of one open 立言任务, which every later step works inside.
+ *
+ * `exact`, because a task's name follows its 主题 and specs in one file pick
+ * related ones. A substring match let 「已打开任务 四天工作制的实际代价」 also
+ * find 「…实际代价 工时来源 mfq2x」 left open by an earlier spec, and the two
+ * cards' tabs were then counted together — a failure that reads as a product
+ * bug and is a locator.
+ */
 export function openedTask(page: Page, title: string) {
-  return page.getByRole("article", { name: `已打开任务 ${title}` });
+  return page.getByRole("article", { name: `已打开任务 ${title}`, exact: true });
 }
 
 /**

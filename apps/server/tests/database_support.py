@@ -11,9 +11,12 @@ that violates a constraint passes there and fails in production. That difference
 is invisible until something runs on PostgreSQL, which is the point of this.
 """
 
+import atexit
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -27,6 +30,9 @@ TEST_DATABASE_URL = "LIYAN_TEST_DATABASE_URL"
 
 _TEMPLATE_SUFFIX = "_template"
 _template_ready = False
+
+#: The SQLite file every test's database is copied from, migrated once.
+_sqlite_template: Path | None = None
 
 #: Databases this run created, so each can be dropped when its test is over.
 #: PostgreSQL caps connections, and a pooled engine per test holds its own until
@@ -56,9 +62,25 @@ def _alembic_upgrade(database_url: str) -> None:
 
 
 def _migrated_sqlite(tmp_path: Path) -> str:
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'liyan.db'}"
-    _alembic_upgrade(database_url)
-    return database_url
+    """A fresh file copied from a template that was migrated once.
+
+    The same reasoning as `_migrated_postgres`, which had it and this did not:
+    running the migrations per test dominated the suite. `alembic upgrade head`
+    is a subprocess — a Python interpreter, the whole migration chain — and at
+    431ms across the hundreds of tests that want a database it was most of the
+    suite's runtime. Copying a file is a millisecond, and each test still gets a
+    database nothing else can touch.
+    """
+    global _sqlite_template
+    if _sqlite_template is None:
+        directory = Path(tempfile.mkdtemp(prefix="liyan-template-"))
+        atexit.register(shutil.rmtree, directory, True)
+        template = directory / "template.db"
+        _alembic_upgrade(f"sqlite+pysqlite:///{template}")
+        _sqlite_template = template
+    database = tmp_path / "liyan.db"
+    shutil.copyfile(_sqlite_template, database)
+    return f"sqlite+pysqlite:///{database}"
 
 
 def _migrated_postgres(configured: str) -> str:

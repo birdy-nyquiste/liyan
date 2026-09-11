@@ -43,7 +43,7 @@ def _settings_ignore_the_machine() -> Iterator[None]:
     test to remember, and the failure when one forgets is this one: green here,
     red there, and nothing on screen saying why.
     """
-    original = dict(Settings.model_config)
+    original_env_file = Settings.model_config.get("env_file")
     leaked = {
         name: value
         for name, value in os.environ.items()
@@ -56,8 +56,7 @@ def _settings_ignore_the_machine() -> Iterator[None]:
         yield
     finally:
         os.environ.update(leaked)
-        Settings.model_config.clear()
-        Settings.model_config.update(original)
+        Settings.model_config["env_file"] = original_env_file
 
 
 @pytest.fixture(autouse=True)

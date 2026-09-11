@@ -200,30 +200,60 @@ TOKENS_PER_CHARACTER = 0.6
 #: Assumed. The instructions and report schema every 知言 run carries.
 ZHIYAN_PREAMBLE_TOKENS = 2_000
 
-#: Measured, thinly. Every 知言 run whose usage was recorded carried far more
-#: input than 立言阁 sent: 43,081 and 165,577 tokens against 来源 of 2,882 and
-#: 3,394 characters, so search injected roughly 39,000 and 161,000. The runs of
-#: 2026-08-27 carried 46,000–142,000. This is the low end of that, because the
-#: sample is two rows and both are short 来源 — the case `credits.md` names as
-#: the hard one. A corpus spread across lengths replaces it.
-ZHIYAN_SEARCH_TOKENS = 45_000
+#: Measured, thinly, and re-measured when the model changed. The figures below
+#: are `deepseek-v4-pro`; everything before them was `deepseek-v4-flash`, which
+#: stopped executing web search (ADR-0004) and is no longer what a 知言 run uses.
+#:
+#: Three pro runs on 2026-09-11 injected 154,352, 229,045 and 563,766 tokens
+#: against 来源 of 56, 56 and 339 characters. That is three to twelve times what
+#: flash injected, and it is not noise: pro opens far more of what it finds —
+#: 11 and 19 pages against flash's two or three — and every opened page arrives
+#: as input. The spread is also real rather than a sampling artefact, because
+#: what a run reads depends on what it finds, not on how long the 来源 is: the
+#: largest injection here came from the 来源 that was barely longer than a tweet.
+#:
+#: 250,000 sits above the middle of the measured range rather than at its top,
+#: and it is left there even though the runs since have mostly come in under it
+#: (44k–153k across eight paired runs). What a run injects depends on what it
+#: finds, and the 564k run is evidence that the tail is real rather than that
+#: the middle is wrong. What makes the middle safe is the cache-hit term below:
+#: priced at `low`'s output, a 564k-injection run settles near 162 额度 against
+#: a 223 额度 hold, because the bigger the injection grows the more of it the
+#: provider serves from cache.
+ZHIYAN_SEARCH_TOKENS = 250_000
 
-#: How much of that injection the provider serves from its cache. Around 90% in
-#: every run measured, and it is why the term above can grow threefold without
-#: the estimate following: a cache hit costs a thirty-first of a miss.
+#: How much of that injection the provider serves from its cache. 83%, 92% and
+#: 96% in the three pro runs, against around 90% under flash — so the rate held
+#: when the model changed even though the volume did not. 0.85 is the low end
+#: of what was measured rather than the mean, because this is the term that
+#: keeps the hold under the settlement. It is why the term above can grow
+#: severalfold without the estimate following: a cache hit costs a thirtieth
+#: of a miss.
 #:
 #: This is the one place the estimator does not assume everything is uncached,
 #: and the exception is deliberate. Search injection is the largest term in a
 #: short 来源's estimate and the most reliably cached, so pricing it at the miss
 #: rate does not buy pessimism — it triples the 预扣 and refuses users work they
 #: can comfortably afford, which is the failure ADR-0008 was balancing against.
-ZHIYAN_SEARCH_CACHE_HIT_RATE = 0.9
+ZHIYAN_SEARCH_CACHE_HIT_RATE = 0.85
 
-#: Measured, thinly. 15,161 output tokens on 2026-08-27 of which 11,205 were
-#: reasoning; 11,218 and 23,308 in the two runs since. The report itself is
-#: around 4,000 — but reasoning is billed as output, so the number that costs
-#: money is the whole of it, and it is three to six times the report.
-ZHIYAN_OUTPUT_TOKENS = 17_000
+#: Measured, thinly. The three pro runs of 2026-09-11 wrote 14,509, 15,501 and
+#: 24,847 output tokens, of which 11,235, 11,885 and 18,297 were reasoning —
+#: much the same as flash wrote, which is the one term the model change left
+#: alone. The report itself is around 4,000; reasoning is billed as output, so
+#: the number that costs money is the whole of it, and it is three to six times
+#: the report. Reasoning is billed as output, so the number that costs money is
+#: the whole of it, and it is two to five times the report.
+#:
+#: Halved by `ReasoningPolicy` asking for `effort: "low"`. Eight paired full
+#: `analyze` runs on 2026-09-11, same 来源, continuations included: the model's
+#: own default wrote 14,374–16,031 output tokens of which ~11,635 was reasoning,
+#: and `low` wrote 6,415–9,511 of which ~4,397 was. Neither arm needed a single
+#: continuation, and both were admitted by acceptance three times in four.
+#:
+#: 12,000 is above the top of the `low` range rather than at it, because this
+#: term is entirely uncached and is the one an unusually long report moves.
+ZHIYAN_OUTPUT_TOKENS = 12_000
 
 #: 立言 has no tool access and so no injection term: what it sends and what comes
 #: back is the whole of it. Assumed to reason as much as 知言 does.
@@ -240,8 +270,12 @@ THEME_SEARCH_TOKENS = ZHIYAN_SEARCH_TOKENS
 THEME_SEARCH_CACHE_HIT_RATE = ZHIYAN_SEARCH_CACHE_HIT_RATE
 
 #: Assumed. Six sections against 知言's seven, and no per-fact verdict prose, so
-#: a little less than 知言 writes.
-THEME_OUTPUT_TOKENS = 15_000
+#: a little less than 知言 writes — which is the whole basis for the number, so
+#: it moves when 知言's does. It came down with it when `ReasoningPolicy` halved
+#: the reasoning: a 主题知言 run goes through the same seam and asks for the same
+#: `effort`. No 主题 run has been measured, and this stays an assumption until
+#: one is.
+THEME_OUTPUT_TOKENS = 10_000
 
 #: Assumed. 提炼主题 cannot search, and what it returns is three lines and three
 #: sentences — so its whole cost is the 来源 it reads plus a very short answer.

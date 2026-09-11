@@ -34,8 +34,14 @@ class Settings(BaseSettings):
     file_max_docx_uncompressed_bytes: int = 50 * 1024 * 1024
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
-    zhiyan_model: str = "deepseek-v4-flash"
+    #: 知言 and 主题知言 need the server-side `web_search` tool, and as of
+    #: 2026-09-11 `deepseek-v4-flash` accepts it and silently does not run it —
+    #: see ADR-0004. `deepseek-v4-pro` still executes it, so it is the default
+    #: rather than a per-environment knob: an environment that quietly picked
+    #: the wrong one produced confident, unsearched reports.
+    zhiyan_model: str = "deepseek-v4-pro"
     zhiyan_timeout_seconds: int = 300
+    #: 立言 has no tool access at all, so the cheaper model is the right one.
     liyan_model: str = "deepseek-v4-flash"
     liyan_timeout_seconds: int = 300
     #: A JSON array of 发布目标. Operator configuration, never user data:
@@ -65,11 +71,18 @@ class Settings(BaseSettings):
     #: refill: this product's cadence is one article at a time, and a standing
     #: grant is a standing bill against every account ever abandoned.
     #:
-    #: A placeholder. `docs/operations/credits.md` sizes it at one complete
-    #: 立言任务, which its own table puts near 118 额度 — but that table rests on
-    #: assumptions `scripts/calibrate_costs.py` has not yet been able to settle.
+    #: Sized at one complete 立言任务 with room to spare. `credits.md` puts a
+    #: typical task — three short 来源, their 知言报告, one 立言文章 — near 610
+    #: 额度 now that 知言 runs on `deepseek-v4-pro`, so 1,000 buys that and a
+    #: little more to try things with.
+    #:
+    #: It was 150 when a task cost 118. The model change made one 知言 run cost
+    #: more than the whole grant, which did not degrade the new-user experience
+    #: so much as end it: the first 生成 a new account attempted was refused for
+    #: insufficient 额度 before it ever ran. A grant that cannot buy one of the
+    #: thing the product is for is not a small grant, it is a broken one.
     #: Raise it in Local, where one developer competes with nobody.
-    signup_grant_credits: int = 150
+    signup_grant_credits: int = 1_000
     #: Stripe. Blank is a legitimate deployment: `/account` still reads, work
     #: still spends, and only buying is unavailable — announced at startup and
     #: through `/health/ready` rather than discovered at a checkout that 500s.

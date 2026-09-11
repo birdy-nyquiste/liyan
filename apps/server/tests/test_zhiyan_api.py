@@ -24,6 +24,7 @@ from zhiyan_support import (
 )
 
 from liyan_server.database import Database, Execution
+from liyan_server.settings import Settings
 from liyan_server.zhiyan.provider import SearchAction, ZhiyanProviderFailure, ZhiyanProviderResult
 
 
@@ -50,7 +51,11 @@ def test_a_queued_run_receives_only_the_accepted_revision_and_server_owned_polic
     assert queued["capabilities"]["can_start"] is False
     assert queued["capabilities"]["can_cancel"] is True
     request = dispatcher.provider.requests[0]
-    assert request.model == "deepseek-v4-flash"
+    # The server's configured model, never the client's. Named through Settings
+    # rather than spelled out, so changing which model 知言 runs on stays a
+    # one-line change in one place — it has already moved once, when flash
+    # stopped executing web search.
+    assert request.model == Settings().zhiyan_model
     assert request.prompt_version
     assert "<source-content>" in request.input_text
     assert revision_id in request.input_text

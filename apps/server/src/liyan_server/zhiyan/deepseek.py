@@ -29,6 +29,7 @@ from liyan_server.zhiyan.provider import (
 WEB_SEARCH_TOOL_TYPE = "web_search"
 UNAVAILABLE_MESSAGE = "知言服务暂时不可用，请稍后重试。"
 UNUSABLE_MESSAGE = "知言服务返回了无法使用的结果，请重试。"
+UNSEARCHED_MESSAGE = "知言服务暂时无法检索外部资料，请稍后重试。"
 
 SEARCH_ACTION_KINDS: frozenset[str] = frozenset({"search", "open_page", "find_in_page"})
 
@@ -168,6 +169,7 @@ class DeepSeekZhiyanProvider:
             call = self._call(body, tally, fallback_model=request.model)
             tally.add(call)
             if call.report_text:
+                _require_a_run_that_searched(request, tally)
                 return ZhiyanProviderResult(
                     report_text=call.report_text,
                     search_actions=tuple(tally.actions),
@@ -266,6 +268,42 @@ class DeepSeekZhiyanProvider:
         )
 
 
+def _require_a_run_that_searched(request: ZhiyanRequest, tally: _RunTally) -> None:
+    """Refuse a report from a run that was allowed to search and never did.
+
+    A model that cannot reach the web does not say so. It writes the report
+    anyway, from whatever it remembers, in the right shape and with the
+    confident specificity that makes a 知言报告 worth reading — and acceptance
+    lets it through, because `_require_used_and_opened_evidence` only judges the
+    evidence a report *cites*, and a report citing none has nothing to judge. An
+    empty 证据 section beside facts all marked 「暂无法核实」 is a legal empty
+    state, which acceptance is right to treat as a success. It is not one here:
+    every claim came back unverified because nothing was ever looked up, and the
+    user paid for a run that read only itself.
+
+    That is not hypothetical. `deepseek-v4-flash` stopped executing the
+    server-side `web_search` tool without ever failing a request: the API still
+    answers 200, still accepts the tool, and simply never runs it — the model's
+    own tool-call markup arrives as ordinary output text. Nothing upstream of
+    here could tell that from a run that searched and found nothing.
+
+    So the rule is about the run, not the report: a run that was given search and
+    performed none produced no evidence it could have had, whatever its text
+    says. Runs that were never given search — 立言, 提炼主题 — are untouched.
+    """
+    if not request.tool_policy.web_search_enabled or tally.actions:
+        return
+    raise tally.failure(
+        "provider_did_not_search",
+        UNSEARCHED_MESSAGE,
+        internal_error=(
+            f"{request.model} returned a report after {len(tally.usages)} call(s) "
+            "without performing a single search action, though web search was "
+            "enabled. The model is not executing the server-side web_search tool."
+        ),
+    )
+
+
 def _continuable(call: ProviderCall, request: ZhiyanRequest) -> bool:
     """Whether asking again could plausibly produce what this call did not.
 
@@ -333,10 +371,20 @@ def _body(
         "tools": tools,
         # `max_tool_calls` is deliberately absent: DeepSeek accepts it and does
         # not enforce it — a run capped at six made twenty — so sending it would
-        # read as a bound that is not one. What actually bounds a run's
-        # searching is the provider's ten-round cap, and what survives that cap
-        # is `continuation_body` rather than any request parameter.
+        # read as a bound that is not one. Re-checked against `deepseek-v4-pro`
+        # on 2026-09-11, where runs capped at three made eight and six; the
+        # compatibility guide now lists it as ignored outright. What actually
+        # bounds a run's searching is the provider's ten-round cap, and what
+        # survives that cap is `continuation_body` rather than any request
+        # parameter. Searching is also not where the money goes — see
+        # `ReasoningPolicy`.
         "tool_choice": "auto" if tools else "none",
+        # Stated rather than left to the model's default: see `ReasoningPolicy`.
+        # `max_output_tokens` belongs in here too and is deliberately absent —
+        # it is a real bound, unlike `max_tool_calls`, but it bounds the report
+        # as well as the thinking, and a run truncated mid-JSON comes back
+        # `incomplete` with everything it spent already billed.
+        "reasoning": {"effort": request.reasoning.effort},
         "text": {
             "format": {
                 "type": "json_schema",
@@ -492,13 +540,48 @@ def _search_action(action: object) -> SearchAction | None:
     kind = action.get("type")
     if not isinstance(kind, str) or kind not in SEARCH_ACTION_KINDS:
         return None
-    query = action.get("query")
     url = action.get("url")
     return SearchAction(
         kind=cast(SearchActionKind, kind),
-        query=query if isinstance(query, str) else None,
+        query=_search_query(action),
         url=url if isinstance(url, str) else None,
     )
+
+
+def _search_query(action: dict[str, object]) -> str | None:
+    """The terms a search action used, under either spelling the API has sent.
+
+    `deepseek-v4-flash` reported one `query` string. `deepseek-v4-pro` reports a
+    `queries` array, and a run may issue several terms in one action. Nothing in
+    acceptance depends on this — evidence is matched on the URLs `open_page`
+    reports — but the audit trail records it, and reading only the old spelling
+    turned every search term in every 主题 and 知言 audit into `null` without
+    anything failing.
+
+    The array also carries the provider's own call id as if it were a term
+    (`ws_call_id=call_06_…`, observed live 2026-09-11). It is the same
+    bookkeeping that rides along on `open_page` URLs as a `#ws_call_id=`
+    fragment, and it is dropped here for the same reason: an audit of what a run
+    searched for should read back as what a person typed, not as what the
+    transport appended.
+    """
+    query = action.get("query")
+    if isinstance(query, str):
+        return query
+    queries = action.get("queries")
+    if isinstance(queries, list):
+        terms = [
+            term
+            for term in queries
+            if isinstance(term, str) and term.strip() and not _is_call_id(term)
+        ]
+        if terms:
+            return " | ".join(terms)
+    return None
+
+
+def _is_call_id(term: str) -> bool:
+    return term.strip().startswith("ws_call_id=")
 
 
 def _message_texts(

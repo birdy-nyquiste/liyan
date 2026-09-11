@@ -6,6 +6,7 @@ import pytest
 from liyan_server.zhiyan.deepseek import (
     DeepSeekZhiyanProvider,
     ProviderHttpResponse,
+    continuation_body,
     provider_result,
     request_body,
 )
@@ -57,6 +58,21 @@ def completed_payload() -> dict[str, Any]:
             },
         ],
     }
+
+
+def payload_carrying(text: str) -> dict[str, Any]:
+    """A completed reply whose message says exactly `text`, from a run that searched.
+
+    The search call is not decoration. A run offered web search and performing
+    none is refused before its text is ever read, so a payload testing how text
+    is *handled* has to be a payload the run itself is allowed to return.
+    """
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "web_search_call", "action": {"type": "search", "query": "查询"}},
+        {"type": "message", "content": [{"type": "output_text", "text": text}]},
+    ]
+    return payload
 
 
 def provider(response: ProviderHttpResponse, recorder: list[Any] | None = None) -> Any:
@@ -279,12 +295,7 @@ def test_the_report_schema_stays_inside_the_strict_structured_output_subset() ->
 )
 def test_a_markdown_fenced_body_is_unwrapped(wrapped: str) -> None:
     """Live runs return a ```json fence intermittently despite strict json_schema."""
-    payload = completed_payload()
-    payload["output"] = [
-        {"type": "message", "content": [{"type": "output_text", "text": wrapped}]}
-    ]
-
-    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+    result = provider(ProviderHttpResponse(200, payload_carrying(wrapped))).analyze(a_request())
 
     assert result.report_text == '{"overview": "ok"}'
 
@@ -294,12 +305,7 @@ def test_a_markdown_fenced_body_is_unwrapped(wrapped: str) -> None:
     ['{"overview": "ok"}', '  {"overview": "ok"}  ', '{"body": "``` inside a value"}'],
 )
 def test_text_that_is_not_fenced_is_passed_through(unfenced: str) -> None:
-    payload = completed_payload()
-    payload["output"] = [
-        {"type": "message", "content": [{"type": "output_text", "text": unfenced}]}
-    ]
-
-    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+    result = provider(ProviderHttpResponse(200, payload_carrying(unfenced))).analyze(a_request())
 
     assert result.report_text == unfenced.strip()
 
@@ -580,3 +586,145 @@ def test_a_socket_that_dies_late_still_owes_the_calls_that_went_through() -> Non
     assert failure.value.usage is not None
     assert failure.value.usage.input_tokens == 60_000
     assert failure.value.search_calls == 2
+
+
+# --- A run that was given search and did not use it --------------------------
+#
+# `deepseek-v4-flash` stopped executing the server-side `web_search` tool some
+# time before 2026-09-11, without ever failing a request: 200, tool accepted,
+# never run. What came back was a full, confident 知言报告 written from memory.
+
+
+def unsearched_payload() -> dict[str, Any]:
+    """A completed reply with a report in it and not one search call."""
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "reasoning", "id": "rs_1"},
+        {
+            "type": "message",
+            "content": [{"type": "output_text", "text": '{"overview": "ok"}'}],
+        },
+    ]
+    return payload
+
+
+def test_a_run_that_could_search_and_never_did_is_not_a_report() -> None:
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        provider(ProviderHttpResponse(200, unsearched_payload())).analyze(a_request())
+
+    assert failure.value.code == "provider_did_not_search"
+    assert "web_search" in (failure.value.internal_error or "")
+    assert "sk-" not in failure.value.message
+
+
+def test_the_unsearched_run_still_owes_what_it_spent() -> None:
+    payload = unsearched_payload()
+    payload["usage"] = {
+        "input_tokens": 4_955,
+        "input_tokens_details": {"cached_tokens": 4_608},
+        "output_tokens": 18_291,
+        "output_tokens_details": {"reasoning_tokens": 15_643},
+        "total_tokens": 23_246,
+    }
+
+    with pytest.raises(ZhiyanProviderFailure) as failure:
+        provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert failure.value.usage is not None
+    assert failure.value.usage.output_tokens == 18_291
+    assert failure.value.search_calls == 0
+
+
+def test_a_run_never_given_search_may_report_without_searching() -> None:
+    """立言 and 提炼主题 are the whole point of the policy flag, and neither
+    searches. The gate is about a run that was offered search and declined it."""
+    result = provider(ProviderHttpResponse(200, unsearched_payload())).analyze(
+        a_request(ToolPolicy(web_search_enabled=False))
+    )
+
+    assert result.report_text == '{"overview": "ok"}'
+
+
+def test_searching_in_an_earlier_call_satisfies_the_gate() -> None:
+    """A continuation's last call has its tools taken away, so it searches
+    nothing by design. What the gate asks about is the run, not the call."""
+    sent: list[Any] = []
+
+    result = replying([searched_but_silent(), unsearched_payload()], sent).analyze(a_request())
+
+    assert len(sent) == 2
+    assert result.report_text == '{"overview": "ok"}'
+    assert result.opened_urls, "the pages call one opened still belong to the run"
+
+
+def test_an_unsearching_model_is_not_worth_a_second_run() -> None:
+    """It will not search on the retry either, and a 知言 run is the most
+    expensive thing here to repeat for nothing."""
+    assert not is_recoverable("provider_did_not_search")
+
+
+def test_a_search_action_is_read_under_either_query_spelling() -> None:
+    """flash sent one `query`; pro sends a `queries` array. Audit records both."""
+    payload = completed_payload()
+    payload["output"] = [
+        {
+            "type": "web_search_call",
+            "action": {
+                "type": "search",
+                "queries": [
+                    "四天工作制 试验",
+                    "four-day week trial",
+                    "ws_call_id=call_06_oDMA6TXv6PyYc2T6vGPx9194",
+                ],
+            },
+        },
+        {"type": "message", "content": [{"type": "output_text", "text": '{"overview": "ok"}'}]},
+    ]
+
+    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert result.search_actions[0].query == "四天工作制 试验 | four-day week trial"
+    assert "ws_call_id" not in (result.search_actions[0].query or "")
+
+
+def test_a_search_action_with_no_readable_terms_is_still_an_action() -> None:
+    """It searched. Not knowing what it typed must not lose that it searched."""
+    payload = completed_payload()
+    payload["output"] = [
+        {"type": "web_search_call", "action": {"type": "search", "queries": []}},
+        {"type": "message", "content": [{"type": "output_text", "text": '{"overview": "ok"}'}]},
+    ]
+
+    result = provider(ProviderHttpResponse(200, payload)).analyze(a_request())
+
+    assert len(result.search_actions) == 1
+    assert result.search_actions[0].query is None
+
+
+# --- How hard the provider may think -----------------------------------------
+
+
+def test_every_request_states_its_reasoning_effort() -> None:
+    """Left to the default, a pro run thinks about twice as hard as it needs to,
+    and reasoning is billed as output — roughly half of what a run costs."""
+    assert request_body(a_request())["reasoning"] == {"effort": "low"}
+
+
+def test_a_continuation_thinks_no_harder_than_the_run_it_continues() -> None:
+    payload = completed_payload()
+
+    body = continuation_body(a_request(), prior_items=payload["output"], final=True)
+
+    assert body["reasoning"] == {"effort": "low"}
+
+
+def test_no_unenforced_bound_is_sent_as_though_it_were_one() -> None:
+    """`max_tool_calls` is listed as ignored and measured as ignored: runs capped
+    at three made eight and six. Sending it would document a limit that is not
+    one. `reasoning.max_output_tokens` is real, and stays out for a different
+    reason — it truncates the report, not just the thinking."""
+    body = request_body(a_request())
+
+    assert "max_tool_calls" not in body
+    assert "max_output_tokens" not in body
+    assert "max_output_tokens" not in body["reasoning"]

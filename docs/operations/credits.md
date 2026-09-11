@@ -118,10 +118,13 @@ thing being one number nobody has to think about.
 
 ### ② 知言, 主题知言, 提炼主题 and 立言 — measured tokens
 
-    cost_usd = (miss_tok × 0.44 + cached_tok × 0.014 + out_tok × 1.32) / 1e6
+    cost_usd = (miss_tok × miss + cached_tok × hit + out_tok × out) / 1e6
     credits  = ceil(cost_usd × K)
 
-One equation for all four operations; only the token counts differ.
+One equation for all four operations; the token counts differ, and so now do
+the three rates — see §Supplier rates, where 知言 and 立言 no longer run the same
+model. Against flash they are 0.44 / 0.014 / 1.32; against pro, 1.32 / 0.044 /
+3.96.
 
 主题 adds two of them. `analyze_theme` is priced like a 知言 run — one searching
 call with one structured report at the end — except in what it reads: the 主题 is
@@ -137,13 +140,23 @@ replace first.
 
 ## Supplier rates
 
-**DeepSeek `deepseek-v4-flash`**, per 1M tokens:
+Two models, because 知言 and 立言 need different things. 知言, 主题知言 and
+提炼主题 run `deepseek-v4-pro`; 立言 runs `deepseek-v4-flash`. The split is not
+a tuning choice — flash stopped executing the server-side `web_search` tool
+(ADR-0004), so an operation that must search has to pay for pro, and one that
+never searches has no reason to.
 
-| | Off-peak | Peak |
-| --- | --- | --- |
-| Input (cache miss) | $0.22 | $0.44 |
-| Input (cache hit) | $0.007 | $0.014 |
-| Output | $0.66 | $1.32 |
+Per 1M tokens:
+
+| | flash off-peak | flash peak | pro off-peak | pro peak |
+| --- | --- | --- | --- | --- |
+| Input (cache miss) | $0.22 | $0.44 | $0.66 | $1.32 |
+| Input (cache hit) | $0.007 | $0.014 | $0.022 | $0.044 |
+| Output | $0.66 | $1.32 | $1.98 | $3.96 |
+
+Pro is three times flash at every rate, and that is the smaller half of what it
+costs. It opens far more of what it finds — 11 and 19 pages in measured runs
+against flash's two or three — and every opened page arrives as billable input.
 
 Peak is 01:00–04:00 and 06:00–10:00 UTC on weekdays, which is 09:00–12:00 and
 14:00–18:00 in China — the working day of the people this product is for, so
@@ -180,23 +193,38 @@ rate. It is therefore not a line item, but it is the least predictable part of a
 | Action | Cost | 额度 | To the user |
 | --- | --- | --- | --- |
 | Capture one 来源 | $0.00004–0.002 | 3 | $0.008 |
-| 知言, short 来源 (2k chars) | $0.0138 | 28 | $0.070 |
-| 知言, long 来源 (500k chars) | $0.1482 | 297 | $0.743 |
-| 提炼主题 (3 short 来源) | $0.0048 | 10 | $0.025 |
-| 主题知言 (3 short 来源) | $0.0247 | 50 | $0.125 |
-| 立言 article | $0.0122 | 25 | $0.063 |
-| **Typical task** (3 short 来源 + article) | $0.054 | **118** | **$0.30** |
-| **Typical task with a 主题** (one press, 主题报告) | $0.083 | **178** | **$0.45** |
-| Long-document task | $0.458 | 925 | $2.31 |
+| 知言, short 来源 (2k chars) | $0.0441 | 89 | $0.22 |
+| 知言, a run that searches hard | $0.1015 | 203 | $0.51 |
+| 提炼主题 (3 short 来源) | $0.0159 | 32 | $0.08 |
+| 主题知言 (3 short 来源) | $0.0566 | 114 | $0.29 |
+| 立言 article | $0.0122 | 25 | $0.06 |
+| **Typical task** (3 short 来源 + article) | $0.149 | **301** | **$0.75** |
+| **Typical task with a 主题** (one press, 主题报告) | $0.223 | **447** | **$1.12** |
+| Search-heavy task | $0.317 | 643 | $1.61 |
+
+知言 tripled when it moved to `deepseek-v4-pro`, and 提炼主题 with it — it shares
+the setting and gains nothing from it, having no search to do. What kept the
+rise to threefold rather than sixfold is `effort: "low"`: eight paired runs put
+the model's own default at 151 额度 against `low`'s 88, for the same acceptance
+rate and in 42% less wall clock.
+
+The second row is no longer a 500k-character 来源 but a short one whose *run*
+searched hard — 564k injected tokens against a 来源 of 56 characters. That is
+the shape of an expensive 知言 run now: what it reads depends on what it finds,
+not on how long the 来源 is.
 
 Charged per act rather than over the total, because that is how it happens: each
 Execution rounds up on its own.
 
-A $20 额度包 is therefore about **67 typical tasks** or **8 long-document ones**.
+A $20 额度包 is therefore about **26 typical tasks** or **12 search-heavy ones**,
+and the 1,000 额度 a new account is given is about **three typical tasks**.
 
 Every figure here is computed by `rate_card.py` and asserted by
 `tests/test_rate_card.py`, so a rate that moves without this page moving with it
-fails a test rather than quietly becoming untrue.
+fails a test rather than quietly becoming untrue. That guard has one blind spot
+worth naming, because it went unnoticed once: the assertions name their model,
+so changing which model an operation *runs* leaves them passing while this page
+goes stale. A scenario's model belongs in the test beside its token counts.
 
 ## Buying 额度
 

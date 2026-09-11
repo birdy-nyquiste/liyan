@@ -16,7 +16,12 @@ from liyan_server.rate_card import (
     worker_cost_micros,
 )
 
+#: 立言 only. It never searches, so the web_search change did not reach it.
 MODEL = "deepseek-v4-flash"
+
+#: 知言, 主题知言 and 提炼主题. flash stopped executing web search, and a 知言 run
+#: that cannot search is refused rather than priced (ADR-0004).
+ZHIYAN_MODEL = "deepseek-v4-pro"
 
 
 def usage(input_tokens: int, output_tokens: int, cached: int = 0) -> ProviderUsage:
@@ -29,25 +34,59 @@ def usage(input_tokens: int, output_tokens: int, cached: int = 0) -> ProviderUsa
     )
 
 
-def zhiyan(input_tokens: int, output_tokens: int, seconds: int) -> int:
-    cost = provider_cost_micros(usage(input_tokens, output_tokens), MODEL)
+def run(
+    input_tokens: int,
+    output_tokens: int,
+    seconds: int,
+    *,
+    model: str,
+    cached: int = 0,
+) -> int:
+    """One operation's provider bill plus the worker it held.
+
+    `model` has no default on purpose. Every scenario below names the model it
+    runs on, because the alternative let this file go on passing while the page
+    it guards went stale: when 知言 moved from flash to pro, these assertions
+    kept asserting flash's arithmetic — correctly, and about an operation that
+    no longer existed.
+    """
+    cost = provider_cost_micros(usage(input_tokens, output_tokens, cached=cached), model)
     assert cost is not None
     return cost + worker_cost_micros(seconds * 1_000)
 
 
 def test_a_short_source_analysis_costs_what_the_page_says() -> None:
-    """2,000 characters of Chinese, the search results, and one report."""
-    assert credits_for(zhiyan(18_200, 4_000, 180)) == 28
+    """A short 来源 whose run searched about as much as they usually do."""
+    assert credits_for(run(88_000, 7_500, 114, model=ZHIYAN_MODEL, cached=80_000)) == 89
 
 
-def test_a_long_source_analysis_costs_what_the_page_says() -> None:
-    """500,000 characters — the ceiling `limits.md` allows one 来源."""
-    assert credits_for(zhiyan(317_000, 6_000, 300)) == 297
+def test_a_search_heavy_analysis_costs_what_the_page_says() -> None:
+    """The dearest injection recorded — 564k tokens, against a 56-character 来源.
+
+    Not a long 来源: what a 知言 run reads depends on what it finds, so the
+    expensive case is a hard question rather than a long one.
+    """
+    assert credits_for(run(565_766, 12_000, 300, model=ZHIYAN_MODEL, cached=543_616)) == 203
+
+
+def test_extracting_themes_costs_what_the_page_says() -> None:
+    """提炼主题 cannot search, and pays pro's rates anyway — it shares 知言's
+    setting. The page says so rather than the code hiding it."""
+    assert credits_for(run(6_000, 2_000, 40, model=ZHIYAN_MODEL)) == 32
+
+
+def test_a_theme_analysis_costs_what_the_page_says() -> None:
+    """主题知言 searches like 知言 and reads every 来源 of the 任务版本."""
+    assert credits_for(run(120_000, 9_000, 140, model=ZHIYAN_MODEL, cached=108_000)) == 114
 
 
 def test_an_article_costs_what_the_page_says() -> None:
-    """Three 知言报告 in, one 立言文章 out, and no tool access to complicate it."""
-    assert credits_for(zhiyan(15_000, 4_000, 120)) == 25
+    """Three 知言报告 in, one 立言文章 out, and no tool access to complicate it.
+
+    Still flash, and the only operation that still is: 立言 never searches, so
+    nothing about the web_search change reached it.
+    """
+    assert credits_for(run(15_000, 4_000, 120, model=MODEL)) == 25
 
 
 def test_a_whole_ordinary_task_costs_what_the_page_says() -> None:
@@ -56,9 +95,11 @@ def test_a_whole_ordinary_task_costs_what_the_page_says() -> None:
     Summed per act rather than over the total, because that is how it is
     charged: each Execution rounds up on its own.
     """
-    task = 3 * CAPTURE_CREDITS + 3 * 28 + 25
+    task = 3 * CAPTURE_CREDITS + 3 * 89 + 25
 
-    assert task == 118
+    assert task == 301
+    assert task + 32 + 114 == 447, "the same task with one press of 提炼主题 and a 主题报告"
+    assert 3 * CAPTURE_CREDITS + 3 * 203 + 25 == 643, "when every run searches hard"
 
 
 def test_the_flat_capture_fee_covers_the_largest_file_it_will_ever_see() -> None:
@@ -155,33 +196,50 @@ def test_an_unrated_model_is_still_unknown_in_either_window() -> None:
     )
 
 
-def test_the_zhiyan_estimate_brackets_what_real_runs_actually_cost() -> None:
-    """The 预扣 used to sit below every run it was estimating.
+def test_the_zhiyan_estimate_covers_what_real_runs_actually_cost() -> None:
+    """The 预扣 must sit at or above the runs it is estimating.
 
-    Two 知言 runs on short 来源 have recorded usage. Their provider term comes to
-    36 and 89 额度 — 37 and 90 as recorded, the extra one being the worker they
-    held — while the estimator predicted 28 for both: under the cheaper one and
-    a third of the dearer. It under-held on every observed run,
-    in the same direction, which is the one way ADR-0008 says not to be wrong.
+    Four `deepseek-v4-pro` runs at `effort: "low"` on 2026-09-11 — what a 知言
+    run now is — settle at 76, 83, 90 and 105 额度. Under-holding is the one way
+    ADR-0008 says not to be wrong, and it is the expensive way, because the
+    shortfall is money 立言阁 cannot go back for.
 
-    The estimate should now land between them: above what a well-behaved run
-    costs, below what a search-heavy one does. Two points is not a calibration
-    and this is not asserting a fit — it is asserting that the estimator is no
-    longer *systematically* under the only evidence available.
+    Covering rather than bracketing is the change the model brought. Against
+    flash this test asserted the estimate landed *between* the cheapest and
+    dearest observed run, which was a reasonable reading when the spread was
+    43k–166k injected tokens. Pro's injection has been seen from 44k to 564k, a
+    thirteenfold spread, so an estimate sitting inside that range is an estimate
+    that under-holds whenever a run searches hard.
+
+    So the bar is the tail rather than the sample: the hold must cover the
+    dearest injection anyone has recorded, not merely the runs that happened to
+    be measured last. This asserts no fit — only that nothing yet observed would
+    have escaped the hold.
     """
     from liyan_server.rate_card import estimate_zhiyan_credits
 
-    cheapest = credits_for(
-        provider_cost_micros(usage(43_081, 11_218, cached=37_504), MODEL) or 0
-    )
-    dearest = credits_for(
-        provider_cost_micros(usage(165_577, 23_308, cached=138_880), MODEL) or 0
-    )
-    assert (cheapest, dearest) == (36, 89), "the two measured runs, priced at peak"
+    settled = [
+        credits_for(provider_cost_micros(u, ZHIYAN_MODEL) or 0)
+        for u in (
+            usage(76_897, 6_415, cached=70_016),
+            usage(43_796, 9_511, cached=39_808),
+            usage(81_558, 6_932, cached=73_728),
+            usage(152_871, 7_093, cached=139_392),
+        )
+    ]
+    assert settled == [76, 90, 83, 105], "the four measured runs, priced at peak"
 
-    estimated = estimate_zhiyan_credits(source_characters=2_882, model=MODEL)
+    # The dearest injection anyone has seen — 564k tokens — repriced at what a
+    # `low` run writes. It is the case the hold exists for, and it is far above
+    # anything the four runs above reached.
+    heaviest = usage(565_766, 7_000, cached=543_616)
+    tail = credits_for(provider_cost_micros(heaviest, ZHIYAN_MODEL) or 0)
+    assert tail == 162
 
-    assert cheapest < estimated < dearest
+    estimated = estimate_zhiyan_credits(source_characters=2_882, model=ZHIYAN_MODEL)
+
+    assert estimated >= tail, "a hold under the dearest run anyone has seen is a shortfall"
+    assert estimated < 2 * tail, "and one far over it refuses work users can afford"
 
 
 def test_an_unrated_model_still_estimates_the_smallest_possible_hold() -> None:

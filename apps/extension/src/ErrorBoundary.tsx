@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { preferredLocale } from "./locale";
+
 /**
  * The last thing between a thrown error and a blank popup.
  *
@@ -17,6 +19,29 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 type Props = { children: ReactNode };
 type State = { failed: boolean };
 
+/**
+ * Its three sentences, carried rather than looked up.
+ *
+ * Everything else the panel says comes from 工作台's table through a React
+ * context — and this is the component that catches the context failing. A
+ * fallback that needs the thing it is a fallback for is no fallback at all, so
+ * these are written twice here and nowhere else.
+ */
+const COPY = {
+  zh: {
+    failed: "插件出了点问题，没能显示。",
+    reload: "重新载入",
+    reassurance:
+      "收集中的来源都保存在立言阁，不会因此丢失。反复出现请联系 birdyyao@nyquiste.com。",
+  },
+  en: {
+    failed: "Something went wrong and the panel could not be shown.",
+    reload: "Reload",
+    reassurance:
+      "Sources you have collected are stored in LiYan Studio and are not lost. If this keeps happening, contact birdyyao@nyquiste.com.",
+  },
+};
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { failed: false };
 
@@ -33,18 +58,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (!this.state.failed) return this.props.children;
+    const copy = COPY[preferredLocale()];
     return (
       <div className="panel">
         <div className="panel__body">
           <p className="form-error" role="alert">
-            插件出了点问题，没能显示。
+            {copy.failed}
           </p>
           <button className="button" type="button" onClick={() => location.reload()}>
-            重新载入
+            {copy.reload}
           </button>
-          <p className="form-hint">
-            收集中的来源都保存在立言阁，不会因此丢失。反复出现请联系 birdyyao@nyquiste.com。
-          </p>
+          <p className="form-hint">{copy.reassurance}</p>
         </div>
       </div>
     );

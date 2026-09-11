@@ -7,6 +7,15 @@
  * stop it being a surprise.
  */
 
+/**
+ * 工作台's translator, passed in rather than looked up.
+ *
+ * These are plain functions and have to stay that way — they are what the
+ * tests reason about — so the language reaches them the only way it can
+ * without a hook: as an argument.
+ */
+type Translate = (source: string) => string;
+
 const HOUR = 60 * 60 * 1000;
 
 /**
@@ -31,15 +40,20 @@ const WARN_WITHIN_HOURS = 4;
  * useful of the two — which is once the basket has outlived the sitting that
  * filled it, and its rows have started counting down.
  */
-export function describeAge(addedAt: number | undefined, now = Date.now()): string | null {
+export function describeAge(
+  t: Translate,
+  addedAt: number | undefined,
+  now = Date.now(),
+): string | null {
   if (addedAt === undefined) return null;
   const elapsed = now - addedAt;
   if (elapsed < HOUR) return null;
-  return `${Math.floor(elapsed / HOUR)} 小时前`;
+  return t("{hours} 小时前").replace("{hours}", String(Math.floor(elapsed / HOUR)));
 }
 
 /** The sentence to show when something in the basket is about to be collected. */
 export function expiryWarning(
+  t: Translate,
   added: Record<string, { at: number }>,
   now = Date.now(),
 ): string | null {
@@ -47,6 +61,9 @@ export function expiryWarning(
   if (!Number.isFinite(oldest)) return null;
   const remainingHours = ASSUMED_TTL_HOURS - (now - oldest) / HOUR;
   if (remainingHours > WARN_WITHIN_HOURS) return null;
-  if (remainingHours <= 0) return "最早添加的来源可能已被清理。";
-  return `最早添加的来源将在约 ${Math.max(1, Math.round(remainingHours))} 小时后被清理。`;
+  if (remainingHours <= 0) return t("最早添加的来源可能已被清理。");
+  return t("最早添加的来源将在约 {hours} 小时后被清理。").replace(
+    "{hours}",
+    String(Math.max(1, Math.round(remainingHours))),
+  );
 }

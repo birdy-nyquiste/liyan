@@ -1,7 +1,8 @@
 # 立言阁浏览器插件
 
-The browser client. `docs/design/the-browser-extension.md` says what it is and
-why it is shaped this way; this file says how to run and ship it.
+The browser client, published as **LiYan Studio Extension**.
+`docs/design/the-browser-extension.md` says what it is and why it is shaped
+this way; this file says how to run and ship it.
 
 ## Running it
 
@@ -103,9 +104,9 @@ not higher than the one live, and the manifest takes it from
 npm run package:extension
 ```
 
-`apps/extension/liyan-extension.zip` is the upload. Before submitting, the
-listing needs saying plainly what the permissions are for, because it is the
-part reviewers ask about:
+`apps/extension/liyan-studio-extension.zip` is the upload. Before submitting,
+the listing needs saying plainly what the permissions are for, because it is
+the part reviewers ask about:
 
 - **activeTab** — the address of the tab the user clicked from, and nothing
   else. There is no content script; the page's contents are never read.
@@ -153,6 +154,10 @@ The server prints `$DB` when it starts. `?url=` and `?title=` set the
 page the "current tab" is showing, which is how the failure and duplicate
 journeys are reached. `LIYAN_E2E_REAL_URL_FETCH=1` on the server makes captures
 real rather than deterministic.
+
+`?lang=zh` and `?lang=en` override the language, which in Chrome follows the
+browser; that is how the listing screenshots are taken in English on a machine
+set to anything.
 
 The harness is never built: `vite.config.ts` names `popup.html` as the only
 input. It is worth keeping — three defects were visible here and in no unit

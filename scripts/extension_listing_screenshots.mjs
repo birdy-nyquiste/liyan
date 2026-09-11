@@ -6,6 +6,10 @@
  * the extension actually looks like in use. No marketing copy is added: the
  * words on the listing belong to the author, not to this script.
  *
+ * The panel is shot in English, because the listing is. In Chrome it follows
+ * the browser; the harness takes `?lang=` so this does not depend on the
+ * language of the machine the screenshots are taken on.
+ *
  * Needs both of these already running:
  *   .venv/bin/python scripts/e2e_server.py --port 8099   (with a purchase seeded)
  *   cd apps/extension && npx vite --mode e2e --port 5199
@@ -13,14 +17,14 @@
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
-const HARNESS = "http://localhost:5199/harness.html";
+const HARNESS = "http://localhost:5199/harness.html?lang=en";
 const OUT = process.argv[2] ?? "./shots";
 
 /** Three distinct URLs, so the basket holds three rows. */
 const PAGES = [
-  ["https://example.com/a", "第一篇"],
-  ["https://example.com/b", "第二篇"],
-  ["https://example.com/c", "第三篇"],
+  ["https://example.com/a", "First page"],
+  ["https://example.com/b", "Second page"],
+  ["https://example.com/c", "Third page"],
 ];
 
 /**
@@ -35,9 +39,9 @@ const PAGES = [
  * relationship with it.
  */
 const SAMPLES = [
-  ["清代书院的讲学制度与士人交往", "1 篇 · 8,412 字", "8,412 字"],
-  ["从科举到学堂：教育转型中的地方财政", "5,207 字", "5,207 字"],
-  ["晚清报刊中的“公论”一词", "3,164 字", "3,164 字"],
+  ["Teaching and Fellowship in Qing Academies", "", "8412 chars"],
+  ["From Examination Hall to Schoolhouse", "", "5207 chars"],
+  ["“Public Opinion” in the Late Qing Press", "", "3164 chars"],
 ];
 mkdirSync(OUT, { recursive: true });
 
@@ -167,18 +171,18 @@ const context = await browser.newContext({
 const page = await context.newPage();
 
 // 1. 未登录 — the first screen after installing.
-await page.goto(`${HARNESS}?signedout=1`);
-await page.getByRole("textbox", { name: "邮箱" }).waitFor();
+await page.goto(`${HARNESS}&signedout=1`);
+await page.getByRole("textbox", { name: "Email" }).waitFor();
 await shot(page, "1-sign-in");
 
 // 2. 主屏 — signed in, nothing collected yet.
-await page.goto(`${HARNESS}?url=${encodeURIComponent(PAGES[0][0])}&title=${encodeURIComponent(PAGES[0][1])}`);
-await page.getByRole("button", { name: "新建任务" }).waitFor();
+await page.goto(`${HARNESS}&url=${encodeURIComponent(PAGES[0][0])}&title=${encodeURIComponent(PAGES[0][1])}`);
+await page.getByRole("button", { name: "New task" }).waitFor();
 await shot(page, "2-home");
 
-// 3. 空篮子 — the basket open, 添加当前页面 live.
-await clickText(page, "新建任务");
-await page.getByText(/还没有来源/).waitFor();
+// 3. 空篮子 — the basket open, Add this page live.
+await clickText(page, "New task");
+await page.getByText(/No sources yet/).waitFor();
 await shot(page, "3-empty-basket");
 
 // 4. 装满了 — three 来源 and the 主题 field.
@@ -186,20 +190,20 @@ await shot(page, "3-empty-basket");
 // The first 来源 goes in without reloading. An empty basket found in storage is
 // treated as collected and the panel returns to 主屏 — correct behaviour, and it
 // means a reload before the first 来源 exists throws the basket away.
-await clickText(page, "添加当前页面");
+await clickText(page, "Add this page");
 await page.waitForTimeout(3500);
 for (const [url, title] of PAGES.slice(1)) {
-  await page.goto(`${HARNESS}?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
+  await page.goto(`${HARNESS}&url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
   await page.waitForTimeout(1500);
-  await clickText(page, "添加当前页面");
+  await clickText(page, "Add this page");
   await page.waitForTimeout(3500);
 }
 await page.locator(".basket__item").nth(2).waitFor();
 await shot(page, "4-three-sources");
 
 // 5. 已创建 — the task exists and 知言 has started.
-await clickText(page, "确认创建任务");
-await page.getByText(/任务已创建/).waitFor({ timeout: 60000 });
+await clickText(page, "Create task");
+await page.getByText(/Task created/).waitFor({ timeout: 60000 });
 await shot(page, "5-created");
 
 await browser.close();

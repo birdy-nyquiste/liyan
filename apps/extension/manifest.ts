@@ -40,16 +40,17 @@ function originPattern(value: string): string {
 export function buildManifest(environment: ManifestEnvironment) {
   return {
     manifest_version: 3,
-    name: "立言阁浏览器插件",
+    name: "LiYan Studio Extension",
     version: environment.version,
-    description: "把正在读的页面收集为来源，创建一个立言任务。",
+    description:
+      "A LiYan Studio product. Create a LiYan task from the page you are reading.",
     minimum_chrome_version: MINIMUM_CHROME_VERSION,
     // 工作台 itself. The Web Store shows this as the item's website, and it is
     // where a user who wants to know what 立言阁 is has to be able to get to —
     // including the 隐私政策 the listing has to point at.
     homepage_url: new URL("/", environment.webBaseUrl).toString(),
     action: {
-      default_title: "立言阁",
+      default_title: "LiYan Studio",
       default_popup: "popup.html",
       default_icon: {
         16: "icons/icon-16.png",

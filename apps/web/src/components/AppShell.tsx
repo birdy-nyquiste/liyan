@@ -51,6 +51,7 @@ type Theme = "light" | "dark" | "system";
 
 const copy = {
   zh: {
+    brand: "立言阁",
     navigation: "主导航",
     newTask: "新建立言任务",
     // The rail's own label. The page it opens keeps the full term as its
@@ -96,6 +97,7 @@ const copy = {
     leaveAnyway: "仍要离开",
   },
   en: {
+    brand: "LiYan Studio",
     navigation: "Primary navigation",
     newTask: "New task",
     newTaskAction: "New task",
@@ -420,7 +422,7 @@ function Sidebar({
         </RailTooltip>
         <span className="sidebar-brand__identity">
           <img src="/liyan-mark.svg" alt="" />
-          <strong>立言阁</strong>
+          <strong>{text.brand}</strong>
         </span>
       </div>
 

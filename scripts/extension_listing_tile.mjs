@@ -39,9 +39,12 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   }
   .brand { display: flex; align-items: center; gap: 12px; }
   .brand img { width: 44px; height: 44px; }
+  /* The name is Latin now, and 40px of it beside a 44px mark is a wall of
+     letters where three glyphs used to sit. Smaller, and with the tracking a
+     Latin serif wants rather than the one that spaced Chinese characters. */
   .brand span {
-    font-family: "Songti SC", "Noto Serif SC", serif;
-    font-size: 40px; font-weight: 600; letter-spacing: 0.06em;
+    font-family: "Iowan Old Style", Georgia, "Songti SC", serif;
+    font-size: 33px; font-weight: 600; letter-spacing: 0.01em;
   }
   /* Three sources gathered into one article: the extension's whole job, drawn
      rather than described, so it survives being shrunk to half size. */
@@ -68,7 +71,7 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   .doc u { display: block; height: 5px; border-radius: 3px; background: var(--ink); opacity: .14; }
   .doc u:nth-of-type(4) { width: 72%; }
 </style>
-<div class="brand"><img src="${markUrl}" alt=""><span>立言阁</span></div>
+<div class="brand"><img src="${markUrl}" alt=""><span>LiYan Studio</span></div>
 <div class="figure">
   <div class="sources">
     <div class="card"><i></i><u></u></div>

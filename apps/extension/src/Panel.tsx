@@ -10,6 +10,7 @@ import { PAID_ONLY } from "@workbench/components/creditRefusal";
 import type { AuthProvider } from "@workbench/auth/provider";
 import type { SignedOutState } from "@workbench/auth/state";
 import { AuthPanel } from "@workbench/components/AuthPanel";
+import { useInterfaceLocale } from "@workbench/interfaceLocale";
 
 import markUrl from "@workbench-assets/liyan-mark.svg";
 
@@ -48,6 +49,13 @@ type PanelState =
   /** A 立言任务 exists. 知言 is already queued for every 来源 in it. */
   | { screen: "created"; task: TaskSummaryResponse };
 
+/**
+ * The four sentences the panel has for a session that cannot be used.
+ *
+ * Written in Chinese and left that way: every string the panel draws is a key
+ * into 工作台's own table, and these three reach the screen through
+ * `AuthPanel`, which already translates whatever `state.message` holds.
+ */
 const SESSION_EXPIRED = "登录已过期，请重新登录。";
 const ACCESS_DENIED = "此账号暂无访问权限。";
 const UNAVAILABLE = "暂时无法连接立言阁，请稍后重试。";
@@ -65,6 +73,7 @@ function signedOut(message: string | null = null): SignedOutState {
 }
 
 export function Panel({ authProvider = extensionAuthProvider }: { authProvider?: AuthProvider }) {
+  const { t } = useInterfaceLocale();
   const [state, setState] = useState<PanelState>({ screen: "checking" });
 
   /**
@@ -198,7 +207,7 @@ export function Panel({ authProvider = extensionAuthProvider }: { authProvider?:
             would drift from it. Chrome needs PNGs for the toolbar icon, and
             those are rasterized from this same source. */}
         <img className="panel__mark" src={markUrl} alt="" />
-        <span className="panel__name">立言阁</span>
+        <span className="panel__name">{t("立言阁")}</span>
       </header>
       <Body
         state={state}
@@ -250,11 +259,13 @@ function Body({
   onCollected,
   ...handlers
 }: BodyProps): ReactNode {
+  const { t, domainMessage } = useInterfaceLocale();
+
   if (state.screen === "checking") {
     return (
       <div className="panel__body">
         <p className="form-status" role="status">
-          读取中…
+          {t("读取中…")}
         </p>
       </div>
     );
@@ -267,12 +278,12 @@ function Body({
     return (
       <div className="panel__body">
         <p className="form-error" role="alert">
-          {PAID_ONLY}
+          {domainMessage(PAID_ONLY)}
         </p>
         <button className="button" type="button" onClick={() => void openWorkbench("/account")}>
-          前往工作台购买额度
+          {t("前往工作台购买额度")}
         </button>
-        <p className="form-hint">购买后回到这里，就能开始新建任务。</p>
+        <p className="form-hint">{t("购买后回到这里，就能开始新建任务。")}</p>
       </div>
     );
   }
@@ -280,14 +291,14 @@ function Body({
   if (state.screen === "home") {
     return (
       <div className="panel__body">
-        <p className="form-hint">把浏览中读到的页面收集成来源，最多三条，一起建成一个立言任务。</p>
+        <p className="form-hint">{t("把浏览中读到的页面收集成来源，最多三条，一起建成一个立言任务。")}</p>
         {state.message ? (
           <p className="form-error" role="alert">
-            {state.message}
+            {t(state.message)}
           </p>
         ) : null}
         <button className="button" type="button" onClick={() => void onOpenBasket()}>
-          新建任务
+          {t("新建任务")}
         </button>
       </div>
     );
@@ -313,11 +324,12 @@ function Body({
             额度. A user who is not told that has had their balance move for
             reasons they did not see. */}
         <p className="panel__done" role="status">
-          任务已创建，
           {task.additional_source_count > 0
-            ? `${task.additional_source_count + 1} 条来源的知言`
-            : "知言"}
-          正在生成。
+            ? t("任务已创建，{count} 条来源的知言正在生成。").replace(
+                "{count}",
+                String(task.additional_source_count + 1),
+              )
+            : t("任务已创建，知言正在生成。")}
         </p>
         <button
           className="button button--quiet panel__task"
@@ -325,10 +337,10 @@ function Body({
           onClick={() => void openWorkbench(`/task/${task.id}`)}
         >
           <span className="panel__task-name">{task.display_name}</span>
-          <span className="panel__task-open">打开 ↗</span>
+          <span className="panel__task-open">{t("打开 ↗")}</span>
         </button>
         <button className="button" type="button" onClick={() => void onOpenBasket()}>
-          再建一个
+          {t("再建一个")}
         </button>
       </div>
     );

@@ -51,9 +51,9 @@ function stubChrome() {
   return { kept, create };
 }
 
-function renderPanel(authProvider: AuthProvider) {
+function renderPanel(authProvider: AuthProvider, locale: "zh" | "en" = "zh") {
   return render(
-    <InterfaceLocaleProvider locale="zh">
+    <InterfaceLocaleProvider locale={locale}>
       <Panel authProvider={authProvider} />
     </InterfaceLocaleProvider>,
   );
@@ -355,5 +355,40 @@ describe("the 条款 a user agrees to at sign-in", () => {
     }
     expect(terms.getAttribute("href")).toMatch(/\/terms$/);
     expect(privacy.getAttribute("href")).toMatch(/\/privacy$/);
+  });
+});
+
+/**
+ * The panel is drawn in whatever language Chrome is set to, and the Web Store
+ * listing is English — so English is what a reviewer installing it sees, and
+ * what the listing screenshots have to be able to show.
+ *
+ * One screen of each kind is enough to prove the wiring: a sentence the panel
+ * writes itself, the button it offers, and its own name in the header. What
+ * every individual string says is 工作台's table's business, not this file's.
+ */
+describe("the language the panel draws itself in", () => {
+  it("is English when the browser is not set to Chinese", async () => {
+    getAccount.mockResolvedValue({ is_paying_user: true, remaining_credits: 10 });
+
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }), "en");
+
+    expect(await screen.findByRole("button", { name: "New task" })).toBeInTheDocument();
+    expect(screen.getByText("LiYan Studio")).toBeInTheDocument();
+    expect(screen.queryByText("新建任务")).not.toBeInTheDocument();
+  });
+
+  it("says in English why a user without credits cannot collect", async () => {
+    getAccount.mockResolvedValue({ is_paying_user: false, remaining_credits: 0 });
+
+    renderPanel(fakeAuthProvider({ getAccessToken: vi.fn(async () => "a-token") }), "en");
+
+    expect(
+      await screen.findByRole("button", { name: "Buy credits in the workbench" }),
+    ).toBeInTheDocument();
+    // 工作台's own sentence for the same refusal, not a second wording of it.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Web page capture and uploaded files unlock once you have bought credits.",
+    );
   });
 });

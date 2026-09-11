@@ -130,6 +130,7 @@ export function Basket({
   onCreated,
   onCollected,
 }: BasketProps) {
+  const { t } = useInterfaceLocale();
   const [session, setSession] = useState<TaskCreationSessionResponse | null>(null);
   const [page, setPage] = useState<CurrentPage | null>(null);
   const [added, setAdded] = useState<AddedSources>({});
@@ -257,19 +258,19 @@ export function Basket({
   const themeTooLong = theme.length > MAX_THEME_CHARACTERS;
   const blocker = confirmationBlocker(session);
   const canConfirm = Boolean(session?.can_confirm) && !busy && !themeTooLong;
-  const expiring = sources.length > 0 ? expiryWarning(added) : null;
+  const expiring = sources.length > 0 ? expiryWarning(t, added) : null;
 
   return (
     <>
       <div className="panel__body">
         {recovered && sources.length > 0 ? (
-          <p className="form-hint">上次还有一个没建完的任务。</p>
+          <p className="form-hint">{t("上次还有一个没建完的任务。")}</p>
         ) : null}
         {sources.length === 0 ? (
           <p className="basket__empty">
-            还没有来源。
+            {t("还没有来源。")}
             <br />
-            翻到想收集的页面，点下面的「添加当前页面」。
+            {t("翻到想收集的页面，点下面的「添加当前页面」。")}
           </p>
         ) : (
           <ul className="basket">
@@ -277,7 +278,7 @@ export function Basket({
               <SourceRow
                 key={source.id}
                 source={source}
-                age={describeAge(added[source.id]?.at)}
+                age={describeAge(t, added[source.id]?.at)}
                 submittedUrl={added[source.id]?.url ?? null}
                 busy={busy}
                 onRemove={remove}
@@ -287,30 +288,38 @@ export function Basket({
         )}
         {sources.length > 0 ? (
           <label className="basket__theme" htmlFor="basket-theme">
-            主题（可留空）
+            {t("主题（可留空）")}
             <input
               id="basket-theme"
               value={theme}
               maxLength={MAX_THEME_CHARACTERS}
-              placeholder="这批来源共同在谈什么"
+              placeholder={t("这批来源共同在谈什么")}
               onChange={(event) => setTheme(event.target.value)}
             />
             <span className="form-hint">
-              一句话，最多 {MAX_THEME_CHARACTERS} 字。留空即不生成主题知言报告。
+              {t("一句话，最多 {max} 字。留空即不生成主题知言报告。").replace(
+                "{max}",
+                String(MAX_THEME_CHARACTERS),
+              )}
             </span>
           </label>
         ) : null}
         {expiring ? <p className="basket__expiry">{expiring}</p> : null}
         {error ? (
           <p className="form-error" role="alert">
-            {error}
+            {t(error)}
           </p>
         ) : null}
       </div>
 
       <div className="panel__foot">
         <p className="panel__foot-note">
-          {cannotAdd ?? `当前页面 · ${page ? shortenUrl(page.url) : "读取中…"}`}
+          {cannotAdd
+            ? t(cannotAdd)
+            : t("当前页面 · {page}").replace(
+                "{page}",
+                page ? shortenUrl(page.url) : t("读取中…"),
+              )}
         </p>
         <button
           className="button button--quiet"
@@ -318,9 +327,9 @@ export function Basket({
           disabled={busy || Boolean(cannotAdd)}
           onClick={() => void addCurrentPage()}
         >
-          添加当前页面
+          {t("添加当前页面")}
         </button>
-        {blocker ? <p className="panel__foot-note">{blocker}</p> : null}
+        {blocker ? <p className="panel__foot-note">{t(blocker)}</p> : null}
         <button
           className="button"
           type="button"
@@ -328,9 +337,17 @@ export function Basket({
           aria-busy={busy}
           onClick={() => void confirm()}
         >
-          {session && session.source_count > 0
-            ? `确认创建任务（${session.source_count} 条来源）`
-            : "确认创建任务"}
+          {/* One 来源 gets its own sentence rather than a count of one.
+              Chinese does not inflect and English does, so a single template
+              would put "1 sources" on the button a listing screenshot shows. */}
+          {session && session.source_count === 1
+            ? t("确认创建任务（1 条来源）")
+            : session && session.source_count > 1
+              ? t("确认创建任务（{count} 条来源）").replace(
+                  "{count}",
+                  String(session.source_count),
+                )
+              : t("确认创建任务")}
         </button>
       </div>
     </>
@@ -351,13 +368,13 @@ function SourceRow({
   busy: boolean;
   onRemove(sourceId: string): Promise<void>;
 }) {
-  const { domainMessage } = useInterfaceLocale();
+  const { t, domainMessage } = useInterfaceLocale();
   // `provenance` only exists once a fetch has succeeded, so a failed 来源 has
   // none — and a row that cannot say which page failed is no use at all to the
   // person deciding what to do about it. What the panel submitted stands in.
   const address = sourceUrl(source) ?? submittedUrl;
   const title = source.title?.trim();
-  const name = title || (address ? shortenUrl(address) : "正在抓取…");
+  const name = title || (address ? shortenUrl(address) : t("正在抓取…"));
   return (
     <li className="basket__item">
       <p className={`basket__title${title ? "" : " basket__title--pending"}`}>{name}</p>
@@ -371,7 +388,7 @@ function SourceRow({
           className="basket__remove"
           type="button"
           disabled={busy}
-          aria-label={`移除 ${name}`}
+          aria-label={t("移除 {name}").replace("{name}", name)}
           onClick={() => void onRemove(source.id)}
         >
           ×
@@ -404,15 +421,17 @@ const WARNING_LABEL: Record<string, string> = {
 };
 
 function StatusPill({ source }: { source: SessionSourceResponse }) {
-  const { domainMessage } = useInterfaceLocale();
+  const { t, domainMessage } = useInterfaceLocale();
   if (source.status === "processing") {
-    return <span className="basket__pill basket__pill--busy">处理中</span>;
+    return <span className="basket__pill basket__pill--busy">{t("处理中")}</span>;
   }
   if (source.status === "failure") {
     // A capture that produced nothing settles to zero, so this one cost the
     // user nothing. Saying so belongs next to the failure, where they are
     // deciding whether it was worth trying.
-    return <span className="basket__pill basket__pill--danger">抓取失败 · 未消耗额度</span>;
+    return (
+      <span className="basket__pill basket__pill--danger">{t("抓取失败 · 未消耗额度")}</span>
+    );
   }
   const length = source.body?.length ?? 0;
   if (source.status === "warning" && source.warnings.length > 0) {
@@ -424,9 +443,14 @@ function StatusPill({ source }: { source: SessionSourceResponse }) {
         className="basket__pill basket__pill--warn"
         title={domainMessage(first.message, first.code)}
       >
-        {WARNING_LABEL[first.code] ?? "需确认"} · {length} 字
+        {t(WARNING_LABEL[first.code] ?? "需确认")} ·{" "}
+        {t("{count} 字").replace("{count}", String(length))}
       </span>
     );
   }
-  return <span className="basket__pill basket__pill--ok">{length} 字</span>;
+  return (
+    <span className="basket__pill basket__pill--ok">
+      {t("{count} 字").replace("{count}", String(length))}
+    </span>
+  );
 }

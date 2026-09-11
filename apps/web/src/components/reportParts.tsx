@@ -125,7 +125,7 @@ export function CapsuleButton({
     <button
       className="zhiyan-capsule-button"
       type="button"
-      aria-label={locale === "en" ? `Insert ${itemId} into the Liyan instruction` : `插入 ${itemId} 到立言指令`}
+      aria-label={locale === "en" ? `Insert ${itemId} into the LiYan instruction` : `插入 ${itemId} 到立言指令`}
       onClick={() => onSelect({
         label: `${reportTitle} · ${itemId}`,
         reference: {

@@ -10,6 +10,8 @@
  * this page exists during `npm run dev:extension` and never ships.
  *
  *     ?url=…&title=…   the page the "current tab" is showing
+ *     ?lang=zh|en      the panel's language, which in Chrome follows the
+ *                      browser; this is how the listing screenshots are taken
  *
  * It has already earned its place — three things wrong with the panel were
  * visible here and in no test: a warning pill that called a 23,000-character
@@ -18,6 +20,7 @@
  */
 import { createRoot } from "react-dom/client";
 import { InterfaceLocaleProvider } from "@workbench/interfaceLocale";
+import { preferredLocale } from "./locale";
 import type { AuthProvider } from "@workbench/auth/provider";
 import { Panel } from "./Panel";
 import "./panel.css";
@@ -25,6 +28,7 @@ import "./panel.css";
 const params = new URLSearchParams(location.search);
 const pageUrl = params.get("url") ?? "https://www.rfc-editor.org/rfc/rfc2324.html";
 const pageTitle = params.get("title") ?? "Hyper Text Coffee Pot Control Protocol";
+const locale = params.get("lang") === "zh" ? "zh" : params.get("lang") === "en" ? "en" : preferredLocale();
 
 const store = new Map<string, unknown>();
 for (const [k, v] of Object.entries(localStorage)) {
@@ -75,8 +79,9 @@ const authProvider: AuthProvider = {
 };
 
 document.documentElement.dataset.theme = "system";
+document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
 createRoot(document.getElementById("root")!).render(
-  <InterfaceLocaleProvider locale="zh">
+  <InterfaceLocaleProvider locale={locale}>
     <Panel authProvider={authProvider} />
   </InterfaceLocaleProvider>,
 );

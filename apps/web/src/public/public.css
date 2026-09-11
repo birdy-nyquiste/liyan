@@ -40,6 +40,10 @@
 .site-brand { display: inline-flex; gap: 12px; align-items: center; color: var(--ink); text-decoration: none; width: fit-content; }
 .site-brand img { width: 34px; height: 40px; }
 .site-brand span { font: 25px "Songti SC", "Noto Serif SC", Georgia, serif; white-space: nowrap; }
+/* The name in English is four times as many glyphs as 立言阁, and the header
+   is a three-column grid with a nav and a CTA in the other two. Smaller, and
+   with a Latin serif's own tracking rather than the one set for characters. */
+.site-brand--latin span { font: 21px "Iowan Old Style", Georgia, "Songti SC", serif; letter-spacing: .01em; }
 .site-nav { display: flex; align-items: center; gap: 28px; }
 .site-nav a { font-size: 14px; color: var(--ink); text-decoration: none; white-space: nowrap; }
 .site-nav a:hover, .site-footer a:hover { text-decoration: underline; }
@@ -442,6 +446,7 @@
   .site-nav { grid-row: 2; grid-column: 1 / -1; justify-content: flex-start; gap: 28px; }
   .site-nav a { padding: 12px 0; }
   .site-brand span { font-size: 22px; }
+  .site-brand--latin span { font-size: 19px; }
   .site-brand img { width: 28px; height: 32px; }
   .site-main, .site-footer { width: calc(100% - 48px); }
   /* One column, and the rule stays. `.site-stage-heading` keeps its own left

@@ -7,7 +7,16 @@ extension; this says how to release it.
 Two decisions are already made and everything below assumes them:
 **Unlisted** distribution, because the extension's 来源 collection needs a paid
 立言阁 account and a public listing would mostly reach people who have none; and
-**zh-CN only**, so there is no `_locales` and one listing to fill in.
+an **English-only listing**, so there is no `_locales` and one listing to fill
+in.
+
+English-only is the *listing*, not the product. The panel is drawn in whatever
+language Chrome is set to — Chinese for a browser set to Chinese, English for
+every other — from 工作台's own table, so a Chinese user's panel did not change
+when the listing became English. What did change is everything the Web Store
+takes from the manifest: the item is called **LiYan Studio Extension** there
+and in `chrome://extensions`, in every language. Screenshots are shot in
+English (`harness.html?lang=en`) because that is what the listing shows.
 
 ---
 
@@ -147,8 +156,9 @@ node scripts/extension_listing_tile.mjs ./out         # the 440x280 tile
 ```
 
 **The row titles in the screenshots are sample text, not captures.** The panel,
-its layout and every state shown are real; the article titles and word counts
-are written into the rows before the shot is taken. The alternative was tried
+its layout and every state shown are real — and English, because the script
+opens the harness with `?lang=en`; the article titles and lengths are written
+into the rows before the shot is taken. The alternative was tried
 and is wrong twice over: the deterministic double answers every URL with the
 same title, so three rows carry three copies of one placeholder — and real
 pages both refuse datacenter traffic (which is the extension's own documented
@@ -161,16 +171,62 @@ material. Edit `SAMPLES` in the script to change them.
 
 | Field | What goes in it |
 | --- | --- |
-| **Item name** | Taken from the manifest: 立言阁浏览器插件 |
-| **Short description** | Taken from the manifest, ≤132 characters: 把正在读的页面收集为来源，创建一个立言任务。 |
-| **Detailed description** | Yours to write. The one paragraph worth leading with: 插件把你正在读的那个页面的**网址**发给立言阁，由立言阁去抓取正文 —— 插件本身从不读取网页内容。 |
+| **Item name** | Taken from the manifest, not editable here: `LiYan Studio Extension` |
+| **Short description** | Taken from the manifest, ≤132 characters: `A LiYan Studio product. Create a LiYan task from the page you are reading.` |
+| **Detailed description** | Written in the dashboard. It opens with the single purpose and then the mechanism — see below. |
 | **Category** | Productivity → Workflow & Planning |
-| **Language** | 中文 (简体) |
+| **Language** | English (United States) |
+
+The first two come out of `apps/extension/manifest.ts` and the dashboard will
+not let you edit them; changing either means a new package. Both are shown on
+the listing, one under the other, so the short one need not repeat what the
+long one says.
 
 The description is the first thing a reviewer reads, and "single purpose that is
 narrow and easy to understand" is a policy rather than a suggestion. Say what
 the extension does and stop; a list of unrelated benefits is what a single
 purpose violation looks like.
+
+The detailed description as submitted:
+
+```
+Create a LiYan task from the web page you are reading.
+
+When you click the toolbar icon, the extension sends the address of the current
+tab to LiYan Studio, and LiYan Studio fetches the article text from its own
+servers. The extension never reads the content of the page. It has no content
+script and cannot see any tab you did not click on.
+
+How it works
+1. On a page worth keeping, open the panel and press New task.
+2. Add the current page. Repeat on up to three pages — the basket survives
+   closing the panel, so you can keep browsing.
+3. Confirm. LiYan Studio creates the task and starts its ZhiYan analysis of
+   every source you collected.
+
+What it needs
+• A LiYan Studio account. Sign-in is an email one-time code.
+• Collecting URL sources requires credits, bought in the LiYan Studio workbench.
+• Because LiYan Studio fetches pages from its own servers, a page that needs a
+  login or a subscription, or that refuses automated requests, cannot be
+  collected even though your own browser opens it fine.
+
+Permissions
+• activeTab — the address and title of the tab you clicked from, and only after
+  you click.
+• storage — your signed-in session and the id of the task you are assembling,
+  both kept in your browser.
+• Two host permissions, both LiYan Studio's own servers: the API and the
+  sign-in provider.
+
+Privacy policy: https://<工作台>/privacy
+```
+
+**The 隐私政策 the last line points at is in Chinese**, and that is a known and
+accepted gap rather than an oversight: the policy is the product's, the
+product's users read Chinese, and an English translation that drifted from the
+binding text would be worse than none. Section 6's answers — which are what a
+reviewer actually grades the disclosure against — are in English.
 
 ---
 
@@ -180,11 +236,10 @@ This is the tab that decides how long the review takes. Every field below is
 answerable from the code, and the answers are already written down — the
 浏览器插件 section of `/privacy` and `apps/extension/manifest.ts` are the source.
 
-**Single purpose** — one or two sentences. Write it in English; the review team
-reads English.
+**Single purpose** — one or two sentences.
 
 > Collects the URL of a page the user is reading as a source for a new writing
-> task in 立言阁 (liyan), and creates that task. Nothing else.
+> task in LiYan Studio, and creates that task. Nothing else.
 
 **Permission justifications.** One per item in the manifest, in English:
 

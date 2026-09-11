@@ -205,7 +205,7 @@ const reports = {
 } as const;
 
 function Report({ kind, en }: { kind: "source" | "theme"; en: boolean }) {
-  const title = kind === "source" ? (en ? "Source Zhiyan report" : "来源知言报告") : (en ? "Theme Zhiyan report" : "主题知言报告");
+  const title = kind === "source" ? (en ? "Source ZhiYan report" : "来源知言报告") : (en ? "Theme ZhiYan report" : "主题知言报告");
   const { icon: Icon, sections } = reports[kind];
   const say = (line: Line) => (en ? line.en : line.zh);
   return <article className="site-report" aria-label={title}>
@@ -370,7 +370,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
               What you read piles up and stirs a hundred thoughts; the feeling arrives, the
               words do not.
             </p>
-            <p className="site-lede-turn">立言阁 helps you:</p>
+            <p className="site-lede-turn">LiYan Studio helps you:</p>
             <p className="site-lede-promise">
               First <Verb>know</Verb> what was said — keep the essence, discard the dross;
             </p>
@@ -446,7 +446,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
         </div>
       </section>
       <section className="site-stage" aria-labelledby="reports-heading">
-        <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "Zhiyan" : "知言"}</h3>
+        <div className="site-stage-heading"><span className="site-stage-number">02</span><h3 id="reports-heading">{en ? "ZhiYan" : "知言"}</h3>
           {/* A citation rather than a sentence, so it is set as one: the
               classical text in 宋体, the attribution on its own line. Mencius'
               four clauses are parallel six-character units — breaking one in
@@ -484,7 +484,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
       <section className="site-stage" aria-labelledby="writing-heading">
         <div className="site-stage-heading">
           <span className="site-stage-number">03</span>
-          <h3 id="writing-heading">{en ? "Liyan" : "立言"}</h3>
+          <h3 id="writing-heading">{en ? "LiYan" : "立言"}</h3>
           {/* Where the product's own name comes from: 立言 is one of the 三不朽,
               and 不朽篇章 in the headline is this passage. Set as a citation,
               like 知言's. */}
@@ -513,7 +513,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
         <div className="site-writing">
           {/* The article is bounded and scrolls, exactly as the 知言报告 do —
               the same two classes, so the two cannot drift apart. */}
-          <article className="site-article" aria-label={en ? "Example · Liyan article" : "示例 · 立言文章"}>
+          <article className="site-article" aria-label={en ? "Example · LiYan article" : "示例 · 立言文章"}>
             <header>
               <span className="site-report-title">
                 <ScrollText size={22} aria-hidden="true" />
@@ -524,7 +524,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
               <div
                 className="site-scroll-body"
                 role="group"
-                aria-label={en ? "Liyan article body" : "立言文章正文"}
+                aria-label={en ? "LiYan article body" : "立言文章正文"}
                 tabIndex={0}
               >
                 <SampleArticle en={en} />
@@ -535,7 +535,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
             <header>
               <span className="site-report-title">
                 <Feather size={22} aria-hidden="true" />
-                <h4>{en ? "Your Liyan instruction" : "你的立言指令"}</h4>
+                <h4>{en ? "Your LiYan instruction" : "你的立言指令"}</h4>
               </span>
             </header>
             {/* The field you write the instruction into, drawn with the same
@@ -593,8 +593,8 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
           <ul>
           {[
             { icon: FileStack, zh: "来源抓取", en: "Capturing a source" },
-            { icon: FileSearch, zh: "知言报告生成", en: "Generating a Zhiyan report" },
-            { icon: ScrollText, zh: "立言文章生成", en: "Generating a Liyan article" },
+            { icon: FileSearch, zh: "知言报告生成", en: "Generating a ZhiYan report" },
+            { icon: ScrollText, zh: "立言文章生成", en: "Generating a LiYan article" },
           ].map(({ icon: Icon, zh, en: label }) => (
             <li key={zh}>
               <Icon size={20} aria-hidden="true" />
@@ -612,7 +612,7 @@ function Homepage({ en, action, newcomer }: { en: boolean; action: ReactNode; ne
           <strong>{en ? "US$1 = 400 credits" : "1 美元 = 400 额度"}</strong>
           <p>
             {en
-              ? "Around three complete tasks: roughly 12 Zhiyan reports and 3 Liyan articles. A guide only — what you spend follows what you actually do."
+              ? "Around three complete tasks: roughly 12 ZhiYan reports and 3 LiYan articles. A guide only — what you spend follows what you actually do."
               : "400 额度大约可完成 3 个完整的任务，约 12 篇知言报告和 3 篇立言文章。仅供参考，用量以实际情况为准。"}
           </p>
         </div>
@@ -687,7 +687,7 @@ export function PublicSite({ locale, mode, onLocaleChange, onModeChange, signedI
     <a className="site-skip" href="#main-content">{en ? "Skip to content" : "跳至内容"}</a>
     <div className="site-header-bar">
       <header className="site-header">
-        <Link to="/" className="site-brand" aria-label={en ? "Liyan home" : "立言阁首页"}><img src="/liyan-mark.svg" alt="" /><span>立言阁</span></Link>
+        <Link to="/" className={`site-brand${en ? " site-brand--latin" : ""}`} aria-label={en ? "LiYan Studio home" : "立言阁首页"}><img src="/liyan-mark.svg" alt="" /><span>{en ? "LiYan Studio" : "立言阁"}</span></Link>
         <nav className="site-nav" aria-label={en ? "Page sections" : "页面目录"}>{[["workflow", en ? "How it works" : "使用流程"], ["pricing", en ? "Pricing" : "价格"], ["faq", en ? "FAQ" : "常见问题"]].map(([id, label]) => <Link key={id} to={`/#${id}`}>{label}</Link>)}</nav>
         <div className="site-controls">
           <button type="button" className="site-toggle" onClick={onLocaleChange} aria-label={`${en ? "Language" : "语言"}: ${en ? "English" : "中文"}`}><Languages size={18} aria-hidden="true" /><span>{en ? "EN" : "中文"}</span></button>
@@ -697,6 +697,6 @@ export function PublicSite({ locale, mode, onLocaleChange, onModeChange, signedI
       </header>
     </div>
     {pathname === "/" ? <Homepage en={en} action={action} newcomer={!signedIn && !checking} /> : legal ? <main id="main-content" className="site-legal"><LegalDocument kind={pathname === "/terms" ? "terms" : "privacy"} en={en} /><Link className="site-text-link" to="/">{en ? "Back to home" : "返回首页"}<ArrowRight size={16} aria-hidden="true" /></Link></main> : <main id="main-content" className="site-auth">{children}</main>}
-    <footer className={`site-footer${compactFooter ? " site-footer--compact" : ""}`}><div className="site-footer-brand"><div className="site-brand"><img src="/liyan-mark.svg" alt="" /><span>立言阁</span></div><p>{en ? "A product of Nyquiste Corporation" : "Nyquiste Corporation 旗下产品"}</p></div><div className="site-footer-bottom"><small>© {new Date().getFullYear()} Nyquiste Corporation</small><nav aria-label={en ? "Legal and contact" : "法律与联系"}><Link to="/terms">{en ? "Terms of Use" : "使用条款"}</Link><Link to="/privacy">{en ? "Privacy Policy" : "隐私政策"}</Link><a href="mailto:birdyyao@nyquiste.com">{en ? "Contact us" : "联系我们"}</a></nav></div></footer>
+    <footer className={`site-footer${compactFooter ? " site-footer--compact" : ""}`}><div className="site-footer-brand"><div className={`site-brand${en ? " site-brand--latin" : ""}`}><img src="/liyan-mark.svg" alt="" /><span>{en ? "LiYan Studio" : "立言阁"}</span></div><p>{en ? "A product of Nyquiste Corporation" : "Nyquiste Corporation 旗下产品"}</p></div><div className="site-footer-bottom"><small>© {new Date().getFullYear()} Nyquiste Corporation</small><nav aria-label={en ? "Legal and contact" : "法律与联系"}><Link to="/terms">{en ? "Terms of Use" : "使用条款"}</Link><Link to="/privacy">{en ? "Privacy Policy" : "隐私政策"}</Link><a href="mailto:birdyyao@nyquiste.com">{en ? "Contact us" : "联系我们"}</a></nav></div></footer>
   </div>;
 }

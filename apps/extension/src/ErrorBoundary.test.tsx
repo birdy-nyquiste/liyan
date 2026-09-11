@@ -8,11 +8,23 @@ function Throws(): never {
   throw new Error("the panel could not render");
 }
 
+/**
+ * What Chrome's language is set to, for the length of one test.
+ *
+ * The fallback cannot be handed a language — it is the thing that catches the
+ * context that would carry one failing — so it reads the browser directly, and
+ * that is what a test has to move.
+ */
+function browserLanguage(tag: string) {
+  vi.spyOn(navigator, "language", "get").mockReturnValue(tag);
+}
+
 describe("ErrorBoundary", () => {
   beforeEach(() => {
     // React logs a caught error itself, and the boundary logs it too. Both are
     // wanted in a real popup and neither is wanted in the test output.
     vi.spyOn(console, "error").mockImplementation(() => undefined);
+    browserLanguage("zh-CN");
   });
 
   afterEach(() => {
@@ -64,5 +76,23 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText(/不会因此丢失/)).toBeInTheDocument();
+  });
+
+  /**
+   * The panel follows the browser, and this is the one screen that cannot be
+   * told what the browser said. A fallback that answered a reader of English
+   * in Chinese would be the panel's last words and its least useful ones.
+   */
+  it("speaks the browser's language, not the panel's", () => {
+    browserLanguage("en-GB");
+    render(
+      <ErrorBoundary>
+        <Throws />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Something went wrong and the panel could not be shown.",
+    );
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
   });
 });

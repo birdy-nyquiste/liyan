@@ -90,9 +90,9 @@ function onPage(url: string, title = "那件事到底是怎么发生的") {
 const onCreated = vi.fn();
 const onCollected = vi.fn();
 
-function renderBasket(recovered = false) {
+function renderBasket(recovered = false, locale: "zh" | "en" = "zh") {
   return render(
-    <InterfaceLocaleProvider locale="zh">
+    <InterfaceLocaleProvider locale={locale}>
       <Basket
         accessToken="a-token"
         basketId="a-basket"
@@ -553,5 +553,37 @@ describe("主题", () => {
     fireEvent.change(box, { target: { value: "四".repeat(81) } });
 
     expect(screen.getByRole("button", { name: /确认创建任务/ })).toBeDisabled();
+  });
+});
+
+/**
+ * The basket in English, which is what the Web Store listing shows.
+ *
+ * Only the sentences built from a number are worth a test of their own: the
+ * rest are one lookup each and would be testing 工作台's table. These three
+ * are assembled — a count, a length, a warning label beside one — and an
+ * assembly is a place a translation can come apart while every string in it
+ * is correct.
+ */
+describe("the basket in English", () => {
+  it("counts sources, lengths and warnings in the language it is drawn in", async () => {
+    getTaskCreationSession.mockResolvedValue(
+      session([
+        source({
+          id: "a",
+          status: "warning",
+          title: "www.rfc-editor.org",
+          body: "x".repeat(23302),
+          warnings: [
+            { code: "missing_title", message: "No page title was found; review the suggested title." },
+          ],
+        }),
+      ]),
+    );
+    renderBasket(true, "en");
+
+    expect(await screen.findByText("No title · 23302 chars")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create task (1 source)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add this page" })).toBeInTheDocument();
   });
 });

@@ -1,8 +1,10 @@
 # 立言阁浏览器插件
 
 The extension whose whole job is to turn pages a user is already reading into
-the 来源 of a new 立言任务. Its name is 立言阁浏览器插件; this page refers to it
-as the extension, the way these pages call 工作台 the workbench. Here is what it
+the 来源 of a new 立言任务. It is 立言阁浏览器插件 here and **LiYan Studio
+Extension** wherever a user meets it — the Web Store listing and
+`chrome://extensions` both take that name from the manifest. This page refers
+to it as the extension, the way these pages call 工作台 the workbench. Here is what it
 is and why it is shaped this way. `docs/operations/limits.md` owns the numbers
 it runs into, and `credits-in-the-workbench.md` owns what 额度 mean; neither is
 restated here.
@@ -190,6 +192,15 @@ having no title and being told 正文偏薄 about it is simply false.
 The refusals are the exception, and stay verbatim. 额度不足 and the per-user
 ceiling arrive already written for a user, and rewording them would be the
 panel disagreeing with the server about why it said no.
+
+**Which language it says them in is Chrome's to decide.** A browser set to any
+kind of Chinese gets Chinese; everything else gets English, out of the same
+table 工作台 translates itself with. There is no setting, and the absence is the
+design: a popup that lives for seconds is the wrong place to keep one, and it
+could not read 工作台's — an extension has its own origin, so the two share no
+storage. The one screen that cannot be told what language to use is the error
+boundary, which is what catches the context carrying it failing; it reads the
+browser directly and carries both of its sentences itself.
 
 Two things the server never sends back, which the panel keeps for itself:
 **when** each 来源 was added, and **which page** it was. A settled 来源 carries

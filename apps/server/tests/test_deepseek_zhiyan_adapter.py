@@ -725,6 +725,9 @@ def test_no_unenforced_bound_is_sent_as_though_it_were_one() -> None:
     reason — it truncates the report, not just the thinking."""
     body = request_body(a_request())
 
+    reasoning = body["reasoning"]
+    assert isinstance(reasoning, dict)
+
     assert "max_tool_calls" not in body
     assert "max_output_tokens" not in body
-    assert "max_output_tokens" not in body["reasoning"]
+    assert "max_output_tokens" not in reasoning

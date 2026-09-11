@@ -424,3 +424,27 @@ def test_a_blank_required_narrative_is_rejected() -> None:
         accept(document)
 
     assert rejection.value.code == "invalid_report_schema"
+
+
+def test_a_report_from_a_run_that_never_searched_is_structurally_valid() -> None:
+    """Why the adapter refuses an unsearched run rather than leaving it to here.
+
+    Acceptance judges the evidence a report *cites*. A model that could not
+    search cites none: every fact comes back 「暂无法核实」, which owes no
+    evidence, and the 证据 section is a legal empty state — so nothing in these
+    rules is broken and the report is admitted. It is still worthless, and the
+    user still paid for it. The thing that is wrong about it is not in the text
+    at all but in the run behind it, which is why the gate lives in
+    `deepseek._require_a_run_that_searched` and not here.
+    """
+    document = valid_document()
+    for fact in document["facts"]["items"]:
+        fact["verdict"] = "暂无法核实"
+        fact["evidence_ids"] = []
+    document["evidence"] = {"items": [], "empty_state": "本次核查没有可引用的外部证据。"}
+    document["overview"]["fact_check_summary"] = "共核查 2 项重要事实：2 项暂无法核实。"
+
+    report = accept(document, opened=())
+
+    assert not report.evidence.items
+    assert all(item.verdict == "暂无法核实" for item in report.facts.items)

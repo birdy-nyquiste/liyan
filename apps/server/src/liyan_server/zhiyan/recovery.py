@@ -27,6 +27,9 @@ MANUAL_RETRY_WINDOW = timedelta(minutes=30)
 #: A failure another identical run could plausibly survive. Anything absent from
 #: this set never spends the automatic attempt: a missing API key, an Execution
 #: whose approved input is gone, or an unreachable queue all fail again the same way.
+#: `provider_did_not_search` is absent for that reason and not by oversight — a
+#: model that is not executing the search tool will not execute it on the retry
+#: either, and a 知言 run is the most expensive thing here to repeat for nothing.
 RECOVERABLE_FAILURE_CODES: frozenset[str] = frozenset(
     {
         "provider_unavailable",

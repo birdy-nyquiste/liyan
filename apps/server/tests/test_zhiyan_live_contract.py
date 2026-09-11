@@ -86,9 +86,22 @@ def test_the_captured_response_predates_usage_and_is_handled_anyway() -> None:
 # --- Against the real API ----------------------------------------------------
 
 
+# Read at import, which is the only moment these are still here. `conftest`
+# strips every `LIYAN_`-prefixed variable for the whole session so that no
+# `Settings` a test builds can inherit the machine it runs on — a guard worth
+# keeping, and one that silently broke the checks below: the skip condition is
+# evaluated during collection and saw the flag, then the fixture removed the
+# key, and the test failed on `os.environ[...]` rather than running. Collection
+# imports this module before any fixture runs, so binding the values here gets
+# them before they are taken away.
+_LIVE = os.environ.get("LIYAN_LIVE_PROVIDERS") == "1"
+_API_KEY = os.environ.get("LIYAN_DEEPSEEK_API_KEY", "")
+_BASE_URL = os.environ.get("LIYAN_DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+_MODEL = os.environ.get("LIYAN_ZHIYAN_MODEL", "deepseek-v4-pro")
+
 REQUIRES_PROVIDERS = pytest.mark.skipif(
-    os.environ.get("LIYAN_LIVE_PROVIDERS") != "1",
-    reason="Set LIYAN_LIVE_PROVIDERS=1 to spend real DeepSeek credit in this check.",
+    not (_LIVE and _API_KEY),
+    reason="Set LIYAN_LIVE_PROVIDERS=1 and LIYAN_DEEPSEEK_API_KEY to spend real credit here.",
 )
 
 CLAIM_BEARING = AcceptedSourceRevision(
@@ -115,10 +128,7 @@ def _live_post(url: str, headers: dict[str, str], body: dict[str, Any]) -> Provi
 
 
 def _live_request() -> Any:
-    return zhiyan_request(
-        CLAIM_BEARING, model=os.environ.get("LIYAN_ZHIYAN_MODEL", "deepseek-v4-flash"),
-        now=datetime.now(UTC),
-    )
+    return zhiyan_request(CLAIM_BEARING, model=_MODEL, now=datetime.now(UTC))
 
 
 @REQUIRES_PROVIDERS
@@ -132,9 +142,8 @@ def test_the_provider_accepts_its_own_search_calls_back_as_input() -> None:
     about the continuation is tested offline against doubles; this is the one
     fact only the live API can settle.
     """
-    key = os.environ["LIYAN_DEEPSEEK_API_KEY"]
-    base = os.environ.get("LIYAN_DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    base = _BASE_URL
+    headers = {"Authorization": f"Bearer {_API_KEY}", "Content-Type": "application/json"}
     request = _live_request()
 
     first = _live_post(f"{base}/responses", headers, request_body(request))
@@ -159,10 +168,7 @@ def test_the_provider_accepts_its_own_search_calls_back_as_input() -> None:
 @REQUIRES_PROVIDERS
 def test_a_real_run_still_produces_an_acceptable_report() -> None:
     """The adapter now loops; this proves the ordinary one-call path is intact."""
-    provider = DeepSeekZhiyanProvider(
-        api_key=os.environ["LIYAN_DEEPSEEK_API_KEY"],
-        base_url=os.environ.get("LIYAN_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-    )
+    provider = DeepSeekZhiyanProvider(api_key=_API_KEY, base_url=_BASE_URL)
 
     result = provider.analyze(_live_request())
 

@@ -104,9 +104,9 @@ not higher than the one live, and the manifest takes it from
 npm run package:extension
 ```
 
-`apps/extension/liyan-extension.zip` is the upload. Before submitting, the
-listing needs saying plainly what the permissions are for, because it is the
-part reviewers ask about:
+`apps/extension/liyan-studio-extension.zip` is the upload. Before submitting,
+the listing needs saying plainly what the permissions are for, because it is
+the part reviewers ask about:
 
 - **activeTab** — the address of the tab the user clicked from, and nothing
   else. There is no content script; the page's contents are never read.

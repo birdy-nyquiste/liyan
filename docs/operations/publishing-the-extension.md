@@ -129,7 +129,7 @@ to, and it is the record of which 立言阁 this build is for:
 cat apps/extension/dist/manifest.json
 ```
 
-The upload is `apps/extension/liyan-extension.zip`.
+The upload is `apps/extension/liyan-studio-extension.zip`.
 
 ---
 

@@ -106,20 +106,40 @@ function AppWorkspace({ authProvider = supabaseAuthProvider }: AppProps) {
    * screen still says the service is unavailable, and only a reload clears it.
    * So the probe repeats while the answer is bad and stops once it is good —
    * the banner is allowed to go away by itself, the way the outage does.
+   *
+   * Probes overlap, and their answers do not come back in the order they were
+   * asked for. A server that is restarting holds a request open instead of
+   * refusing it, so a probe sent during the outage is still hanging when a
+   * later one gets a clean answer, and then lands as its own 5s deadline —
+   * describing a moment that has already passed. Taken at face value it put
+   * the banner back up over a service that was answering fine, and by then the
+   * watch had stopped, so nothing was left to take it down again: a reload was
+   * the only cure. Hence `answered`. An answer older than the one on screen is
+   * not news about the server, and is dropped.
    */
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setInterval> | undefined;
+    /** Probes asked for, and the newest one whose answer reached the screen. */
+    let asked = 0;
+    let answered = 0;
 
     const probe = () => {
+      const mine = ++asked;
+      // 只有比屏幕上那个答案更新的答案才算新消息 —— 一次挂了很久才到期的旧探测
+      // 说的是已经过去的那次停机，不该把横幅重新拉起来。
+      const isStale = () => !active || mine < answered;
       void serverIsAlive()
         .then((isAlive) => {
-          if (!active) return;
+          if (isStale()) return;
+          answered = mine;
           setHealth(isAlive ? "available" : "unavailable");
           if (isAlive) stopWatching();
         })
         .catch(() => {
-          if (active) setHealth("unavailable");
+          if (isStale()) return;
+          answered = mine;
+          setHealth("unavailable");
         });
     };
 

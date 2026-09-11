@@ -76,6 +76,66 @@ describe("server health", () => {
     });
     expect(fetch.mock.calls).toHaveLength(probes);
   });
+
+  /**
+   * The probe was the only request in the workbench reaching for
+   * `AbortSignal.timeout`, which Chromium before 103 and Safari before 16 do
+   * not have. There it threw before the request was made, the probe read that
+   * as a server it could not reach, and the banner sat over an API that was
+   * answering everything else fine — in one browser, on every reload, with
+   * nothing transient about it to wait out.
+   */
+  it("probes on a browser without AbortSignal.timeout", async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ status: "alive" }));
+    vi.stubGlobal("fetch", fetch);
+    const timeout = AbortSignal.timeout;
+    // @ts-expect-error 装成 Chromium 103 之前的引擎：这个静态方法根本不存在。
+    delete AbortSignal.timeout;
+
+    try {
+      render(<App />);
+
+      expect(await screen.findByRole("heading", { name: "登入立言阁" })).toBeInTheDocument();
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      AbortSignal.timeout = timeout;
+    }
+  });
+
+  /**
+   * The banner came back anyway, on a healthy production server, and only a
+   * reload cleared it — because a probe sent during the outage was still
+   * hanging when a later one got a clean answer, and landed afterwards as its
+   * own deadline. An answer that old describes a moment already gone, and the
+   * watch had stopped by the time it arrived, so nothing could take the banner
+   * down a second time.
+   */
+  it("ignores a probe that was already in flight when the server came back", async () => {
+    // 重启中的服务端把请求挂着，而不是立刻拒掉 —— 它是被自己那 5 秒的期限掐断的。
+    let failTheHungProbe!: (reason: unknown) => void;
+    const hung = new Promise<Response>((_, reject) => {
+      failTheHungProbe = reject;
+    });
+    const fetch = vi.fn().mockReturnValueOnce(hung);
+    vi.stubGlobal("fetch", fetch);
+
+    render(<App />);
+    await screen.findByRole("heading", { name: "登入立言阁" });
+
+    fetch.mockResolvedValue(Response.json({ status: "alive" }));
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+
+    await act(async () => {
+      failTheHungProbe(new DOMException("signal timed out", "TimeoutError"));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
 
 describe("Email OTP sign in", () => {

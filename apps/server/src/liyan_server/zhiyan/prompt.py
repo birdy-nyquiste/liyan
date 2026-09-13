@@ -25,7 +25,25 @@ from datetime import datetime
 from liyan_server.zhiyan.provider import ToolPolicy, WrapUp, ZhiyanRequest
 from liyan_server.zhiyan.report import report_json_schema
 
-ZHIYAN_PROMPT_VERSION = "zhiyan-prompt-v0.3"
+#: v0.4 states the search budget that v0.3 promised and never gave. Step 3 said
+#: 「按下面的预算与优先级使用检索」 and then listed four qualitative bullets, while
+#: every other section of this prompt carries a count — facts 3–8, viewpoints
+#: 3–6, logic 0–4, intent 0–3. Searching was the one unbounded thing in a prompt
+#: made of bounds, and it is the one that costs minutes.
+#:
+#: What it is worth, measured 2026-09-12 over six runs on three 来源 against
+#: three unbudgeted ones: mean pages opened fell from 22.0 to 16.3, and mean
+#: wall-clock from 245s to 234s. The second number is the honest one — a 4%
+#: difference across runs ranging 111s to 344s is not a result.
+#:
+#: The reason is that the cap is obeyed about half the time. Three runs came in
+#: at 6, 7 and 10 pages; three ignored it entirely at 22, 26 and 27. That is the
+#: same character `max_tool_calls` has (ADR-0004) and it should be read the same
+#: way: a stated page budget is a preference this model sometimes honours, never
+#: a bound. The bullet stays because a prompt promising a 预算 should state one
+#: and because the runs that do obey it are dramatically cheaper, but nothing
+#: downstream may assume 12 pages is a ceiling.
+ZHIYAN_PROMPT_VERSION = "zhiyan-prompt-v0.4"
 
 UNTRUSTED_OPEN = "<source-content>"
 UNTRUSTED_CLOSE = "</source-content>"
@@ -79,8 +97,11 @@ ZHIYAN_INSTRUCTIONS = f"""\
    判断什么算时效性），以及错误后会显著误导读者的内容。把清单按重要性排好序再开始检索：
    检索轮次有限，用尽时剩下的只能写「暂无法核实」，所以顺序决定这份报告的价值。
 3. 外部核查。按下面的预算与优先级使用检索：
+   - 整次运行最多打开 12 个页面。这是硬预算：用完就用已经打开的页面完成报告，
+     其余写「暂无法核实」。
    - 先定完清单再检索，不要边读边搜。
    - 按第 2 步的顺序逐条核，一条找不到就换检索角度，不要在同一条上反复消耗。
+   - 一条主张打开 1 个页面即可定论；只有清单前三条允许打开第 2 个页面做独立印证。
    - 打开实际资料页面，不把搜索摘要或模型记忆当作最终依据。
    - 一条主张确实找不到可靠材料时写「暂无法核实」，然后继续下一条。
 4. 分析：区分事实与观点，确认观点归属，还原主要论证，识别真正影响结论的逻辑问题，区分
@@ -92,7 +113,7 @@ ZHIYAN_INSTRUCTIONS = f"""\
 通用：
 
 - 优先原件，不用转述。报道里提到某份报告、研究或法规，就去打开那份原件本身。
-- 同源不算互相印证。多家媒体转载同一通稿只算一个来源；重要主张尽量有两个相互独立的依据。
+- 同源不算互相印证。多家媒体转载同一通稿只算一个来源；清单前三条尽量有两个相互独立的依据。
 - 来源涉及境外主体或国际议题时，必须检索外文一手材料，不能只用中文转述。evidence 的
   title 保留原文标题，其余一律简体中文。
 - 时效以 current_time 为准，不以你的训练知识判断什么算「最新」。来源发布之后出现的进展

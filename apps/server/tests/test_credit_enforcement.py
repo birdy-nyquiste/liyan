@@ -292,7 +292,9 @@ def test_a_search_heavy_failure_costs_立言阁_and_not_the_user(tmp_path: Path)
     assert balance(dispatcher.database_url) < before
 
     class SearchedAndWroteNothing(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             raise ZhiyanProviderFailure(
                 "invalid_provider_response",
                 "知言服务返回了无法使用的结果，请重试。",

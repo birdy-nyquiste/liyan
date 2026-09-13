@@ -347,7 +347,7 @@ def test_output_arriving_after_an_accepted_cancellation_is_kept_only_for_tracing
     execution_id = source_state(client, headers, task_id, 0)["execution"]["id"]
 
     class CancellingProvider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> object:  # type: ignore[override]
+        def analyze(self, request: ZhiyanRequest, **_: object) -> object:  # type: ignore[override]
             cancelled = client.post(f"/executions/{execution_id}/cancel", headers=headers)
             assert cancelled.status_code == 202
             assert cancelled.json()["status"] == "cancel_requested"
@@ -390,7 +390,7 @@ def test_a_report_arriving_after_another_run_won_is_kept_only_for_tracing(
     class OvertakenProvider(DeterministicZhiyanProvider):
         """Loses its run to the timeout sweep, then answers anyway."""
 
-        def analyze(self, request: ZhiyanRequest) -> object:  # type: ignore[override]
+        def analyze(self, request: ZhiyanRequest, **_: object) -> object:  # type: ignore[override]
             abandon_run(dispatcher.database_url, abandoned)
             assert (
                 client.post(
@@ -450,7 +450,9 @@ def test_a_refused_report_is_kept_so_the_refusal_can_be_explained(tmp_path: Path
     task_id, _ = confirm_sources(client, headers, ["四天工作制已经没有争议"])
 
     class WroteProse(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             return ZhiyanProviderResult(
                 report_text="很抱歉，我无法核实这些说法。",
                 search_actions=(SearchAction(kind="search", query="四天工作制"),),

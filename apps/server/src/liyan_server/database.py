@@ -295,6 +295,18 @@ class Execution(Base):
     stale_result: Mapped[dict[str, object] | None] = mapped_column(JSON)
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
     request_hash: Mapped[str | None] = mapped_column(String(64))
+    #: What a searching run has done so far, written while it is still running
+    #: and read only to show it. `running` was otherwise the whole of what the
+    #: workbench could say for six minutes, and a writer could not tell a run
+    #: reading its twentieth page from one that had died.
+    #:
+    #: Null rather than zero before a run reports anything, because a run that
+    #: has not said yet and a run that searched nothing are different, and only
+    #: one of them is worth showing. Operations that cannot search never write
+    #: these at all. They are counts and nothing else — no query, no URL — so
+    #: this column cannot carry provider-read content to a browser.
+    searched_count: Mapped[int | None] = mapped_column(Integer)
+    opened_count: Mapped[int | None] = mapped_column(Integer)
 
 
 class UrlFetchResult(Base):

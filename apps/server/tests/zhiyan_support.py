@@ -288,7 +288,9 @@ class DeterministicZhiyanProvider:
         self.proposal_outcomes: list[ZhiyanProviderResult | ZhiyanProviderFailure] = []
         self.requests: list[ZhiyanRequest] = []
 
-    def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+    def analyze(
+        self, request: ZhiyanRequest, **_: object
+    ) -> ZhiyanProviderResult:
         self.requests.append(request)
         if request.format_name == THEME_FORMAT_NAME:
             queue, default = self.theme_outcomes, accepted_theme_result()

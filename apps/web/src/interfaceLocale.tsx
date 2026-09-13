@@ -120,6 +120,8 @@ const ENGLISH: Record<string, string> = {
   "已保存的草稿": "Saved draft",
   "正在生成立言文章…": "Writing the article…",
   "正在生成知言报告…": "Writing the report…",
+  "已检索 {searched} 次，已打开 {opened} 个页面":
+    "Searched {searched} times, opened {opened} pages",
   "正在处理来源…": "Reading the source…",
   "文章标题": "Article title",
   "文章正文": "Article body",

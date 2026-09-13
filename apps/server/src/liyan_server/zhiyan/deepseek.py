@@ -13,18 +13,25 @@ as a failed run is what made 知言 unreliable exactly in proportion to how much
 searched: see `continuation_body`.
 """
 
-from collections.abc import Callable, Sequence
+import json
+import logging
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import cast
+from urllib.parse import urlsplit, urlunsplit
 
 from liyan_server.provider_usage import ProviderUsage, combined_usage, provider_usage
 from liyan_server.zhiyan.provider import (
+    ProgressObserver,
+    RunProgress,
     SearchAction,
     SearchActionKind,
     ZhiyanProviderFailure,
     ZhiyanProviderResult,
     ZhiyanRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 WEB_SEARCH_TOOL_TYPE = "web_search"
 UNAVAILABLE_MESSAGE = "知言服务暂时不可用，请稍后重试。"
@@ -146,17 +153,28 @@ class DeepSeekZhiyanProvider:
         *,
         api_key: str,
         base_url: str = "https://api.deepseek.com",
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 900,
+        stall_seconds: int = 120,
         post: PostResponses | None = None,
         max_continuations: int = MAX_SEARCH_CONTINUATIONS,
     ) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
-        self._post = post or self._post_with_httpx
+        self._stall_seconds = stall_seconds
+        #: An injected `post` is a whole call answered at once, which is what a
+        #: test double is. Left alone, the adapter streams — see `read_stream`.
+        #: The two paths return the identical `ProviderHttpResponse`, so only
+        #: the progress a stream can report distinguishes them.
+        self._post = post
         self._max_continuations = max(0, max_continuations)
 
-    def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+    def analyze(
+        self,
+        request: ZhiyanRequest,
+        *,
+        on_progress: ProgressObserver | None = None,
+    ) -> ZhiyanProviderResult:
         if not self._api_key:
             raise ZhiyanProviderFailure(
                 "provider_unconfigured",
@@ -166,7 +184,12 @@ class DeepSeekZhiyanProvider:
         tally = _RunTally()
         body = request_body(request)
         for remaining in range(self._max_continuations, -1, -1):
-            call = self._call(body, tally, fallback_model=request.model)
+            call = self._call(
+                body,
+                tally,
+                fallback_model=request.model,
+                on_progress=on_progress,
+            )
             tally.add(call)
             if call.report_text:
                 _require_a_run_that_searched(request, tally)
@@ -200,16 +223,18 @@ class DeepSeekZhiyanProvider:
         tally: _RunTally,
         *,
         fallback_model: str,
+        on_progress: ProgressObserver | None = None,
     ) -> ProviderCall:
+        url = f"{self._base_url}/responses"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
         try:
-            response = self._post(
-                f"{self._base_url}/responses",
-                {
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                body,
-            )
+            if self._post is not None:
+                response = self._post(url, headers, body)
+            else:
+                response = self._stream(url, headers, body, tally, on_progress)
         except ZhiyanProviderFailure as transport:
             # `_post` cannot see the tally, so a socket that died on call three
             # would otherwise report a run that cost nothing — when calls one
@@ -236,36 +261,158 @@ class DeepSeekZhiyanProvider:
             )
         return read_response(response.payload, fallback_model=fallback_model, tally=tally)
 
-    def _post_with_httpx(
+    def _stream(
         self,
         url: str,
         headers: dict[str, str],
         body: dict[str, object],
+        tally: _RunTally,
+        on_progress: ProgressObserver | None,
     ) -> ProviderHttpResponse:
+        """One call, read as it arrives rather than when it is over.
+
+        The same request, `stream: true`, and the terminal event's `response`
+        object handed back — which is byte-identical to what the unstreamed
+        endpoint returns, so nothing downstream of here can tell the difference.
+        Confirmed live 2026-09-12: `response.completed` carries `output`,
+        `usage`, `status`, `id` and `incomplete_details`, all of them.
+
+        What streaming buys is the two things this adapter could not otherwise
+        have. A run announces each search while it is searching — 122 seconds
+        before the report landed, in the probe this was built from — which is
+        the whole of `RunProgress`. And a stalled call becomes distinguishable
+        from a slow one: `read` here is the gap between two pieces of the
+        answer, not the length of the answer, so a run may take fifteen minutes
+        and still be cut off after two minutes of silence.
+        """
         import httpx
 
+        searched = sum(1 for action in tally.actions if action.kind == "search")
+        # Distinct pages, not actions: `find_in_page` is the model reading more
+        # of a page it already opened, and counting it again would tell a writer
+        # the run had opened seventy pages when it had opened twenty. The set
+        # carries prior calls' pages too, because a continuation re-reads what it
+        # already found and the writer is watching one run, not one call.
+        opened: set[str] = {
+            _page_key(action.url)
+            for action in tally.actions
+            if action.kind in {"open_page", "find_in_page"} and action.url
+        }
+
+        def announce(action: SearchAction) -> None:
+            nonlocal searched
+            if action.kind == "search":
+                searched += 1
+            elif action.url:
+                opened.add(_page_key(action.url))
+            if on_progress is None:
+                return
+            try:
+                on_progress(RunProgress(searched=searched, opened=len(opened)))
+            except Exception:  # noqa: BLE001
+                # Progress is diagnostic, the same judgement `record_heartbeat`
+                # makes: a run that has searched twenty times must not be lost
+                # because the thing reporting it failed.
+                logger.warning("zhiyan_progress_not_reported")
+
         try:
-            response = httpx.post(
-                url,
-                headers=headers,
-                json=body,
-                timeout=self._timeout_seconds,
-            )
+            with (
+                httpx.Client(
+                    timeout=httpx.Timeout(
+                        self._timeout_seconds,
+                        connect=30.0,
+                        read=float(self._stall_seconds),
+                    )
+                ) as client,
+                client.stream(
+                    "POST",
+                    url,
+                    headers=headers | {"Accept": "text/event-stream"},
+                    json=body | {"stream": True},
+                ) as response,
+            ):
+                if response.status_code != 200:
+                    return ProviderHttpResponse(
+                        status_code=response.status_code,
+                        payload=None,
+                        body_text=response.read()[:2_000].decode(errors="replace"),
+                    )
+                return read_stream(response.iter_lines(), on_search=announce)
         except httpx.HTTPError as error:
             raise ZhiyanProviderFailure(
                 "provider_unavailable",
                 UNAVAILABLE_MESSAGE,
                 internal_error=repr(error),
             ) from error
+
+
+#: The terminal events of a streamed response. Each carries the whole `response`
+#: object, so all three end the stream with something this adapter can read:
+#: `completed` is the ordinary end, `incomplete` is the truncation that
+#: `read_response` turns into `incomplete_provider_response`, and `failed`
+#: carries the provider's own error in the same envelope.
+TERMINAL_EVENTS: frozenset[str] = frozenset(
+    {"response.completed", "response.incomplete", "response.failed"}
+)
+
+
+def _page_key(url: str) -> str:
+    """One opened page, however many times the provider announced it.
+
+    `open_page` reports its URL with a `#ws_call_id=…` fragment naming the call
+    that fetched it (ADR-0004), so the same page opened twice arrives as two
+    different strings. Dropping the fragment is what makes a count of pages a
+    count of pages. Only the fragment: a query string is part of which page this
+    is, and acceptance matches evidence on the same basis.
+    """
+    parts = urlsplit(url.strip())
+    return urlunsplit(
+        (parts.scheme.casefold(), parts.netloc.casefold(), parts.path, parts.query, "")
+    )
+
+
+def read_stream(
+    lines: Iterable[str],
+    *,
+    on_search: Callable[[SearchAction], None] | None = None,
+) -> ProviderHttpResponse:
+    """Fold a `text/event-stream` back into the response it is streaming.
+
+    Every event is discarded except two kinds. A finished `web_search_call` item
+    is announced, because that is the only moment anyone learns a run is still
+    working and what it has done. A terminal event is kept, because its
+    `response` is the answer — the unstreamed payload, identical, which is what
+    lets streaming be a transport detail rather than a second code path.
+
+    A stream that ends without a terminal event returns no payload rather than
+    half a report: `read_response` then reports it as a response carrying no
+    output items, which is what it is.
+    """
+    payload: object = None
+    for line in lines:
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
         try:
-            payload: object = response.json()
+            event = json.loads(data)
         except ValueError:
-            payload = None
-        return ProviderHttpResponse(
-            status_code=response.status_code,
-            payload=payload,
-            body_text=response.text[:2_000],
-        )
+            # One unreadable frame is not a failed run. The terminal event is
+            # what this is here for, and it either arrives or it does not.
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "response.output_item.done" and on_search is not None:
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "web_search_call":
+                action = _search_action(item.get("action"))
+                if action is not None:
+                    on_search(action)
+        elif kind in TERMINAL_EVENTS:
+            payload = event.get("response")
+    return ProviderHttpResponse(status_code=200, payload=payload)
 
 
 def _require_a_run_that_searched(request: ZhiyanRequest, tally: _RunTally) -> None:

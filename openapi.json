@@ -3305,6 +3305,16 @@
                 "type": "null"
               }
             ]
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSearchProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -3320,7 +3330,8 @@
           "finished_at",
           "cancellation_requested_at",
           "result_id",
-          "error"
+          "error",
+          "progress"
         ],
         "title": "ExecutionResponse"
       },
@@ -4720,6 +4731,25 @@
         ],
         "title": "RetryPublicationRequest",
         "description": "Identity and consent — never content.\n\nThe 发布任务 already holds everything the attempt will send. A body that could\nname a title, an author, or a Revision would be a way to publish something\nnewer under the word \"retry\"."
+      },
+      "RunSearchProgress": {
+        "properties": {
+          "searched": {
+            "type": "integer",
+            "title": "Searched"
+          },
+          "opened": {
+            "type": "integer",
+            "title": "Opened"
+          }
+        },
+        "type": "object",
+        "required": [
+          "searched",
+          "opened"
+        ],
+        "title": "RunSearchProgress",
+        "description": "How much external checking one run has done, while it is still doing it."
       },
       "SaveLiyanRevisionRequest": {
         "properties": {

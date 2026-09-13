@@ -245,6 +245,7 @@ describe("TaskZhiyanArea with a theme", () => {
             finished_at: "2026-09-01T18:02:00Z",
             cancellation_requested_at: null,
             result_id: null,
+            progress: null,
             error: { code: "busy", message: "服务繁忙，请重试。" },
           },
           capabilities: {

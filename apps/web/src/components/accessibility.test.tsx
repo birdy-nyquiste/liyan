@@ -109,6 +109,7 @@ function zhiyanState(overrides: Record<string, unknown> = {}): ZhiyanPanelState 
       finished_at: "2026-08-22T18:00:04Z",
       cancellation_requested_at: null,
       result_id: null,
+      progress: null,
       error: { code: "provider_unavailable", message: "分析服务暂时不可用，请稍后重试。" },
     },
     report: null,

@@ -154,7 +154,7 @@ def test_late_zhiyan_and_liyan_results_cannot_mutate_a_deleted_task(
     client, headers, dispatcher = zhiyan_client(tmp_path)
     zhiyan_task_id, revision_ids = confirm_sources(client, headers, ["Late zhiyan"])
 
-    def late_zhiyan(_: ZhiyanRequest) -> ZhiyanProviderResult:
+    def late_zhiyan(_: ZhiyanRequest, **__: object) -> ZhiyanProviderResult:
         assert delete_task(client, headers, zhiyan_task_id).status_code == 204
         return accepted_result("迟到的知言结果")
 

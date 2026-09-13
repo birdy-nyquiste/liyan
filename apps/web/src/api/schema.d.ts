@@ -1106,6 +1106,7 @@ export interface components {
             /** Result Id */
             result_id: string | null;
             error: components["schemas"]["ExecutionError"] | null;
+            progress: components["schemas"]["RunSearchProgress"] | null;
         };
         /** @enum {string} */
         ExecutionStatus: "queued" | "running" | "cancel_requested" | "cancelled" | "failed" | "stale" | "succeeded";
@@ -1559,6 +1560,16 @@ export interface components {
              * @default false
              */
             acknowledge_existing_preview: boolean;
+        };
+        /**
+         * RunSearchProgress
+         * @description How much external checking one run has done, while it is still doing it.
+         */
+        RunSearchProgress: {
+            /** Searched */
+            searched: number;
+            /** Opened */
+            opened: number;
         };
         /** SaveLiyanRevisionRequest */
         SaveLiyanRevisionRequest: {

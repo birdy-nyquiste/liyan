@@ -28,6 +28,13 @@ class ExecutionError(BaseModel):
     message: str
 
 
+class RunSearchProgress(BaseModel):
+    """How much external checking one run has done, while it is still doing it."""
+
+    searched: int
+    opened: int
+
+
 class ExecutionResponse(BaseModel):
     id: str
     operation: Literal[
@@ -49,12 +56,26 @@ class ExecutionResponse(BaseModel):
     cancellation_requested_at: datetime | None
     result_id: str | None
     error: ExecutionError | None
+    #: What a searching run has done so far, absent until it says. Two counts
+    #: and nothing else — never a query or a URL — so this cannot carry text a
+    #: provider read back to a browser.
+    progress: RunSearchProgress | None
 
 
 def execution_response(execution: Execution) -> ExecutionResponse:
     error = (
         ExecutionError(code=execution.error_code, message=execution.error_message)
         if execution.error_code and execution.error_message
+        else None
+    )
+    # Both counts or neither: half of a progress line is a worse answer than
+    # none, and a run that has reported has reported both.
+    progress = (
+        RunSearchProgress(
+            searched=execution.searched_count,
+            opened=execution.opened_count,
+        )
+        if execution.searched_count is not None and execution.opened_count is not None
         else None
     )
     return ExecutionResponse(
@@ -70,4 +91,5 @@ def execution_response(execution: Execution) -> ExecutionResponse:
         cancellation_requested_at=execution.cancellation_requested_at,
         result_id=str(execution.result_id) if execution.result_id else None,
         error=error,
+        progress=progress,
     )

@@ -40,7 +40,24 @@ class Settings(BaseSettings):
     #: rather than a per-environment knob: an environment that quietly picked
     #: the wrong one produced confident, unsearched reports.
     zhiyan_model: str = "deepseek-v4-pro"
-    zhiyan_timeout_seconds: int = 300
+    #: The ceiling on one provider call, not on one run: a run may make three.
+    #: 300 was sized for `deepseek-v4-flash` taking 78–96 seconds (ADR-0004),
+    #: and pro does not. Wall-clock time on this endpoint is almost exactly the
+    #: output it generates divided by a constant — 92–99 tokens a second across
+    #: every run measured, production and local — and pro generates 20k–35k
+    #: tokens, which is 200 to 370 seconds before anything has gone wrong. The
+    #: old ceiling was inside that range: a normal long run and a hung one were
+    #: the same event, and the difference matters because `provider_unavailable`
+    #: is what a timeout raises and 知言 is the operation worth waiting for.
+    zhiyan_timeout_seconds: int = 900
+    #: How long a streamed call may say *nothing* — the gap between two pieces
+    #: of the answer, which is what actually distinguishes a stalled run from a
+    #: slow one. A working run is never quiet for long: it emits reasoning
+    #: deltas continuously and its longest observed silence, while DeepSeek
+    #: fetched a page, was about eight seconds. Two minutes is therefore a very
+    #: loose bound on silence while being a tight one on death, which is the
+    #: trade the old single ceiling could not express.
+    zhiyan_stall_timeout_seconds: int = 120
     #: 立言 has no tool access at all, so the cheaper model is the right one.
     liyan_model: str = "deepseek-v4-flash"
     liyan_timeout_seconds: int = 300

@@ -11,6 +11,7 @@ export type FileSourceResponse = components["schemas"]["FileSourceResponse"];
 export type SessionSourceResponse = components["schemas"]["SessionSourceResponse"];
 export type TaskCreationSessionResponse = components["schemas"]["TaskCreationSessionResponse"];
 export type ZhiyanStateResponse = components["schemas"]["ZhiyanStateResponse"];
+export type ExecutionResponse = components["schemas"]["ExecutionResponse"];
 export type ThemeStateResponse = components["schemas"]["ThemeStateResponse"];
 export type ThemeReportResponse = components["schemas"]["ThemeReportResponse"];
 export type ThemeReportDocument = components["schemas"]["ThemeReportDocument"];

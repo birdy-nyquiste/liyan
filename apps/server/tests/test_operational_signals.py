@@ -269,14 +269,14 @@ def test_a_late_provider_answer_cannot_undo_a_recovered_execution(
 
     original = dispatcher.provider.analyze
 
-    def answer_after_the_sweep(request: Any) -> Any:
+    def answer_after_the_sweep(request: Any, **kwargs: Any) -> Any:
         # The worker has claimed its Execution and is mid-flight, which is
         # exactly when the sweep sees a run that has been going too long.
         report = recover_stalled_executions(
             dispatcher.database_url, policy=StalledPolicy(), now=later(hours=2)
         )
         swept.append(report.stalled_executions)
-        return original(request)
+        return original(request, **kwargs)
 
     dispatcher.provider.analyze = answer_after_the_sweep  # type: ignore[method-assign]
     dispatcher.run_all()

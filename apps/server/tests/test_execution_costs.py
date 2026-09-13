@@ -72,7 +72,9 @@ def run_one(tmp_path: Path, provider: object) -> tuple[str, object]:
 
 def test_a_successful_run_is_costed_and_chargeable(tmp_path: Path) -> None:
     class Provider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             return accepted_result(usage=USAGE)
 
     database_url, execution_id = run_one(tmp_path, Provider())
@@ -103,7 +105,9 @@ def test_a_run_that_never_reached_the_provider_is_costed_as_unknown(tmp_path: Pa
     """
 
     class Provider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             raise unavailable()
 
     database_url, _ = run_one(tmp_path, Provider())
@@ -127,7 +131,9 @@ def test_a_report_nobody_kept_was_invoiced_all_the_same(tmp_path: Path) -> None:
     execution_id = source_state(client, headers, task_id)["execution"]["id"]
 
     class CancellingProvider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             client.post(f"/executions/{execution_id}/cancel", headers=headers)
             return accepted_result(usage=USAGE)
 
@@ -150,7 +156,9 @@ def test_a_provider_that_reported_no_usage_leaves_the_cost_unknown(tmp_path: Pat
     orders of magnitude and look like a real number while doing it."""
 
     class Provider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             return accepted_result()
 
     database_url, _ = run_one(tmp_path, Provider())
@@ -207,7 +215,9 @@ def test_a_failed_run_is_free_even_when_nobody_could_price_it(tmp_path: Path) ->
     """
 
     class Provider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             raise unavailable()
 
     database_url, _ = run_one(tmp_path, Provider())
@@ -232,7 +242,9 @@ def test_a_search_heavy_run_that_wrote_nothing_is_costed_from_its_own_failure(
     """
 
     class Provider(DeterministicZhiyanProvider):
-        def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult:
+        def analyze(
+            self, request: ZhiyanRequest, **_: object
+        ) -> ZhiyanProviderResult:
             raise ZhiyanProviderFailure(
                 "invalid_provider_response",
                 "知言服务返回了无法使用的结果，请重试。",

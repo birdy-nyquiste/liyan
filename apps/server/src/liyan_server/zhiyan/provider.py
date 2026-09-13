@@ -5,6 +5,7 @@ fully-approved request and returns raw text plus the search actions it performed
 deciding whether that text is a 知言报告 belongs to `acceptance`.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -28,6 +29,33 @@ class ToolPolicy:
     """What external tooling a run may use. The provider owns its own search caps."""
 
     web_search_enabled: bool = True
+
+
+@dataclass(frozen=True)
+class RunProgress:
+    """What a run has done so far, reported while it is still doing it.
+
+    A 知言 run takes minutes and, until this existed, put nothing on screen for
+    any of them: `running` was the whole of what the workbench could say, and a
+    writer could not tell a run that was reading its twentieth page from one
+    that had died. These two counts are the smallest thing that answers it, and
+    they are structural — a number of searches and a number of pages, never a
+    query string or a URL, so nothing a provider read can reach a browser
+    through this channel.
+
+    Counts are cumulative across every call one run makes, because a writer is
+    watching one run rather than the calls it happens to be split into.
+    """
+
+    searched: int
+    opened: int
+
+
+#: Told what a run has done, as often as the provider says anything new. It must
+#: be cheap and it must not raise: it is called from inside the provider loop,
+#: and a run that already searched twenty times must not be lost because the
+#: thing reporting it failed.
+type ProgressObserver = Callable[[RunProgress], None]
 
 
 type ReasoningEffort = Literal["none", "low", "high", "max"]
@@ -60,6 +88,18 @@ class ReasoningPolicy:
     Four runs an arm on one 来源 is a direction, not a fit. What it is enough to
     settle is that the default was buying more thinking rather than a better
     report.
+
+    `none` is not the next notch down, and this is the warning against reaching
+    for it when a run feels slow. Measured 2026-09-12 over six runs on three
+    claim-bearing 来源, `none` was four times faster and produced nothing usable
+    — 0 of 6 accepted, every one refused `invalid_report_schema` at character
+    zero. It does not remove the thinking; it moves it. With the reasoning
+    channel shut the model narrates its plan into `output_text` instead — "I'll
+    analyze this source… Let me search for these… Now writing the full report."
+    — and the run ends there, on that sentence, having never written the
+    report. `text.format` does not save it: the strict `json_schema` is ignored
+    just as thoroughly. What `none` buys is a run that stops before the
+    expensive part, which is why it looks like a saving.
     """
 
     effort: ReasoningEffort = "low"
@@ -133,4 +173,9 @@ class ZhiyanProviderFailure(ZhiyanRunFailure):
 
 
 class ZhiyanProvider(Protocol):
-    def analyze(self, request: ZhiyanRequest) -> ZhiyanProviderResult: ...
+    def analyze(
+        self,
+        request: ZhiyanRequest,
+        *,
+        on_progress: ProgressObserver | None = None,
+    ) -> ZhiyanProviderResult: ...

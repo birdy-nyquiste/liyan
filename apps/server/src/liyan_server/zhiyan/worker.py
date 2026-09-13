@@ -29,6 +29,7 @@ from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message, surrendered
 from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
+from liyan_server.run_progress import progress_recorder
 from liyan_server.zhiyan.acceptance import accept_report_text
 from liyan_server.zhiyan.failures import ZhiyanRunFailure
 from liyan_server.zhiyan.orchestration import dispatch_or_fail, queue_run
@@ -73,7 +74,8 @@ def process_zhiyan_run(
                     now=snapshot.requested_at,
                     tool_policy=snapshot.tool_policy,
                     prompt_version=snapshot.prompt_version,
-                )
+                ),
+                on_progress=progress_recorder(database, execution_id),
             )
             document = accept_report_text(result.report_text, opened_urls=result.opened_urls)
         except ZhiyanRunFailure as failure:

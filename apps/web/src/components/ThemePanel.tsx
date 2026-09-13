@@ -2,6 +2,7 @@ import type { ThemeStateResponse } from "../api/client";
 import type { CapsuleChoice } from "./InstructionEditor";
 import { useRetryCountdown } from "./useRetryCountdown";
 import { RunningNotice } from "./RunningNotice";
+import { searchProgressText } from "./zhiyanStatus";
 import { ThemeReportView } from "./ThemeReportView";
 import { useInterfaceLocale } from "../interfaceLocale";
 import { STATUS_LABELS } from "./zhiyanStatus";
@@ -63,7 +64,10 @@ export function ThemePanel({
 
       <div id={`theme-body-${revisionId}`}>
         {active && !stopping ? (
-          <RunningNotice label={t("正在生成主题知言报告…")} />
+          <RunningNotice
+            label={t("正在生成主题知言报告…")}
+            detail={searchProgressText(state.execution, t) ?? undefined}
+          />
         ) : null}
 
         {unfinished && execution?.error ? (

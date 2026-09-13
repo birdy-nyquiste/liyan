@@ -215,6 +215,7 @@ def analyze_source_execution(execution_id: str) -> None:
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             timeout_seconds=settings.zhiyan_timeout_seconds,
+            stall_seconds=settings.zhiyan_stall_timeout_seconds,
         ),
         CeleryExecutionDispatcher(settings.broker_url),
     )
@@ -229,6 +230,7 @@ def analyze_theme_execution(execution_id: str) -> None:
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             timeout_seconds=settings.zhiyan_timeout_seconds,
+            stall_seconds=settings.zhiyan_stall_timeout_seconds,
         ),
         CeleryExecutionDispatcher(settings.broker_url),
     )
@@ -243,9 +245,10 @@ def propose_themes_execution(execution_id: str) -> None:
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             # 提炼主题 cannot search, so it is one short call rather than several
-            # long ones. It still gets the 知言 timeout: the difference between
+            # long ones. It still gets the 知言 timeouts: the difference between
             # them is what a slow provider does, not what this run deserves.
             timeout_seconds=settings.zhiyan_timeout_seconds,
+            stall_seconds=settings.zhiyan_stall_timeout_seconds,
         ),
     )
 

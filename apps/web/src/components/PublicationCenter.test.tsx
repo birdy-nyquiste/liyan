@@ -299,6 +299,7 @@ describe("PublicationCenter", () => {
         finished_at: "2026-08-23T10:00:02Z",
         cancellation_requested_at: null,
         result_id: null,
+        progress: null,
         error: { code: "dispatch_failed", message: "发布未能启动，请稍后重试。" },
       }],
     })]);

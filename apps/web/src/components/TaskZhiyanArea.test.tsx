@@ -112,6 +112,7 @@ function execution(overrides: Record<string, unknown> = {}) {
     finished_at: null,
     cancellation_requested_at: null,
     result_id: null,
+    progress: null,
     error: null,
     ...overrides,
   };
@@ -514,6 +515,49 @@ describe("TaskZhiyanArea", () => {
       ([target, options]) => requestMethod(target, options) === "POST",
     );
     expect(requestUrl(started?.[0])).toContain("/source-revisions/revision-1/zhiyan-runs");
+  });
+
+  it("says how far a running analysis has got, once it has got anywhere", async () => {
+    // Six minutes of 分析进行中 and nothing else is the complaint this answers:
+    // a writer cannot tell a run reading its twelfth page from a dead one.
+    const running = stateResponse({
+      status: "running",
+      report: null,
+      execution: execution({ progress: { searched: 4, opened: 12 } }),
+      capabilities: {
+        can_start: false,
+        can_cancel: true,
+        retry: { allowed: false, remaining: 2, allowed_at: null },
+      },
+    });
+    respondWith(overviewResponse([running], LIYAN_WAITING));
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
+
+    expect(
+      await screen.findByText("已检索 4 次，已打开 12 个页面"),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about progress before the run has reported any", async () => {
+    // Null is not zero. 「已检索 0 次」 reads as a stuck run, which is the
+    // opposite of what this line is for.
+    const running = stateResponse({
+      status: "running",
+      report: null,
+      execution: execution({ progress: null }),
+      capabilities: {
+        can_start: false,
+        can_cancel: true,
+        retry: { allowed: false, remaining: 2, allowed_at: null },
+      },
+    });
+    respondWith(overviewResponse([running], LIYAN_WAITING));
+
+    render(<TaskZhiyanArea accessToken="token" taskId="task-1" pollIntervalMs={1} />);
+
+    expect(await screen.findByText("正在生成知言报告…")).toBeInTheDocument();
+    expect(screen.queryByText(/已检索/)).not.toBeInTheDocument();
   });
 
   it("terminates the running execution the server advertises", async () => {

@@ -4,7 +4,7 @@ import { useRetryCountdown } from "./useRetryCountdown";
 import { RunningNotice } from "./RunningNotice";
 import { ZhiyanReportView } from "./ZhiyanReportView";
 import { useInterfaceLocale } from "../interfaceLocale";
-import { STATUS_LABELS } from "./zhiyanStatus";
+import { STATUS_LABELS, searchProgressText } from "./zhiyanStatus";
 
 export function ZhiyanPanel({
   state,
@@ -72,7 +72,10 @@ export function ZhiyanPanel({
       <div id={`zhiyan-body-${revisionId}`}>
 
       {state.status === "running" && !stopping ? (
-        <RunningNotice label={t("正在生成知言报告…")} />
+        <RunningNotice
+          label={t("正在生成知言报告…")}
+          detail={searchProgressText(execution, t) ?? undefined}
+        />
       ) : null}
 
       {unfinished && execution?.error ? (

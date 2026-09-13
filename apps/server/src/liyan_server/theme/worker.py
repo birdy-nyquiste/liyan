@@ -30,6 +30,7 @@ from liyan_server.execution_dispatch import ExecutionDispatcher
 from liyan_server.execution_states import cancelled_message, surrendered
 from liyan_server.metering import record_execution_cost
 from liyan_server.observability import log_execution_failed
+from liyan_server.run_progress import progress_recorder
 from liyan_server.task_api import version_source_revisions
 from liyan_server.theme.acceptance import accept_theme_report_text
 from liyan_server.theme.orchestration import (
@@ -79,7 +80,8 @@ def process_theme_run(
                     now=snapshot.requested_at,
                     tool_policy=snapshot.tool_policy,
                     prompt_version=snapshot.prompt_version,
-                )
+                ),
+                on_progress=progress_recorder(database, execution_id),
             )
             document = accept_theme_report_text(
                 result.report_text, opened_urls=result.opened_urls

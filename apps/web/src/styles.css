@@ -2988,6 +2988,26 @@ a.source-meta:focus-visible .source-meta__value {
   font-weight: var(--weight-medium);
 }
 
+/* The label and, under it, how far the run has actually got. Stacked rather
+   than run together: the label is a constant and the detail changes every few
+   seconds, and a line that rewrites itself beside unchanging text is harder to
+   read than one that owns its own row. */
+.running-notice__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Quieter than the label it sits under — this is reassurance, not the message.
+   Lining numerals so the counts do not jitter sideways as they tick up. */
+.running-notice__detail {
+  color: color-mix(in srgb, var(--accent-ink) 72%, transparent);
+  font-size: 0.8rem;
+  font-weight: var(--weight-normal);
+  font-variant-numeric: tabular-nums;
+}
+
 .running-notice__bar {
   position: relative;
   width: 42px;
